@@ -6,7 +6,6 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import com.example.travelapp.ui.auth.LoginScreen
 import com.example.travelapp.ui.auth.SplashScreen
-// --- 바로 여기! HomeScreen을 import 해주세요. ---
 import com.example.travelapp.ui.home.HomeScreen
 
 /**

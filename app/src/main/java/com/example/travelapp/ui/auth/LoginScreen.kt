@@ -54,6 +54,12 @@ fun LoginScreen() {
             verticalArrangement = Arrangement.spacedBy(16.dp) // 버튼 사이 간격 16dp
         ) { // 실제 카카오 구글 로그인 버튼 이미지 교체 예정
             Button(
+                onClick = { /* 네이버 로그인 클릭 시 동작 */ },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("네이버 로그인")
+            }
+            Button(
                 onClick = { /* 카카오 로그인 클릭 시 동작 */ },
                 modifier = Modifier.fillMaxWidth()
             ) {
