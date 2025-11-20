@@ -34,14 +34,16 @@ fun AppNavHost(
 
         composable(Screen.Splash.route) {
             SplashScreen(onTimeout = {
+                // 스플래시 화면에서 3초 후 로그인 화면으로 이동
                 navController.navigate(Screen.Login.route) {
+                    // 스플래시 화면을 백스택에서 제거하여 뒤로가기 시 스플래시 화면으로 돌아가지 않도록 합니다.
                     popUpTo(Screen.Splash.route) { inclusive = true }
                 }
             })
         }
 
         composable(Screen.Login.route) {
-            LoginScreen()
+            LoginScreen(navController = navController)
         }
 
         composable(Screen.Home.route) {

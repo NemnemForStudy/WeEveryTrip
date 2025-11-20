@@ -31,6 +31,8 @@ android {
         properties.load(project.rootProject.file("local.properties").inputStream())
         val kakaoKey = properties.getProperty("kakao.native.app.key") ?: ""
         buildConfigField("String", "KAKAO_NATIVE_APP_KEY", "\"$kakaoKey\"")
+
+        manifestPlaceholders["kakao_app_key"] = "kakao${kakaoKey}"
     }
 
     buildTypes {
@@ -76,6 +78,9 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.test.manifest)
 
     implementation("com.kakao.sdk:v2-all:2.20.1")
+
+    // 네비게이션 라이브러리 추가
+    implementation("androidx.navigation:navigation-compose:2.7.7") // 이 줄 확인
 
     // Hilt
     implementation(libs.hilt.android)

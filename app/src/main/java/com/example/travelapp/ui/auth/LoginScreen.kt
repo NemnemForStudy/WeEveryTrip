@@ -1,5 +1,6 @@
 package com.example.travelapp.ui.auth
 
+import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -13,15 +14,43 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavController
+import com.example.travelapp.ui.navigation.Screen
 import com.example.travelapp.ui.theme.TravelAppTheme
+import com.example.travelapp.ui.viewModel.LoginEvent
+import com.example.travelapp.ui.viewModel.LoginViewModel
 
 @Composable
-fun LoginScreen() {
+fun LoginScreen(navController: NavController) {
+    val loginViewModel: LoginViewModel = viewModel()
+    val context = LocalContext.current
+
+    // 로그인 이벤트 관찰 및 처리
+    LaunchedEffect(key1 = Unit) {
+        loginViewModel.loginEvent.collect {
+            when (it) {
+                is LoginEvent.LoginSuccess -> {
+                    Toast.makeText(context, "로그인 성공!", Toast.LENGTH_SHORT).show()
+                    navController.navigate(Screen.Home.route) {
+                        // 로그인 화면을 백스택에서 제거하여 뒤로가기 시 로그인 화면으로 돌아가지 않도록 합니다.
+                        popUpTo(Screen.Login.route) { inclusive = true }
+                    }
+                }
+                is LoginEvent.LoginFailed -> {
+                    Toast.makeText(context, "로그인 실패: ${it.message}", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+
     // 화면 전체를 채우는 Column. 내부 요소들을 배치하는 기본 컨테이너
     Column (
         modifier = Modifier.fillMaxSize().padding(24.dp), // 화면 전체에 여백
@@ -39,7 +68,7 @@ fun LoginScreen() {
                 text = "모두의",
                 style = MaterialTheme.typography.headlineLarge
             )
-            Row { 
+            Row {
                 Spacer(modifier = Modifier.width(30.dp))
                 Text(
                     text = "여행",
@@ -60,7 +89,7 @@ fun LoginScreen() {
                 Text("네이버 로그인")
             }
             Button(
-                onClick = { /* 카카오 로그인 클릭 시 동작 */ },
+                onClick = { loginViewModel.loginWithKakaoTalk(context) },
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text("카카오 로그인")
@@ -89,7 +118,9 @@ fun LoginScreen() {
 fun LoginScreenPreview() {
     TravelAppTheme {
         Surface(color = MaterialTheme.colorScheme.background) {
-            LoginScreen()
+            // Preview에서는 NavController를 직접 전달할 수 없으므로, 기본 LoginScreen을 사용합니다.
+            // 실제 앱에서는 AppNavHost가 NavController를 전달합니다.
+            LoginScreen(navController = NavController(LocalContext.current))
         }
     }
 }
