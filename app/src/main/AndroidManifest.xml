@@ -34,6 +34,14 @@
                 <data android:host="oauth" android:scheme="${kakao_app_key}" />
             </intent-filter>
         </activity>
+        
+        <!-- 네이버 로그인 (최신 SDK에서는 자동으로 처리됨) -->
     </application>
+
+    <!-- 네이버 앱으로 로그인하기 위한 설정 -->
+    <queries>
+        <package android:name="com.nhn.android.nid" />
+        <package android:name="com.nhn.android.search" />
+    </queries>
 
 </manifest>

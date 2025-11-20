@@ -32,6 +32,16 @@ android {
         val kakaoKey = properties.getProperty("kakao.native.app.key") ?: ""
         buildConfigField("String", "KAKAO_NATIVE_APP_KEY", "\"$kakaoKey\"")
 
+        val naverClientId = properties.getProperty("naver.client.id") ?: ""
+        buildConfigField("String", "NAVER_CLIENT_ID", "\"$naverClientId\"")
+
+        val naverClientSecret = properties.getProperty("naver.client.secret") ?: ""
+        buildConfigField("String", "NAVER_CLIENT_SECRET", "\"$naverClientSecret\"")
+
+        val googleWebClientId = properties.getProperty("google.web.client.id") ?: ""
+        buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"$googleWebClientId\"")
+
+        // 카카오 콜백위해 꼭 있어야함.
         manifestPlaceholders["kakao_app_key"] = "kakao${kakaoKey}"
     }
 
@@ -67,6 +77,8 @@ dependencies {
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.navigation.compose)
+    implementation(libs.googleid)
+    implementation(libs.play.services.auth)
 
     // Test and Debug dependencies
     testImplementation(libs.junit)
@@ -77,10 +89,18 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
 
+    // 카카오 로그인
     implementation("com.kakao.sdk:v2-all:2.20.1")
+
+    // Naver Login
+    implementation("com.navercorp.nid:oauth:5.10.0")
+//    implementation("androidx.browser:browser:1.7.0")
 
     // 네비게이션 라이브러리 추가
     implementation("androidx.navigation:navigation-compose:2.7.7") // 이 줄 확인
+
+    // 구글 로그인
+    implementation("com.google.android.gms:play-services-auth:21.2.0")
 
     // Hilt
     implementation(libs.hilt.android)
