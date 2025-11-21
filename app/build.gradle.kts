@@ -97,7 +97,7 @@ dependencies {
 //    implementation("androidx.browser:browser:1.7.0")
 
     // 네비게이션 라이브러리 추가
-    implementation("androidx.navigation:navigation-compose:2.7.7") // 이 줄 확인
+    implementation("androidx.navigation:navigation-compose:2.7.7")
 
     // 구글 로그인
     implementation("com.google.android.gms:play-services-auth:21.2.0")

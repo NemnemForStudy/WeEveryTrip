@@ -1,0 +1,14 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- 네이버 로고의 배경 초록색 둥근 사각형 -->
+    <path
+        android:fillColor="#FF03C75A"
+        android:pathData="M20,2H4C2.9,2 2,2.9 2,4V20C2,21.1 2.9,22 4,22H20C21.1,22 22,21.1 22,20V4C22,2.9 21.1,2 20,2Z"/>
+    <!-- 흰색 'N' 문자 -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M16.5,18V6H13.7V11.85L10.3,6H7.5V18H10.3V12.15L13.7,18H16.5Z"/>
+</vector>
