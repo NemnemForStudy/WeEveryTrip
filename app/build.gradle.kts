@@ -102,6 +102,7 @@ dependencies {
     // 구글 로그인
     implementation("com.google.android.gms:play-services-auth:21.2.0")
 
+    implementation("androidx.compose.material:material-icons-extended:1.7.5")
     // Hilt
     implementation(libs.hilt.android)
     kapt(libs.hilt.compiler)
