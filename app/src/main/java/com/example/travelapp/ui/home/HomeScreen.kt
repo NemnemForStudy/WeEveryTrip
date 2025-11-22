@@ -48,6 +48,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.rememberNavController
+import com.example.travelapp.ui.navigation.Screen
 import com.example.travelapp.ui.theme.TravelAppTheme
 
 /**
@@ -121,7 +122,7 @@ fun HomeScreen(navController: NavHostController) {
                 actions = {
                     if(!showSearchBar) {
                         // Write button
-                        IconButton(onClick = { /* 글쓰기 버튼 클릭 */ }) {
+                        IconButton(onClick = { navController.navigate(Screen.Write.route) }) {
                             Icon(Icons.Filled.Edit, contentDescription = "글쓰기")
                         }
                     }

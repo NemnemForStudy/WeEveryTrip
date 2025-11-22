@@ -106,4 +106,13 @@ dependencies {
     // Hilt
     implementation(libs.hilt.android)
     kapt(libs.hilt.compiler)
+
+    // Hilt Navigation Compose (추가)
+    implementation("androidx.hilt:hilt-navigation-compose:1.2.0")
+
+    // Retrofit
+    implementation("com.squareup.retrofit2:retrofit:2.9.0")
+    implementation("com.squareup.retrofit2:converter-gson:2.9.0") // JSON 파싱을 위한 GSON 컨버터
+    implementation("com.squareup.okhttp3:logging-interceptor:4.11.0") // HTTP 요청 로깅 (디버그용)
+
 }

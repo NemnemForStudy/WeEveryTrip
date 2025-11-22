@@ -45,9 +45,12 @@ import com.example.travelapp.ui.theme.TravelAppTheme
 import com.example.travelapp.ui.viewModel.LoginEvent
 import com.example.travelapp.ui.viewModel.LoginViewModel
 import com.google.android.gms.auth.api.signin.GoogleSignIn
+import com.google.android.gms.auth.api.signin.GoogleSignInAccount
 import com.google.android.gms.auth.api.signin.GoogleSignInClient
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.android.gms.common.api.ApiException
+import com.google.android.gms.tasks.Task
+import kotlin.contracts.contract
 
 @Composable
 fun LoginScreen(navController: NavController) {
@@ -57,6 +60,7 @@ fun LoginScreen(navController: NavController) {
 
     // GoogleSignInClient 초기화
     // 웹 클라이언트 ID 사용해 구글 로그인 옵션 설정
+    Log.d(TAG, "클라이언트 ID: ${BuildConfig.GOOGLE_WEB_CLIENT_ID}")
     val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
         .requestIdToken(BuildConfig.GOOGLE_WEB_CLIENT_ID)
         .requestEmail()
@@ -64,15 +68,16 @@ fun LoginScreen(navController: NavController) {
     val googleSignInClient: GoogleSignInClient = remember(context) { GoogleSignIn.getClient(context, gso) }
 
     // Google 로그인 결과를 처리하기 위한 ActivityResultLauncher
-    val googleAuthLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+    val googleAuthLauncher = rememberLauncherForActivityResult(contract = ActivityResultContracts.StartActivityForResult()) { result ->
+        Log.d(TAG, "구글 로그인 결과 코드: ${result.resultCode}")
+
         if (result.resultCode == Activity.RESULT_OK) {
-            val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
-            try {
-                val account = task.getResult(ApiException::class.java)
-                loginViewModel.handlerGoogleSignInResult(account)
-            } catch (e: ApiException) {
-                Log.e(TAG, "Google 로그인 실패", e)
-            }
+            Log.d(TAG, "구글 로그인 결과 OK - 계정 정보 처리 시작")
+            val task: Task<GoogleSignInAccount> = GoogleSignIn.getSignedInAccountFromIntent(result.data)
+            loginViewModel.handlerGoogleSignInResult(task)
+        } else {
+            Log.w(TAG, "구글 로그인 취소 또는 실패 - 결과 코드: ${result.resultCode}")
+            loginViewModel.emitLoginFailed("구글 로그인이 취소되었습니다")
         }
     }
 
@@ -117,8 +122,15 @@ fun LoginScreen(navController: NavController) {
             KakaoLoginButton(onClick = { loginViewModel.loginWithKakaoTalk(context) })
             GoogleLoginButton(
                 onClick = {
-                    val signInIntent = googleSignInClient.signInIntent
-                    googleAuthLauncher.launch(signInIntent)
+                    Log.d(TAG, "구글 로그인 버튼 클릭")
+                    try {
+                        val signInIntent = googleSignInClient.signInIntent
+                        Log.d(TAG, "인텐트 생성 성공")
+                        googleAuthLauncher.launch(signInIntent)
+                    } catch (e: Exception) {
+                        Log.e(TAG, "생성 실패", e)
+                        loginViewModel.emitLoginFailed("초기화 실패")
+                    }
                 }
             )
         }

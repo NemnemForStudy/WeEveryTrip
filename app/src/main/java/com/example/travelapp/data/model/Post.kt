@@ -1,0 +1,19 @@
+package com.example.travelapp.data.model
+
+data class Post(
+    val id: String, // 서벙서 할당되는 ID
+    val category: String,
+    val title: String,
+    val content: String,
+    val tags: List<String>,
+    val imgUrl: String? = null // 이미지 있을 경우 URL
+)
+
+// 게시물 생성 요청위한 데이터 클래스(ID는 서버에서 생성하므로 제외)
+data class CreatePostRequest(
+    val category: String,
+    val title: String,
+    val content: String,
+    val tags: List<String>,
+    val imgUrl: String? = null
+)

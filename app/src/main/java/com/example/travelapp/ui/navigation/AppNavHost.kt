@@ -1,12 +1,18 @@
 package com.example.travelapp.ui.navigation
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import com.example.travelapp.ui.auth.LoginScreen
 import com.example.travelapp.ui.auth.SplashScreen
 import com.example.travelapp.ui.home.HomeScreen
+import com.example.travelapp.ui.write.WriteScreen
 
 /**
  * 앱의 화면 주소(Route)를 정의하는 sealed class입니다.
@@ -17,6 +23,7 @@ sealed class Screen(val route: String) {
     object Splash : Screen("splash")
     object Login : Screen("login")
     object Home : Screen("home")
+    object Write : Screen("write") // 글쓰기 화면 경로 추가
 }
 
 /**
@@ -30,7 +37,9 @@ sealed class Screen(val route: String) {
 fun AppNavHost(
     navController: NavHostController,
 ) {
-    NavHost(navController = navController, startDestination = Screen.Splash.route) {
+        NavHost(navController = navController, startDestination = Screen.Splash.route) {
+    // 테스트를 위해 시작 화면을 HomeScreen으로 변경
+//    NavHost(navController = navController, startDestination = Screen.Home.route) {
 
         composable(Screen.Splash.route) {
             SplashScreen(onTimeout = {
@@ -48,6 +57,10 @@ fun AppNavHost(
 
         composable(Screen.Home.route) {
             HomeScreen(navController = navController)
+        }
+
+        composable(Screen.Write.route) { // 글쓰기 화면 composable 추가
+            WriteScreen(navController = navController)
         }
     }
 }
