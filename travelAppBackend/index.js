@@ -2,48 +2,22 @@
 require('dotenv').config();
 
 const express = require('express');
-const { Pool } = require('pg');
-
 const app = express();
 const port = 3000;
 
-// PostgreSQL 연결 풀(Pool) 생성
-const pool = new Pool({
-  user: process.env.DB_USER,
-  host: process.env.DB_HOST,
-  database: process.env.DB_DATABASE,
-  password: process.env.DB_PASSWORD,
-  port: process.env.DB_PORT,
-});
+// API 라우터 불러옴
+const postsRouter = require('./src/api/post');
+
+// JSON 요청 본물을 파싱하기 위한 미들웨어
+app.use(express.json());
 
 // 기본 API
 app.get('/', (req, res) => {
   res.send('여행 앱 백엔드 서버에 오신 것을 환영합니다!');
 });
 
-// 데이터베이스 연결 테스트를 위한 API
-app.get('/test-db', async (req, res) => {
-  let client;
-  try {
-    // 커넥션 풀에서 클라이언트(연결 객체)를 하나 가져옵니다.
-    client = await pool.connect();
-    console.log("PostgreSQL 데이터베이스에 성공적으로 연결되었습니다!");
-
-    // 간단한 쿼리를 실행하여 현재 시간을 가져옵니다.
-    const result = await client.query('SELECT NOW()');
-    res.status(200).send(`데이터베이스 현재 시간: ${result.rows[0].now}`);
-
-  } catch (err) {
-    console.error('데이터베이스 연결 중 오류 발생:', err.stack);
-    res.status(500).send('데이터베이스 연결에 실패했습니다.');
-
-  } finally {
-    // 사용이 끝난 클라이언트는 반드시 반환하여 다른 요청이 사용할 수 있도록 합니다.
-    if (client) {
-      client.release();
-    }
-  }
-});
+// '/api/posts' 경로로 들어오는 요청은 postsRouter가 처리함.
+app.use('/api/posts', postsRouter);
 
 // 서버 실행
 app.listen(port, () => {

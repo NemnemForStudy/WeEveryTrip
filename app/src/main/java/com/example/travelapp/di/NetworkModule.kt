@@ -41,7 +41,7 @@ object NetworkModule {
     fun provideRetrofit(okHttpClient: OkHttpClient): Retrofit {
         // TODO: 실제 API 서버 기본 URL로 변경해야함.
         // ex) "http://localhost:8080/"
-        val BASE_URL = "http://localhost:3000" // 에뮬레이터에서 로컬 호스트 접근 시 사용
+        val BASE_URL = "http://10.0.2.2:3000" // 에뮬레이터에서 로컬 호스트 접근 시 사용
         return Retrofit.Builder()
             .baseUrl(BASE_URL)
             .client(okHttpClient)
