@@ -8,6 +8,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -21,11 +22,13 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -36,7 +39,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import com.example.travelapp.BuildConfig
 import com.example.travelapp.R
@@ -48,19 +52,18 @@ import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount
 import com.google.android.gms.auth.api.signin.GoogleSignInClient
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
-import com.google.android.gms.common.api.ApiException
 import com.google.android.gms.tasks.Task
-import kotlin.contracts.contract
 
 @Composable
 fun LoginScreen(navController: NavController) {
-    val loginViewModel: LoginViewModel = viewModel()
+    val loginViewModel: LoginViewModel = hiltViewModel()
     val context = LocalContext.current
-    val TAG = "LoginViewModel"
+    val TAG = "LoginScreen"
+
+    val uiState by loginViewModel.loginUiState.collectAsStateWithLifecycle()
 
     // GoogleSignInClient 초기화
     // 웹 클라이언트 ID 사용해 구글 로그인 옵션 설정
-    Log.d(TAG, "클라이언트 ID: ${BuildConfig.GOOGLE_WEB_CLIENT_ID}")
     val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
         .requestIdToken(BuildConfig.GOOGLE_WEB_CLIENT_ID)
         .requestEmail()
@@ -74,7 +77,7 @@ fun LoginScreen(navController: NavController) {
         if (result.resultCode == Activity.RESULT_OK) {
             Log.d(TAG, "구글 로그인 결과 OK - 계정 정보 처리 시작")
             val task: Task<GoogleSignInAccount> = GoogleSignIn.getSignedInAccountFromIntent(result.data)
-            loginViewModel.handlerGoogleSignInResult(task)
+            loginViewModel.handleGoogleSignInResult(task)
         } else {
             Log.w(TAG, "구글 로그인 취소 또는 실패 - 결과 코드: ${result.resultCode}")
             loginViewModel.emitLoginFailed("구글 로그인이 취소되었습니다")
@@ -82,11 +85,10 @@ fun LoginScreen(navController: NavController) {
     }
 
     // 로그인 이벤트 관찰 및 처리
-    LaunchedEffect(key1 = Unit) {
+    LaunchedEffect(key1 = loginViewModel) {
         loginViewModel.loginEvent.collect { event ->
             when (event) {
                 is LoginEvent.LoginSuccess -> {
-                    Toast.makeText(context, "로그인 성공!", Toast.LENGTH_SHORT).show()
                     navController.navigate(Screen.Home.route) {
                         popUpTo(Screen.Login.route) { inclusive = true }
                     }
@@ -98,51 +100,49 @@ fun LoginScreen(navController: NavController) {
         }
     }
 
-    // 화면 전체를 채우는 Column. 내부 요소들을 배치하는 기본 컨테이너
-    Column (
-        modifier = Modifier.fillMaxSize().padding(24.dp), // 화면 전체에 여백
-        horizontalAlignment = Alignment.CenterHorizontally // 자식들을 가로측 중앙에 정렬
-    ) {
-        // 1. 상단 로고 영역
-        // Spacer에 weight(1f)를 줘 로고를 화면 상단에 밀어 올리는 효과
-        Spacer(modifier = Modifier.weight(1f))
-        Column(verticalArrangement = Arrangement.Center) { // 로고 텍스트들을 중간으로 정렬
+    LaunchedEffect(key1 = uiState.error) {
+        uiState.error?.let {
+            Toast.makeText(context, it, Toast.LENGTH_LONG).show()
+        }
+    }
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column (
+            modifier = Modifier.fillMaxSize().padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Spacer(modifier = Modifier.weight(1f))
             Text(
                 text = "모여로그",
                 style = MaterialTheme.typography.headlineLarge
             )
-        }
-        Spacer(modifier = Modifier.weight(1f))
-        Column(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(16.dp) // 버튼 사이 간격 16dp
-        ) {
-            NaverLoginButton(onClick = { loginViewModel.loginWithNaver(context) })
-            KakaoLoginButton(onClick = { loginViewModel.loginWithKakaoTalk(context) })
-            GoogleLoginButton(
-                onClick = {
-                    Log.d(TAG, "구글 로그인 버튼 클릭")
-                    try {
+            Spacer(modifier = Modifier.weight(1f))
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                NaverLoginButton(onClick = { loginViewModel.loginWithNaver(context) })
+                KakaoLoginButton(onClick = { loginViewModel.loginWithKakaoTalk(context) })
+                GoogleLoginButton(
+                    onClick = {
                         val signInIntent = googleSignInClient.signInIntent
-                        Log.d(TAG, "인텐트 생성 성공")
                         googleAuthLauncher.launch(signInIntent)
-                    } catch (e: Exception) {
-                        Log.e(TAG, "생성 실패", e)
-                        loginViewModel.emitLoginFailed("초기화 실패")
                     }
-                }
+                )
+            }
+            Spacer(modifier = Modifier.weight(1f))
+            Text(
+                text = "로그인 시 서비스 이용 약관 및 개인정보 처리 방침에 동의하게 됩니다.",
+                style = MaterialTheme.typography.bodySmall,
+                color = Color.Gray
             )
         }
 
-        // 하단 정책 안내 텍스트 영역
-        // 마지막 Spacer가 로그인 버튼과 정책 텍스를 화면 아래쪽으로 밀어냄
-        Spacer(modifier = Modifier.weight(1f))
-        Text(
-            text = "로그인 시 서비스 이용 약관 및 개인정보 처리 방침에 동의하게 됩니다.",
-            style = MaterialTheme.typography.bodySmall,
-            color = Color.Gray
-        )
+        // [추가] 로딩 중일 때 화면 중앙에 프로그레스 바를 표시합니다.
+        if (uiState.isLoading) {
+            CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
+        }
     }
 }
 

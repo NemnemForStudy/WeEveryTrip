@@ -8,6 +8,9 @@ const port = 3000;
 // API 라우터 불러옴
 const postsRouter = require('./src/api/post');
 
+// auth 라우터 불러오기
+const authRouter = require('./src/api/auth');
+
 // JSON 요청 본물을 파싱하기 위한 미들웨어
 app.use(express.json());
 
@@ -18,6 +21,7 @@ app.get('/', (req, res) => {
 
 // '/api/posts' 경로로 들어오는 요청은 postsRouter가 처리함.
 app.use('/api/posts', postsRouter);
+app.use('/api/auth', authRouter);
 
 // 서버 실행
 app.listen(port, () => {

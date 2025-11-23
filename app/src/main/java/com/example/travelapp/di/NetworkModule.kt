@@ -1,5 +1,6 @@
 package com.example.travelapp.di
 
+import com.example.travelapp.data.api.AuthApiService
 import com.example.travelapp.data.api.PostApiService
 import dagger.Module
 import dagger.Provides
@@ -16,7 +17,7 @@ import javax.inject.Singleton
 @InstallIn(SingletonComponent::class) // 이 모듈의 의존성이 앱의 싱글톤 라이프사이클을 따흔다.
 object NetworkModule {
     // HTTP 요청 및 응답 로깅을 위한 Interceptor를 제공함.
-// 디버깅 시 네트워크 통신 내용을 콘솔에서 확인할 수 있어 유용함.
+    // 디버깅 시 네트워크 통신 내용을 콘솔에서 확인할 수 있어 유용함.
     @Provides
     @Singleton
     fun provideHttpLoggingInterceptor(): HttpLoggingInterceptor {
@@ -54,6 +55,14 @@ object NetworkModule {
     @Singleton
     fun providePostApiService(retrofit: Retrofit): PostApiService {
         return retrofit.create(PostApiService::class.java)
+    }
+
+    // AuthApiService 구현체를 Retrofit을 통해 생성해 제공함.
+    // 이제 Hilt는 AuthRepo가 필요하는 AuthApiService를 어떻게 만들지 알게 됨
+    @Provides
+    @Singleton
+    fun provideAuthApiService(retrofit: Retrofit): AuthApiService {
+        return retrofit.create(AuthApiService::class.java)
     }
 
 }
