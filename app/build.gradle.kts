@@ -6,16 +6,37 @@ plugins {
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.kapt)
     alias(libs.plugins.hilt.android)
+    id("com.google.android.libraries.mapsplatform.secrets-gradle-plugin") version "2.0.1" apply false
 }
 
-val localProperties = Properties().apply {
-    rootProject.file("local.properties").inputStream().use { load(it) }
+val localProperties = Properties()
+val localPropertiesFile = rootProject.file("local.properties")
+if(localPropertiesFile.exists()) {
+    localProperties.load(localPropertiesFile.inputStream())
 }
 
 android {
     namespace = "com.example.travelapp"
     compileSdk {
         version = release(36)
+    }
+
+    buildTypes {
+        getByName("debug") {
+            // local.properties에서 BASE_URL 값을 읽어오거나, 없으면 기본값을 사용합니다.
+            val baseUrl = localProperties.getProperty("BASE_URL")
+            buildConfigField("String", "BASE_URL", "\"$baseUrl\"")
+        }
+        getByName("release") {
+            // 릴리즈(출시) 빌드에서는 실제 배포된 서버 주소 사용
+            // 지금은 없으니 임시주소
+            val baseUrl = localProperties.getProperty("RELEASE_BASE_URL", "\"https://api.your-domain.com\"")
+            buildConfigField("String", "BASE_URL", "\"$baseUrl\"")
+
+            isMinifyEnabled = false
+            // 이 코드는 앱을 정식으로 배포(Release)할 때, 앱의 크기를 줄이고 코드를 알아보기 힘들게 만드는(난독화) 설정 파일들을 지정하는 명령어입니다.
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+        }
     }
 
     defaultConfig {
@@ -114,5 +135,4 @@ dependencies {
     implementation("com.squareup.retrofit2:retrofit:2.9.0")
     implementation("com.squareup.retrofit2:converter-gson:2.9.0") // JSON 파싱을 위한 GSON 컨버터
     implementation("com.squareup.okhttp3:logging-interceptor:4.11.0") // HTTP 요청 로깅 (디버그용)
-
 }

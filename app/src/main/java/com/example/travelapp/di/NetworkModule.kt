@@ -1,5 +1,6 @@
 package com.example.travelapp.di
 
+import com.example.travelapp.BuildConfig
 import com.example.travelapp.util.AuthInterceptor
 import com.example.travelapp.data.api.AuthApiService
 import com.example.travelapp.data.api.NaverAuthApiService
@@ -78,12 +79,9 @@ object NetworkModule {
     @Provides
     @Singleton
     @Named("AppRetrofit")
-    fun provideRetrofit(@Named("AuthOkHttpClient") okHttpClient: OkHttpClient): Retrofit {
-        // TODO: 실제 API 서버 기본 URL로 변경해야함.
-        // ex) "http://localhost:8080/"
-        val BASE_URL = "http://172.30.1.38:3000" // 에뮬레이터에서 로컬 호스트 접근 시 사용
+    fun provideAppRetrofit(@Named("AuthOkHttpClient") okHttpClient: OkHttpClient): Retrofit {
         return Retrofit.Builder()
-            .baseUrl(BASE_URL)
+            .baseUrl(BuildConfig.BASE_URL)
             .client(okHttpClient)
             .addConverterFactory(GsonConverterFactory.create()) // JSON 파싱 위한 GSON 컨버팅
             .build()

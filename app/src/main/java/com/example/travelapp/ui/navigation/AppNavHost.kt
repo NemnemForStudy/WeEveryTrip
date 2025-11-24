@@ -13,6 +13,7 @@ import com.example.travelapp.ui.auth.LoginScreen
 import com.example.travelapp.ui.auth.SplashScreen
 import com.example.travelapp.ui.home.HomeScreen
 import com.example.travelapp.ui.write.WriteScreen
+import com.example.travelapp.util.TokenManager
 
 /**
  * 앱의 화면 주소(Route)를 정의하는 sealed class입니다.
@@ -36,15 +37,14 @@ sealed class Screen(val route: String) {
 @Composable
 fun AppNavHost(
     navController: NavHostController,
+    tokenManager: TokenManager
 ) {
-        NavHost(navController = navController, startDestination = Screen.Splash.route) {
-    // 테스트를 위해 시작 화면을 HomeScreen으로 변경
-//    NavHost(navController = navController, startDestination = Screen.Home.route) {
-
+    NavHost(navController = navController, startDestination = Screen.Splash.route) {
         composable(Screen.Splash.route) {
             SplashScreen(onTimeout = {
-                // 스플래시 화면에서 3초 후 로그인 화면으로 이동
-                navController.navigate(Screen.Login.route) {
+                // 스플래시 화면에서 화면 종료 시, 토큰 유효성을 검사해 분기함.
+                val destination = if(tokenManager.isTokenValid()) Screen.Home.route else Screen.Login.route
+                navController.navigate(destination) {
                     // 스플래시 화면을 백스택에서 제거하여 뒤로가기 시 스플래시 화면으로 돌아가지 않도록 합니다.
                     popUpTo(Screen.Splash.route) { inclusive = true }
                 }

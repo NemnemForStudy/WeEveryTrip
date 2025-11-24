@@ -1,7 +1,10 @@
 package com.example.travelapp.data.model
 
+import com.google.gson.annotations.SerializedName
+
 data class Post(
-    val id: String, // 서벙서 할당되는 ID
+    // 어노테이션을 추가하여 서버의 'post_id'와 매핑합니다.
+    @SerializedName("post_id") val id: String, // 서벙서 할당되는 ID
     val category: String,
     val title: String,
     val content: String,

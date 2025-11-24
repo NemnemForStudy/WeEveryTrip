@@ -44,4 +44,9 @@ class TokenManager @Inject constructor(@ApplicationContext context: Context) {
     fun clearToken() {
         prefs.edit().remove(KEY_AUTH_TOKEN).apply()
     }
+
+    fun isTokenValid(): Boolean {
+        val token = getToken()
+        return !token.isNullOrEmpty()
+    }
 }

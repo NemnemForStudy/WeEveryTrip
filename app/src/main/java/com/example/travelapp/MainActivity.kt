@@ -14,10 +14,16 @@ import androidx.compose.ui.Modifier
 import androidx.navigation.compose.rememberNavController
 import com.example.travelapp.ui.navigation.AppNavHost
 import com.example.travelapp.ui.theme.TravelAppTheme
+import com.example.travelapp.util.TokenManager
 import dagger.hilt.android.AndroidEntryPoint
+import javax.inject.Inject
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+    // Hilt를 통해 TokenManager 인스턴스 주입받음.
+    @Inject
+    lateinit var tokenManager: TokenManager
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -31,8 +37,7 @@ class MainActivity : ComponentActivity() {
                     val navController = rememberNavController()
 
                     // 2. 만들어둔 네비게이션 지도 넣고 전달
-                    AppNavHost(navController = navController)
-
+                    AppNavHost(navController = navController, tokenManager = tokenManager)
                 }
             }
         }
