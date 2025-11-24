@@ -15,9 +15,8 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.input.InputTransformation.Companion.keyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AirplanemodeActive
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.ChatBubbleOutline
+import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.List
@@ -159,7 +158,7 @@ fun HomeScreen(navController: NavHostController) {
                 // 자유 게시판
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Icon(
-                        imageVector = Icons.Filled.ChatBubbleOutline,
+                        imageVector = Icons.Outlined.ChatBubbleOutline,
                         contentDescription = "자유 게시판",
                         modifier = Modifier.size(30.dp),
                         tint = MaterialTheme.colorScheme.primary
@@ -170,7 +169,7 @@ fun HomeScreen(navController: NavHostController) {
                 // 여행 카테고리
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Icon(
-                        imageVector = Icons.Filled.AirplanemodeActive,
+                        imageVector = Icons.Default.List,
                         contentDescription = "여행 카테고리",
                         modifier = Modifier.size(30.dp),
                         tint = MaterialTheme.colorScheme.primary

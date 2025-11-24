@@ -123,7 +123,9 @@ dependencies {
     // 구글 로그인
     implementation("com.google.android.gms:play-services-auth:21.2.0")
 
-    implementation("androidx.compose.material:material-icons-extended:1.7.5")
+    // Material 3와 호환되는 아이콘 라이브러리
+    implementation("androidx.compose.material:material-icons-extended-android:1.6.7")
+
     // Hilt
     implementation(libs.hilt.android)
     kapt(libs.hilt.compiler)
@@ -135,4 +137,7 @@ dependencies {
     implementation("com.squareup.retrofit2:retrofit:2.9.0")
     implementation("com.squareup.retrofit2:converter-gson:2.9.0") // JSON 파싱을 위한 GSON 컨버터
     implementation("com.squareup.okhttp3:logging-interceptor:4.11.0") // HTTP 요청 로깅 (디버그용)
+
+    // Coil (이미지 로딩 라이브러리)
+    implementation("io.coil-kt:coil-compose:2.6.0")
 }

@@ -1,5 +1,6 @@
 package com.example.travelapp.ui.write
 
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.travelapp.data.model.CreatePostRequest
@@ -24,22 +25,33 @@ class WriteViewModel @Inject constructor(
 
     // 게시물 생성 요청 처리 함수
     // View(WriteScreen)에서 이 함수를 호출해 게시물 등록 시작
-    fun createPost(category: String, title: String, content: String, tags: List<String>, imgUrl: String?= null) {
+    // 11-24 imgUrl 대신 imageUris: List<Uri> 받음.
+    fun createPost(
+        category: String,
+        title: String,
+        content: String,
+        tags: List<String>,
+        imgUris: List<Uri>
+    ) {
         // viewModelScope는 ViewModel이 제거될 때 자동으로 취소되는 코루틴 스코프 제공
         viewModelScope.launch {
             _postCreationStatus.value = PostCreationStatus.Loading
-            val request = CreatePostRequest(category, title, content, tags, imgUrl)
 
             // Repository 통해 게시물 생성 API 호출
-            postRepository.createPost(request).onSuccess { post ->
+            postRepository.createPost(category, title, content, tags, imgUris).onSuccess { post ->
                 // API 호출 성공 시 상태 Success 변경, 생성 게시물 데이터 전달
                 _postCreationStatus.value = PostCreationStatus.Success(post.id)
             }
-            . onFailure { throwable ->
-                // API 호출 실패 시 Error 상태로 변경하고, 에러 메시지 전달함.
-                _postCreationStatus.value = PostCreationStatus.Error(throwable.localizedMessage ?: "알 수 없는 오류 발생")
-            }
+                . onFailure { throwable ->
+                    // API 호출 실패 시 Error 상태로 변경하고, 에러 메시지 전달함.
+                    _postCreationStatus.value = PostCreationStatus.Error(throwable.localizedMessage ?: "알 수 없는 오류 발생")
+                }
         }
+    }
+
+    // 게시물 작성 완료 또는 취소 후 상태 초기화
+    fun resetStatus() {
+        _postCreationStatus.value = PostCreationStatus.Idle
     }
 
     // 게시물 생성 상태를 나타내는 sealed 클래스

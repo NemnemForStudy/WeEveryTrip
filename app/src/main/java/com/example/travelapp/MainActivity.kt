@@ -25,7 +25,8 @@ class MainActivity : ComponentActivity() {
     lateinit var tokenManager: TokenManager
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
+                super.onCreate(savedInstanceState)
+
         enableEdgeToEdge()
         setContent {
             TravelAppTheme {

@@ -1,85 +1,90 @@
 package com.example.travelapp.ui.write
 
-import android.net.Uri // 추가
+import android.net.Uri
 import android.widget.Toast
-import androidx.activity.compose.rememberLauncherForActivityResult // 추가
-import androidx.activity.result.contract.ActivityResultContracts // 추가
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack // [수정] 호환성 좋은 기본 아이콘 사용
-import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.outlined.CameraAlt
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.navigation.NavController
-import androidx.navigation.compose.rememberNavController
-import com.example.travelapp.ui.theme.TravelAppTheme
-import androidx.compose.foundation.interaction.MutableInteractionSource // 추가된 import
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.navigation.NavController
+import androidx.navigation.compose.rememberNavController
+import coil.compose.rememberAsyncImagePainter
+import com.example.travelapp.ui.theme.TravelAppTheme
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WriteScreen(
     navController: NavController,
     viewModel: WriteViewModel = hiltViewModel()
 ) {
-    val context = LocalContext.current // Toast 메시지용
-
-    // ViewModel의 게시물 생성 상태 관찰
+    val context = LocalContext.current
     val postCreationStatus by viewModel.postCreationStatus.collectAsStateWithLifecycle()
 
-    // 상태 관리 변수들
     var showDialog by remember { mutableStateOf(true) }
     var category by remember { mutableStateOf("카테고리") }
     var title by remember { mutableStateOf("") }
     var content by remember { mutableStateOf("") }
-    var tagsInput by remember { mutableStateOf("") } // tags 변수 이름을 tagsInput으로 변경하여 List<String>과 구분
-    var selectedImageUri by remember { mutableStateOf<Uri?>(null) } // 선택된 이미지 URI 상태
+    var tagsInput by remember { mutableStateOf("") }
+    // [수정] 단일 이미지가 아닌, 여러 이미지 Uri를 저장할 리스트로 변경합니다.
+    var selectedImageUris by remember { mutableStateOf<List<Uri>>(emptyList()) }
 
-    // PostCreationStatus 변화에 따른 UI 피드백 처리
     LaunchedEffect(postCreationStatus) {
-        when(postCreationStatus) {
+        when (val status = postCreationStatus) {
             is WriteViewModel.PostCreationStatus.Success -> {
-                val postId = (postCreationStatus as WriteViewModel.PostCreationStatus.Success).postId
+                Toast.makeText(context, "게시물이 성공적으로 등록되었습니다!", Toast.LENGTH_SHORT).show()
+                // 상태를 초기화하고 이전 화면으로 돌아갑니다.
+                viewModel.resetStatus()
                 navController.popBackStack()
             }
             is WriteViewModel.PostCreationStatus.Error -> {
-                val message = (postCreationStatus as WriteViewModel.PostCreationStatus.Error).message
+                Toast.makeText(context, "오류: ${status.message}", Toast.LENGTH_LONG).show()
+                viewModel.resetStatus() // 오류 발생 후에도 상태 초기화
             }
             is WriteViewModel.PostCreationStatus.Loading -> {
-                Toast.makeText(context, "게시물 등록 중...", Toast.LENGTH_SHORT).show()
+                // 로딩 중임을 알리는 UI를 여기에 추가할 수 있습니다. (예: 로딩 스피너)
             }
-            WriteViewModel.PostCreationStatus.Idle -> {
-                // 초기 상태, 아무것도 안함.
-            }
+            WriteViewModel.PostCreationStatus.Idle -> { /* 초기 상태 */ }
         }
     }
 
-    // 갤러리 런처
-    val galleryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
-        selectedImageUri = uri
-        if (uri != null) {
-            Toast.makeText(context, "사진이 선택되었습니다.", Toast.LENGTH_SHORT).show()
+    // [수정] 여러 이미지를 선택할 수 있는 GetMultipleContents()로 변경합니다.
+    val galleryLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetMultipleContents()
+    ) { uris: List<Uri> ->
+        // 선택된 이미지 리스트를 상태에 업데이트합니다.
+        selectedImageUris = uris
+        if (uris.isNotEmpty()) {
+            Toast.makeText(context, "${uris.size}개의 사진이 선택되었습니다.", Toast.LENGTH_SHORT).show()
         }
     }
 
-    // 1. 여행 유형 선택 팝업
     if (showDialog) {
         AlertDialog(
-            onDismissRequest = {
-                // [수정] 팝업 바깥 눌렀을 때 앱 꺼짐 방지
-                showDialog = false
-            },
+            onDismissRequest = { showDialog = false },
             title = { Text(text = "여행 유형 선택") },
             text = { Text(text = "작성할 글의 여행 유형을 선택해주세요.") },
             dismissButton = {
@@ -97,74 +102,55 @@ fun WriteScreen(
         )
     }
 
-    // 2. 메인 화면 구성
     Scaffold(
-        modifier = Modifier.fillMaxSize(),
-        containerColor = Color.Transparent
-    ) { innerPadding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                .padding(16.dp)
-        ) {
-            // [상단 바]
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 16.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // [수정] 호환성 문제 없는 기본 아이콘(Filled.ArrowBack) 사용
-                Icon(
-                    imageVector = Icons.Default.ArrowBack,
-                    contentDescription = "Back",
-                    modifier = Modifier
-                        .size(24.dp)
-                        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { navController.popBackStack() }
-                )
-
-                // 등록 버튼
-                Text(
-                    text = "등록",
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.Blue,
-                    modifier = Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
-                        // 등록 버튼 클릭 시 동작
-                        if(title.isNotEmpty() && content.isNotEmpty() && category != "카테고리") {
-                            // 태그 문자열을 List<String> 으로 변환(공백 기준)
-                            val tagsList = tagsInput.split(" ").map { it.trim() }.filter { it.isNotEmpty() }
-                            //ViewModel createPost 함수 호출
+        topBar = {
+            TopAppBar(
+                title = { Text("글쓰기", fontWeight = FontWeight.Bold) },
+                navigationIcon = {
+                    IconButton(onClick = { navController.popBackStack() }) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = "뒤로가기")
+                    }
+                },
+                actions = {
+                    TextButton(onClick = {
+                        if (title.isNotEmpty() && content.isNotEmpty() && category != "카테고리") {
+                            val tagsList = tagsInput.split(" ", ",", "#").map { it.trim() }.filter { it.isNotEmpty() }
+                            // [수정] ViewModel에 이미지 Uri 리스트를 전달합니다.
                             viewModel.createPost(
                                 category = category,
                                 title = title,
                                 content = content,
                                 tags = tagsList,
-                                imgUrl = selectedImageUri?.toString()
+                                imgUris = selectedImageUris
                             )
                         } else {
                             Toast.makeText(context, "카테고리, 제목, 내용을 모두 입력해주세요.", Toast.LENGTH_SHORT).show()
                         }
+                    }) {
+                        Text("등록", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                     }
-                )
-            }
-
-            // [수정] HorizontalDivider -> Divider 로 변경 (앱 튕김의 주범 해결)
-            HorizontalDivider(color = Color.LightGray, thickness = 1.dp)
-            Spacer(modifier = Modifier.height(16.dp))
-
+                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White)
+            )
+        },
+        containerColor = Color.White
+    ) { innerPadding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .padding(horizontal = 16.dp)
+        ) {
             // [카테고리 선택 & 제목 입력]
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Box(
                     modifier = Modifier
                         .border(1.dp, Color.Gray, RoundedCornerShape(4.dp))
-                        .padding(horizontal = 12.dp, vertical = 12.dp)
-                        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { showDialog = true }
+                        .padding(horizontal = 12.dp, vertical = 8.dp)
+                        .clickable { showDialog = true }
                 ) {
                     Text(
                         text = category,
@@ -172,9 +158,7 @@ fun WriteScreen(
                         color = if (category == "카테고리") Color.Gray else Color.Black
                     )
                 }
-
                 Spacer(modifier = Modifier.width(8.dp))
-
                 TextField(
                     value = title,
                     onValueChange = { title = it },
@@ -189,34 +173,62 @@ fun WriteScreen(
                     singleLine = true
                 )
             }
-
-            Spacer(modifier = Modifier.height(16.dp))
+            Divider(color = Color(0xFFEEEEEE), thickness = 1.dp, modifier = Modifier.padding(vertical = 8.dp))
 
             // [사진 첨부 버튼]
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { galleryLauncher.launch("image/*") } // 갤러리 열기
+                    .clickable { galleryLauncher.launch("image/*") }
                     .padding(vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    imageVector = Icons.Default.CameraAlt,
-                    contentDescription = "사진 첨부",
-                    tint = Color.Gray
-                )
+                Icon(Icons.Outlined.CameraAlt, contentDescription = "사진 첨부", tint = Color.Gray)
                 Spacer(modifier = Modifier.width(8.dp))
-                Text(text = "사진 첨부하기", color = Color.Gray)
+                Text(text = "사진 첨부하기 (${selectedImageUris.size})", color = Color.Gray)
             }
 
-            // [수정] Divider 사용
-            HorizontalDivider(color = Color(0xFFEEEEEE), thickness = 1.dp)
+            // [추가] 선택된 이미지 미리보기
+            if (selectedImageUris.isNotEmpty()) {
+                LazyRow(
+                    modifier = Modifier.padding(vertical = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(selectedImageUris) { uri ->
+                        Box(
+                            modifier = Modifier.size(100.dp)
+                        ) {
+                            Image(
+                                painter = rememberAsyncImagePainter(uri),
+                                contentDescription = "선택된 이미지",
+                                modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(8.dp)),
+                                contentScale = ContentScale.Crop
+                            )
+                            IconButton(
+                                onClick = {
+                                    // 'x' 버튼 클릭 시 해당 이미지 리스트에서 제거
+                                    selectedImageUris = selectedImageUris - uri
+                                },
+                                modifier = Modifier
+                                    .align(Alignment.TopEnd)
+                                    .padding(4.dp)
+                                    .size(20.dp)
+                                    .background(Color.Black.copy(alpha = 0.5f), CircleShape)
+                            ) {
+                                Icon(Icons.Default.Close, contentDescription = "이미지 제거", tint = Color.White, modifier = Modifier.size(14.dp))
+                            }
+                        }
+                    }
+                }
+            }
+
+            Divider(color = Color(0xFFEEEEEE), thickness = 1.dp)
 
             // [태그 입력]
             TextField(
                 value = tagsInput,
                 onValueChange = { tagsInput = it },
-                placeholder = { Text("#태그를 입력하세요") },
+                placeholder = { Text("#태그를 입력하세요 (쉼표, 띄어쓰기로 구분)") },
                 modifier = Modifier.fillMaxWidth(),
                 colors = TextFieldDefaults.colors(
                     focusedContainerColor = Color.Transparent,
@@ -226,45 +238,29 @@ fun WriteScreen(
                 ),
                 singleLine = true
             )
+            Divider(color = Color(0xFFEEEEEE), thickness = 1.dp)
 
-            // [수정] Divider 사용
-            HorizontalDivider(color = Color(0xFFEEEEEE), thickness = 1.dp)
-
-            // [본문 입력 (TextArea)]
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f) // 남은 공간 모두 채우기
-            ) {
-                TextField(
-                    value = content,
-                    onValueChange = { content = it },
-                    placeholder = {
-                        Text(
-                            text = "불쾌감을 주는 욕설, 비하 발언 등 이상한 글을 쓸 경우\n이용 제재 및 처벌의 대상이 될 수 있습니다.",
-                            color = Color.Gray,
-                            fontSize = 14.sp
-                        )
-                    },
-                    modifier = Modifier.fillMaxSize(),
-                    colors = TextFieldDefaults.colors(
-                        focusedContainerColor = Color.Transparent,
-                        unfocusedContainerColor = Color.Transparent,
-                        focusedIndicatorColor = Color.Transparent,
-                        unfocusedIndicatorColor = Color.Transparent
-                    )
+            // [본문 입력]
+            TextField(
+                value = content,
+                onValueChange = { content = it },
+                placeholder = { Text("내용을 입력하세요...") },
+                modifier = Modifier.fillMaxWidth().weight(1f),
+                colors = TextFieldDefaults.colors(
+                    focusedContainerColor = Color.Transparent,
+                    unfocusedContainerColor = Color.Transparent,
+                    focusedIndicatorColor = Color.Transparent,
+                    unfocusedIndicatorColor = Color.Transparent
                 )
-            }
+            )
         }
     }
 }
 
-// 미리보기용
 @Preview(showBackground = true)
 @Composable
 fun WriteScreenPreview() {
     TravelAppTheme {
-        val navController = rememberNavController()
-        WriteScreen(navController = navController)
+        WriteScreen(navController = rememberNavController())
     }
 }
