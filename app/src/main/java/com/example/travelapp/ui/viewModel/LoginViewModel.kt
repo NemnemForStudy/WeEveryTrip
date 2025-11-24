@@ -5,18 +5,20 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.travelapp.BuildConfig
+import com.example.travelapp.data.api.NaverAuthApiService
 import com.example.travelapp.data.model.SocialLoginRequest
 import com.example.travelapp.data.model.User
 import com.example.travelapp.data.repository.AuthRepository
+import com.example.travelapp.util.TokenManager
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount
 import com.google.android.gms.common.api.ApiException
 import com.google.android.gms.tasks.Task
-import dagger.hilt.android.lifecycle.HiltViewModel
 import com.kakao.sdk.common.model.ClientError
 import com.kakao.sdk.common.model.ClientErrorCause
 import com.kakao.sdk.user.UserApiClient
 import com.navercorp.nid.NaverIdLoginSDK
 import com.navercorp.nid.oauth.OAuthLoginCallback
+import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -32,7 +34,9 @@ data class LoginUiState(
 
 @HiltViewModel
 class LoginViewModel @Inject constructor(
-    private val authRepository: AuthRepository
+    private val authRepository: AuthRepository,
+    private val tokenManager: TokenManager,
+    private val naverAuthApiService: NaverAuthApiService
 ) : ViewModel() {
 
     private val _loginEvent = MutableSharedFlow<LoginEvent>()
@@ -56,10 +60,7 @@ class LoginViewModel @Inject constructor(
                 )
                 NaverIdLoginSDK.authenticate(context, object : OAuthLoginCallback {
                     override fun onSuccess() {
-                        viewModelScope.launch {
-                            Log.i(TAG, "네이버 로그인 성공, 토큰 : ${NaverIdLoginSDK.getAccessToken()}")
-                            _loginEvent.emit(LoginEvent.LoginSuccess)
-                        }
+                        fetchNaverUserProfile()
                     }
 
                     override fun onFailure(httpStatus: Int, message: String) {
@@ -67,7 +68,7 @@ class LoginViewModel @Inject constructor(
                             val errorCode = NaverIdLoginSDK.getLastErrorCode().code
                             val errorDescription = NaverIdLoginSDK.getLastErrorDescription()
                             Log.e(TAG, "네이버 로그인 실패 - 코드: $errorCode, 설명: $errorDescription")
-                            _loginEvent.emit(LoginEvent.LoginFailed("네이버 로그인에 실패했습니다."))
+                            emitLoginFailed("네이버 로그인에 실패했습니다.")
                         }
                     }
 
@@ -82,13 +83,45 @@ class LoginViewModel @Inject constructor(
         }
     }
 
+    private fun fetchNaverUserProfile() {
+        viewModelScope.launch {
+            val accessToken = NaverIdLoginSDK.getAccessToken()
+            if (accessToken == null) {
+                emitLoginFailed("네이버 접근 토큰을 가져오는데 실패했습니다.")
+                return@launch
+            }
+
+            try {
+                val response = naverAuthApiService.getNaverUserProfile("Bearer $accessToken")
+
+                // [수정] isSuccessful 오타를 수정하고, 실패 시 에러 메시지를 보내는 로직을 추가합니다.
+                if (response.isSuccessful && response.body() != null) {
+                    val profile = response.body()!!.response
+                    Log.i(TAG, "네이버 프로필 조회 성공. 서버에 로그인 요청 시작.")
+                    requestSocialLogin(
+                        email = profile.email,
+                        nickname = profile.nickname,
+                        profileImage = profile.profileImage,
+                        provider = "naver",
+                        socialId = profile.id
+                    )
+                } else {
+                    Log.e(TAG, "네이버 프로필 조회 실패: ${response.code()} ${response.message()}")
+                    emitLoginFailed("네이버 사용자 정보를 가져오는데 실패했습니다.")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "네이버 프로필 조회 중 오류 발생", e)
+                emitLoginFailed("네이버 프로필 조회 중 오류가 발생했습니다.")
+            }
+        }
+    }
+
     fun handleGoogleSignInResult(task: Task<GoogleSignInAccount>) {
         try {
             val account: GoogleSignInAccount? = task.getResult(ApiException::class.java)
             if (account != null) {
                 Log.i(TAG, "구글 로그인 성공. 서버에 로그인 요청 시작.")
 
-                // [수정] email과 id가 null이 아닌지 안전하게 확인하고 서버에 요청합니다.
                 val userEmail = account.email
                 val userId = account.id
 
@@ -132,7 +165,7 @@ class LoginViewModel @Inject constructor(
 
                 if (response.isSuccessful && response.body() != null) {
                     val loginData = response.body()!!
-                    // TODO: 토큰 저장 로직 (다음 단계)
+                    loginData.token?.let { tokenManager.saveToken(it) }
                     _loginUiState.value = LoginUiState(loginSuccessUser = loginData.user)
                     _loginEvent.emit(LoginEvent.LoginSuccess)
                 } else {
@@ -188,7 +221,6 @@ class LoginViewModel @Inject constructor(
             } else if (user != null) {
                 Log.i(TAG, "카카오 사용자 정보 요청 성공. 서버에 로그인 요청 시작.")
 
-                // [수정] 카카오 로그인도 email과 id가 null이 아닌지 안전하게 확인합니다.
                 val userEmail = user.kakaoAccount?.email
                 val userId = user.id
 

@@ -12,7 +12,9 @@ const postsRouter = require('./src/api/post');
 const authRouter = require('./src/api/auth');
 
 // JSON 요청 본물을 파싱하기 위한 미들웨어
-app.use(express.json());
+// JSON 요청 본문의 크기 제한을 50mb로 늘립니다.
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // 기본 API
 app.get('/', (req, res) => {
