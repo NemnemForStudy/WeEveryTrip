@@ -106,4 +106,78 @@ router.post('/', upload.array('image', 5), async(req, res) => {
         client.release();
     }
 })
+
+// GET /api/posts - 모든 게시물 조회 또는 제목으로 검색
+router.get('/', async(req, res) =>  {
+    // 클라이언트가 보낸 URL 쿼리에서 search 값을 가져옴.
+    const { search } = req.query;
+    console.log('=== 검색 요청 ===');
+    console.log('search 파라미터:', search);
+    console.log('search 타입:', typeof search);
+    const client = await db.getClient(); // db 연결 가져옴.
+
+    try {
+        let queryText;
+        const queryParams = [];
+
+        if(search) {
+            // 검색어가 있는 경우 : SQL 쿼리에서 WHERE 절 추가해 제목(title) 필터링함.
+            queryText = `
+                SELECT p.post_id, p.title, p.content, u.nickname, p.created_at
+                FROM post p
+                JOIN "user" u ON p.user_id = u.user_id
+                WHERE p.title ILIKE $1
+                ORDER BY p.created_at DESC
+            `;
+            queryParams.push(`%${search}%`);
+        } else {
+            // 검색어 없음
+            queryText = `
+                SELECT p.post_id, p.title, p.content, u.nickname, p.created_at
+                FROM post p
+                JOIN "user" u ON p.user_id = u.user_id
+                ORDER BY p.created_at DESC
+            `;
+        }
+
+        const result = await db.query(queryText, queryParams);
+        console.log('=== 검색 결과 ===');
+        console.log('쿼리:', queryText);
+        console.log('파라미터:', queryParams);
+        console.log('결과 행 수:', result.rows.length);
+        console.log('결과:', result.rows);
+        // 성공적 조회
+        res.status(200).json(result.rows);
+    } catch(err) {
+        // 서버 에러 처리
+        console.error('게시물 조회 중 오류 발생: ', err.stack);
+        res.status(500).json({ message: '서버 오류로 인해 게시물 조회할 수 없습니다.' });
+    } finally {
+        // 사용한 클라이언트 반환
+        client.release();
+    }
+})
+
+// ==================================================
+// 임시 테스트용 API (닉네임 컬럼 확인용)
+// ==================================================
+router.get('/test-nickname', async (req, res) => {
+    try {
+        // 다른 테이블은 전혀 건드리지 않고, 오직 "user" 테이블에서 "nickname"만 가져옵니다.
+        const result = await db.query('SELECT nickname FROM "user" LIMIT 1');
+        // 성공하면, 성공 메시지와 함께 실제 데이터를 보여줍니다.
+        res.status(200).json({
+            message: '성공! user 테이블에서 nickname 컬럼을 찾았습니다.',
+            data: result.rows
+        });
+    } catch (err) {
+        // 실패하면, 어떤 에러 메시지가 발생하는지 명확하게 보여줍니다.
+        res.status(500).json({
+            message: '오류! user 테이블에서 nickname 컬럼을 찾을 수 없습니다.',
+            error: err.message,
+            detail: err.detail
+        });
+    }
+});
+
 module.exports = router;

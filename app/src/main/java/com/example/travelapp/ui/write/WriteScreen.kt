@@ -15,7 +15,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.outlined.CameraAlt
+import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -183,7 +183,7 @@ fun WriteScreen(
                     .padding(vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(Icons.Outlined.CameraAlt, contentDescription = "사진 첨부", tint = Color.Gray)
+                Icon(Icons.Default.CameraAlt, contentDescription = "사진 첨부", tint = Color.Gray)
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(text = "사진 첨부하기 (${selectedImageUris.size})", color = Color.Gray)
             }

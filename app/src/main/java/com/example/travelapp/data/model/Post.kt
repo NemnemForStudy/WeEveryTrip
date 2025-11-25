@@ -8,6 +8,8 @@ data class Post(
     val category: String,
     val title: String,
     val content: String,
+    val nickname: String,
+    val created_at: String,
     val tags: List<String>,
     val imgUrl: String? = null // 이미지 있을 경우 URL
 )

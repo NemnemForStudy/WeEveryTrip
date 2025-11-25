@@ -85,4 +85,23 @@ class PostRepository @Inject constructor(
             Result.failure(e)
         }
     }
+
+    suspend fun searchPostsByTitle(query: String): Result<List<Post>> {
+        println("Repository에서 검색 시작: query=$query")
+        return try {
+            // API 호출
+            val response = postApiService.searchPosts(query)
+
+            if(response.isSuccessful) {
+                response.body()?.let {
+                    Result.success(it)
+                } ?: Result.failure(IllegalStateException("API 응답 본문이 비어있습니다."))
+            } else {
+                Result.failure(IllegalStateException("검색 실패: ${response.code()} - ${response.message()}"))
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            Result.failure(e)
+        }
+    }
 }

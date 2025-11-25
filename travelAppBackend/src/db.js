@@ -16,4 +16,5 @@ const pool = new Pool({
 // 다른 파일에서 pool 가져와 쿼리 실행
 module.exports = {
     query: (text, params) => pool.query(text, params),
+    getClient: () => pool.connect(),
 }

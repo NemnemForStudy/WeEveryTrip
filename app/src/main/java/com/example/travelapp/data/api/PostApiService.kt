@@ -11,6 +11,7 @@ import retrofit2.http.Multipart
 import retrofit2.http.POST
 import retrofit2.http.Part
 import retrofit2.http.PartMap
+import retrofit2.http.Query
 
 interface PostApiService {
     // 게시물 생성 api 엔드포인트
@@ -21,6 +22,9 @@ interface PostApiService {
 
     @GET("posts") // 모든 게시물 가져오기
     suspend fun getPosts(): Response<List<Post>>
+
+    @GET("api/posts") // 제목으로 검색
+    suspend fun searchPosts(@Query("search") query: String): Response<List<Post>>
 
     @Multipart
     @POST("/api/posts") // TODO: 실제 백엔드 API 엔드포인트 경로로 변경해야 함.

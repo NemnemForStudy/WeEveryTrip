@@ -25,12 +25,14 @@ android {
         getByName("debug") {
             // local.properties에서 BASE_URL 값을 읽어오거나, 없으면 기본값을 사용합니다.
             val baseUrl = localProperties.getProperty("BASE_URL")
+            val phoneBaseUrl = localProperties.getProperty("PHONE_BASE_URL", baseUrl)
             buildConfigField("String", "BASE_URL", "\"$baseUrl\"")
+            buildConfigField("String", "PHONE_BASE_URL", "\"$phoneBaseUrl\"")
         }
         getByName("release") {
             // 릴리즈(출시) 빌드에서는 실제 배포된 서버 주소 사용
             // 지금은 없으니 임시주소
-            val baseUrl = localProperties.getProperty("RELEASE_BASE_URL", "\"https://api.your-domain.com\"")
+            val baseUrl = localProperties.getProperty("RELEASE_BASE_URL", "https://api.your-domain.com")
             buildConfigField("String", "BASE_URL", "\"$baseUrl\"")
 
             isMinifyEnabled = false
@@ -65,16 +67,6 @@ android {
         // 카카오 콜백위해 꼭 있어야함.
         manifestPlaceholders["kakao_app_key"] = "kakao${kakaoKey}"
     }
-
-    buildTypes {
-        release {
-            isMinifyEnabled = false
-            proguardFiles(
-                getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro"
-            )
-        }
-    }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
@@ -85,6 +77,9 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true
+    }
+    composeOptions {
+        kotlinCompilerExtensionVersion = "2.0.21"
     }
 }
 
@@ -118,13 +113,13 @@ dependencies {
 //    implementation("androidx.browser:browser:1.7.0")
 
     // 네비게이션 라이브러리 추가
-    implementation("androidx.navigation:navigation-compose:2.7.7")
+        implementation("androidx.navigation:navigation-compose")
 
     // 구글 로그인
     implementation("com.google.android.gms:play-services-auth:21.2.0")
 
     // Material 3와 호환되는 아이콘 라이브러리
-    implementation("androidx.compose.material:material-icons-extended-android:1.6.7")
+        implementation("androidx.compose.material:material-icons-extended")
 
     // Hilt
     implementation(libs.hilt.android)

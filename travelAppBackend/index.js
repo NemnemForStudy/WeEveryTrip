@@ -27,6 +27,6 @@ app.use('/api/auth', authRouter);
 
 // 서버 실행
 app.listen(port, () => {
-  console.log(`서버가 http://localhost:${port} 에서 실행 중입니다.`);
+  console.log(`서버가 http://0.0.0.0:${port} 에서 실행 중입니다.`);
   console.log('데이터베이스 연결을 테스트하려면 http://localhost:3000/test-db 로 접속하세요.');
 });

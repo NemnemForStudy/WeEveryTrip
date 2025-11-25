@@ -81,7 +81,7 @@ object NetworkModule {
     @Named("AppRetrofit")
     fun provideAppRetrofit(@Named("AuthOkHttpClient") okHttpClient: OkHttpClient): Retrofit {
         return Retrofit.Builder()
-            .baseUrl(BuildConfig.BASE_URL)
+            .baseUrl(BuildConfig.PHONE_BASE_URL)
             .client(okHttpClient)
             .addConverterFactory(GsonConverterFactory.create()) // JSON 파싱 위한 GSON 컨버팅
             .build()

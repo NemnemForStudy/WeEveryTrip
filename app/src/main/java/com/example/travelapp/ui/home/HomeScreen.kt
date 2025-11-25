@@ -10,16 +10,16 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.text.input.InputTransformation.Companion.keyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.outlined.ChatBubbleOutline
+import androidx.compose.material.icons.filled.AirplanemodeActive
+import androidx.compose.material.icons.filled.ChatBubbleOutline
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -33,6 +33,7 @@ import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -42,11 +43,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.rememberNavController
+import com.example.travelapp.data.model.Post
 import com.example.travelapp.ui.navigation.Screen
 import com.example.travelapp.ui.theme.TravelAppTheme
 
@@ -56,24 +60,16 @@ import com.example.travelapp.ui.theme.TravelAppTheme
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HomeScreen(navController: NavHostController) {
-    // 검색어 저장할 상태 변수
+fun HomeScreen(
+    navController: NavHostController,
+    // 생명주기에 맞춰 viewModel이 자동으로 관리됨.
+    viewModel: HomeViewModel = hiltViewModel()
+) {
+   // 검색어 저장할 상태 변수
     var searchQuery by remember { mutableStateOf("") }
+    val showSearchBar by viewModel.showSearchBar.collectAsState()
     // 소프트웨어 키보드 컨트롤러
     val keyboardController = LocalSoftwareKeyboardController.current
-    var showSearchBar by remember { mutableStateOf(false) }
-
-    val performSearch = { query: String ->
-        if(query.isNotBlank()) {
-            // 실제 검색 로직 구현
-            // 네트워크 요청, 로컬 데이터 검색
-            Log.d("Search", "검색어: $query")
-
-            // 검색 후 검색바 닫기
-            showSearchBar = false
-            keyboardController?.hide()
-        }
-    }
 
     Scaffold(
         topBar = {
@@ -83,7 +79,10 @@ fun HomeScreen(navController: NavHostController) {
                         // 검색 입력 필드
                         TextField(
                             value = searchQuery,
-                            onValueChange = { searchQuery = it },
+                            onValueChange = { newValue ->
+                                Log.d("HomeScreen", "입력됨: $newValue")
+                                searchQuery = newValue
+                            },
                             placeholder = { Text("검색어를 입력하세요") },
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth(),
@@ -92,14 +91,19 @@ fun HomeScreen(navController: NavHostController) {
                             // 검색 버튼 클릭 시 동작
                             keyboardActions = KeyboardActions(
                                 onSearch = {
+                                    Log.d("HomeScreen", "onSearch triggered! 검색어: $searchQuery")
                                     keyboardController?.hide()
                                     // 검색 로직 추가
-                                    performSearch(searchQuery)
+                                    // 검색 실행도 ViewModel에 위임합니다.
+                                    viewModel.performSearch(searchQuery)
                                 }
                             ),
                             leadingIcon = {
                                 // 뒤로 가기 버튼
-                                IconButton(onClick = { showSearchBar = false }) {
+                                IconButton(onClick = {
+                                    viewModel.closeSearchBar()
+                                    searchQuery = ""
+                                }) {
                                     Icon(Icons.Default.ArrowBack, "뒤로 가기")
                                 }
                             },
@@ -127,7 +131,7 @@ fun HomeScreen(navController: NavHostController) {
                     }
 
                     // Search button
-                    IconButton(onClick = { showSearchBar = true }) {
+                    IconButton(onClick = { viewModel.openSearchBar() }) {
                         Icon(Icons.Filled.Search, contentDescription = "검색")
                     }
                 },
@@ -158,7 +162,7 @@ fun HomeScreen(navController: NavHostController) {
                 // 자유 게시판
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Icon(
-                        imageVector = Icons.Outlined.ChatBubbleOutline,
+                        imageVector = Icons.Default.ChatBubbleOutline,
                         contentDescription = "자유 게시판",
                         modifier = Modifier.size(30.dp),
                         tint = MaterialTheme.colorScheme.primary
@@ -169,7 +173,7 @@ fun HomeScreen(navController: NavHostController) {
                 // 여행 카테고리
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Icon(
-                        imageVector = Icons.Default.List,
+                        imageVector = Icons.Default.AirplanemodeActive,
                         contentDescription = "여행 카테고리",
                         modifier = Modifier.size(30.dp),
                         tint = MaterialTheme.colorScheme.primary
@@ -199,7 +203,81 @@ fun HomeScreen(navController: NavHostController) {
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
+            if(showSearchBar) {
+                val searchResults by viewModel.searchResults.collectAsState()
+                val isLoading by viewModel.isLoading.collectAsState()
+
+                if(isLoading) {
+                    // 로딩 중
+                    Text(
+                        text = "검색 중...",
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(16.dp)
+                    )
+                } else if (searchResults.isEmpty()) {
+                    Text(
+                        text = "검색 결과가 없습니다.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(16.dp)
+                    )
+                } else {
+                    // 검색 결과가 있을때 리스트로 표시
+                    LazyColumn(
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        items(searchResults.size) { index ->
+                            val post = searchResults[index]
+                            PostItem(post = post)
+                        }
+                    }
+                }
+            }
             Text(text = "메인 콘텐츠 영역", style = MaterialTheme.typography.bodyLarge)
+        }
+    }
+}
+
+@Composable
+fun PostItem(post: Post) {
+    Column(
+        modifier = Modifier.fillMaxWidth()
+            .padding(vertical = 8.dp)
+            .background(
+                color = MaterialTheme.colorScheme.surface,
+                shape = RoundedCornerShape(8.dp)
+            )
+            .padding(12.dp)
+    ) {
+        Text(
+            text = post.title,
+            style = MaterialTheme.typography.titleMedium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+
+        Text(
+            text = post.content,
+            style = MaterialTheme.typography.bodySmall,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(top = 4.dp)
+        )
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                text = post.nickname,
+                style = MaterialTheme.typography.labelSmall
+            )
+
+            Text(
+                text = post.created_at,
+                style = MaterialTheme.typography.labelSmall
+            )
         }
     }
 }
