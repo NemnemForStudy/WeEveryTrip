@@ -27,12 +27,14 @@ interface PostApiService {
     suspend fun searchPosts(@Query("search") query: String): Response<List<Post>>
 
     @Multipart
-    @POST("/api/posts") // TODO: 실제 백엔드 API 엔드포인트 경로로 변경해야 함.
+    @POST("api/posts") // TODO: 실제 백엔드 API 엔드포인트 경로로 변경해야 함.
     suspend fun createPost(
-        // 텍스트 데이터들을 Map 형태로 받음
-        @PartMap textData: Map<String, @JvmSuppressWildcards RequestBody>,
-        // 이미지 파일들을 리스트 형태로 받음
-        @Part images: List<MultipartBody.Part>
-//        @Body request: CreatePostRequest
+        // 1. @PartMap을 개별 @Part로 변경합니다.
+        @Part("category") category: RequestBody,
+        @Part("title") title: RequestBody,
+        @Part("content") content: RequestBody,
+        @Part("tags") tags: RequestBody,
+        // 2. 이미지 파트의 이름도 명시적으로 "images"로 지정합니다.
+        @Part images: Array<MultipartBody.Part>
     ): Response<Post>
 }

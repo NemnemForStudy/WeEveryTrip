@@ -105,12 +105,19 @@ dependencies {
     testImplementation(libs.junit.jupiter)
     testImplementation(libs.junit.jupiter)
     testImplementation(libs.junit.jupiter)
+    testImplementation(libs.junit.jupiter)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
+    
+    // AndroidTest용 Mockito 추가
+    androidTestImplementation("org.mockito:mockito-android:5.7.0")
+    androidTestImplementation("org.mockito.kotlin:mockito-kotlin:5.2.1")
+    androidTestImplementation(kotlin("test"))
+    androidTestImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.0")
 
     // 카카오 로그인
     implementation("com.kakao.sdk:v2-all:2.20.1")
