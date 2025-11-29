@@ -171,15 +171,24 @@ class PostRepositoryTest {
      * Given : API가 정상적으로 게시물을 생성할 때
      * When : createPost() 호출
      * Then : Result.success와 함께 생성된 게시물이 반환되어야 함
+     *
+     * Mock 설정 설명:
+     * - any<RequestBody>(): 어떤 RequestBody 인자가 와도 매칭
+     * - any<Array<MultipartBody.Part>>(): 어떤 Array 인자가 와도 매칭
+     * - thenReturn(mockResponse): 위 조건이 만족되면 mockResponse 반환
      */
     @Test
     fun testCreatePostSuccess() = runTest {
         val mockResponse = Response.success(samplePost)
 
-        // any() 매처를 사용해 어떤 인자가 와도 mockResponse 반환
+        // 실제 함수 시그니처에 맞게 Mock 설정
+        // createPost(category, title, content, tags, images) 순서대로 매칭
         whenever(mockPostApiService.createPost(
-            any<Map<String, RequestBody>>(),
-            any<List<MultipartBody.Part>>()
+            any<RequestBody>(),  // category
+            any<RequestBody>(),  // title
+            any<RequestBody>(),  // content
+            any<RequestBody>(),  // tags
+            any<Array<MultipartBody.Part>>()  // images (Array!)
         )).thenReturn(mockResponse)
 
         // when: Repo의 게시물 생성 함수
@@ -207,10 +216,14 @@ class PostRepositoryTest {
     fun testCreatePostFailure() = runTest {
         val expectException = RuntimeException("서버 연결 실패")
 
+        // 실제 함수 시그니처에 맞게 Mock 설정
         whenever(
             mockPostApiService.createPost(
-                any<Map<String, RequestBody>>(),
-                any<List<MultipartBody.Part>>()
+                any<RequestBody>(),  // category
+                any<RequestBody>(),  // title
+                any<RequestBody>(),  // content
+                any<RequestBody>(),  // tags
+                any<Array<MultipartBody.Part>>()  // images (Array!)
             )
         ).thenThrow(expectException)
 

@@ -10,7 +10,11 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
-        maven { url = java.net.URI("https://devrepo.kakao.com/nexus/content/groups/public/") }
+        // 카카오 sdk
+        maven("https://devrepo.kakao.com/nexus/content/groups/public/")
+        // ️ 네이버 지도 SDK 저장소
+        maven("https://repository.map.naver.com/archive/maven")
+        // maven { url = uri("https://naver.jfrog.io/artifactory/map-sdk") }
     }
 }
 

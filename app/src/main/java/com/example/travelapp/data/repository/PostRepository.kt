@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import com.example.travelapp.data.api.PostApiService
 import com.example.travelapp.data.model.Post
+import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
@@ -14,7 +15,8 @@ import java.io.FileOutputStream
 import java.util.UUID
 import javax.inject.Inject
 
-class PostRepository @Inject constructor(
+//@HiltViewModel
+open class PostRepository @Inject constructor(
     private val postApiService: PostApiService,
     @ApplicationContext private val context: Context
 ) {

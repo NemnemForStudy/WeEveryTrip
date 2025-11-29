@@ -11,7 +11,20 @@ data class Post(
     val nickname: String,
     val created_at: String,
     val tags: List<String>,
-    val imgUrl: String? = null // 이미지 있을 경우 URL
+    val imgUrl: String? = null, // 이미지 있을 경우 URL
+
+    // 지도 표시 위한 위치 정보 필드 추가
+    @SerializedName("latitude")
+    val latitude: Double? = null, // 위도
+
+    @SerializedName("longitude")
+    val longitude: Double? = null, // 경도
+
+    @SerializedName("location_name")
+    val locationName: String? = null, // 위치 이름
+
+    @SerializedName("is_domestic")
+    val isDomestic: Boolean = true // 국내(true) / 국외(false) 여행 구분
 )
 
 // 게시물 생성 요청위한 데이터 클래스(ID는 서버에서 생성하므로 제외)
@@ -20,5 +33,9 @@ data class CreatePostRequest(
     val title: String,
     val content: String,
     val tags: List<String>,
-    val imgUrl: String? = null
+    val imgUrl: String? = null,
+    val latitude: Double? = null,
+    val longitude: Double? = null,
+    val locationName: String? = null,
+    val isDouble: Boolean = true
 )

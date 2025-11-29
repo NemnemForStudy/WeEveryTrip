@@ -1,21 +1,21 @@
 package com.example.travelapp.ui.home
 
-import android.app.Application
 import com.example.travelapp.data.model.Post
 import com.example.travelapp.data.repository.PostRepository
-import kotlinx.coroutines.ExperimentalCoroutinesApi
-import org.junit.jupiter.api.AfterEach
-import org.junit.jupiter.api.BeforeEach
-import org.junit.jupiter.api.Test
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
-import org.mockito.kotlin.mock // Mockito import
+import org.junit.jupiter.api.AfterEach
+// ⭐️ 중요: JUnit 5의 Assertions를 사용해야 합니다.
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Test
+import org.mockito.kotlin.mock
 import org.mockito.kotlin.whenever
-import kotlin.test.assertEquals
 
 @ExperimentalCoroutinesApi
 class HomeViewModelTest {
@@ -27,7 +27,9 @@ class HomeViewModelTest {
     @BeforeEach
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
+        // Mockito를 사용하여 가짜 객체 생성
         mockPostRepository = mock()
+        // ViewModel에 가짜 Repository 주입
         viewModel = HomeViewModel(mockPostRepository)
     }
 
@@ -36,9 +38,10 @@ class HomeViewModelTest {
         Dispatchers.resetMain()
     }
 
-    // 실패하는 테스트
+    // 실패하는 테스트 (TDD Red Phase)
     @Test
     fun `performSearch_should_update_searchResults_on_success`() = runTest {
+        // Given (준비)
         val searchQuery = "테스트"
         val fakeSearchResults = listOf(
             Post(
@@ -63,13 +66,17 @@ class HomeViewModelTest {
             )
         )
 
-        // searchPostsByTitle 호출되면 성공으로 fakeSearchResults 반환하도록 설정
+        // searchPostsByTitle 호출되면 성공으로 fakeSearchResults 반환하도록 설정 (Stubbing)
         whenever(mockPostRepository.searchPostsByTitle(searchQuery)).thenReturn(Result.success(fakeSearchResults))
 
+        // When (실행)
         viewModel.performSearch(searchQuery)
 
+        // Then (검증)
         testDispatcher.scheduler.advanceUntilIdle() // 예약된 코루틴 작업 모두 실행
         val searchResult = viewModel.searchResults.first() // searchResults StateFlow 첫 번째 값을 가져옴
+
+        // JUnit 5 assertEquals 사용
         assertEquals(2, searchResult.size)
         assertEquals("테스트 제목 1", searchResult[0].title)
     }

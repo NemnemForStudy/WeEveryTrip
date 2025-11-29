@@ -11,6 +11,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import com.example.travelapp.ui.auth.LoginScreen
 import com.example.travelapp.ui.auth.SplashScreen
+import com.example.travelapp.ui.home.FeedScreen
 import com.example.travelapp.ui.home.HomeScreen
 import com.example.travelapp.ui.write.WriteScreen
 import com.example.travelapp.util.TokenManager
@@ -25,6 +26,7 @@ sealed class Screen(val route: String) {
     object Login : Screen("login")
     object Home : Screen("home")
     object Write : Screen("write") // 글쓰기 화면 경로 추가
+    object Feed : Screen("feed") // 계시판 화면 경로
 }
 
 /**
@@ -61,6 +63,16 @@ fun AppNavHost(
 
         composable(Screen.Write.route) { // 글쓰기 화면 composable 추가
             WriteScreen(navController = navController)
+        }
+
+        composable(Screen.Feed.route) {
+            FeedScreen(
+                onPostClick = { post ->
+                    // TODO: 게시물 상세 화면 이동
+                    // navController.navigate(Screen.Detail.route)
+
+                }
+            )
         }
     }
 }
