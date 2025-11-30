@@ -5,10 +5,10 @@ import com.example.travelapp.data.api.PostApiService
 import com.example.travelapp.data.model.Post
 import kotlinx.coroutines.test.runTest
 import okhttp3.MultipartBody
-import okhttp3.Request
 import okhttp3.RequestBody
-import kotlin.test.assertEquals
-import kotlin.test.assertTrue
+// ⭐️ [변경] JUnit 4용 Import 사용 (jupiter 아님)
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.mockito.Mock
@@ -18,29 +18,18 @@ import org.mockito.kotlin.whenever
 import retrofit2.Response
 
 /**
- * PostRepository의 단위 테스트 클래스
- *
- * TDD(Test Driven Development) 원칙에 따라 작성됨:
- * 1. Red: 실패하는 테스트 먼저 작성
- * 2. Green: 테스트를 통과하는 최소한의 코드 작성
- * 3. Refactor: 코드 개선 및 리팩토링
- *
- * 테스트 대상: PostRepository
- * Mock 객체: PostApiService, Context
+ * PostRepository의 단위 테스트 클래스 (JUnit 4 버전)
+ * * 주의: androidTest 폴더에 있으므로 JUnit 4를 사용해야 합니다.
  */
 class PostRepositoryTest {
 
-    // Mock 객체 선언
-    // @Mock 어노테이션으로 Mockito가 가짜 객체를 생성하도록 함
     @Mock
     private lateinit var mockPostApiService: PostApiService
     @Mock
     private lateinit var mockContext: Context
 
-    // Mock 객체
     private lateinit var postRepository: PostRepository
 
-    // 테스트용 데이터
     private val samplePost = Post(
         id = "test-id-123",
         category = "여행",
@@ -52,57 +41,31 @@ class PostRepositoryTest {
         imgUrl = "https://example.com/image.jpg"
     )
 
-    /**
-     * 각 테스트 실행 전 호출되는 초기화 함수
-     *
-     * MockitoAnnotations.openMocks(this):
-     * - @Mock 어노테이션이 붙은 필드들을 Mock 객체로 초기화
-     *
-     * PostRepository 인스턴스 생성:
-     * - Mock 객체들을 주입하여 실제 네트워크 호출 없이 테스트 가능
-     */
-
+    // ⭐️ [변경] @BeforeEach -> @Before (JUnit 4)
     @Before
     fun setUp() {
-        // Mock 객체 초기화
         MockitoAnnotations.openMocks(this)
         postRepository = PostRepository(mockPostApiService, mockContext)
     }
 
-    /**
-     * 테스트 1: 게시물 검색 성공 시나리오
-     *
-     * Given : API가 정상적 게시물 리스트 반환할 때
-     * When : searchPostsByTitle() 호출
-     * Then : Result.success와 함께 리스트 반환
-     */
-
     @Test
-    fun `testSearchPostSearch`() = runTest {
+    fun testSearchPostSearch() = runTest {
         val query = "제주도"
         val expectedPosts = listOf(samplePost)
         val mockResponse = Response.success(expectedPosts)
 
-        // whenever : mockito의 stubbing 메서드
-        // searchPosts(query) 호출되면 mockResponse 반환하도록 설정
         whenever(mockPostApiService.searchPosts(query))
             .thenReturn(mockResponse)
 
-        // When : Repository의 검색 함수 호출
         val result = postRepository.searchPostsByTitle(query)
 
-        // Then : 결과 검증
-        assertTrue(result.isSuccess, "검색 결과는 성공적이여야 합니다.")
-        assertEquals(expectedPosts, result.getOrNull(), "반환된 게시물 리스트가 예상과 일치해야 합니다.")
+        // ⭐️ [변경] JUnit 4는 메시지가 맨 앞에 옵니다.
+        // assertTrue(message, condition)
+        assertTrue("검색 결과는 성공적이여야 합니다.", result.isSuccess)
+        // assertEquals(message, expected, actual)
+        assertEquals("반환된 게시물 리스트가 예상과 일치해야 합니다.", expectedPosts, result.getOrNull())
     }
 
-    /**
-     * 테스트 2: 게시물 검색 실패 시나리오 (네트워크 오류)
-     *
-     * Given : API 호출 시 예외가 발생할 때
-     * When : searchPostsByTitle() 호출
-     * Then : Result.failure가 반환되어야 함
-     */
     @Test
     fun testSearchPostFailure_NetworkError() = runTest {
         val query = "제주도"
@@ -113,24 +76,16 @@ class PostRepositoryTest {
 
         val result = postRepository.searchPostsByTitle(query)
 
-        // Then : 실패 결과 검증
-        assertTrue(result.isFailure, "검색 실패")
-        assertEquals(expectException, result.exceptionOrNull(), "예외가 올바르게 전달되어야 함.")
+        assertTrue("검색 실패해야 함", result.isFailure)
+        assertEquals("예외가 올바르게 전달되어야 함.", expectException, result.exceptionOrNull())
     }
 
-    /**
-     * 테스트 3: 게시물 검색 실패 시나리오 (HTTP 404 에러)
-     *
-     * Given : API가 404 에러를 반환할 때
-     * When : searchPostsByTitle() 호출
-     * Then : Result.failure가 반환되어야 함
-     */
     @Test
     fun testSearchPostFailure_HttpError() = runTest {
         val query = "존재하지 않는 게시물"
         val mockResponse = Response.error<List<Post>>(
             404,
-            okhttp3.ResponseBody.create(null, "Not Fount")
+            okhttp3.ResponseBody.create(null, "Not Found")
         )
 
         whenever(mockPostApiService.searchPosts(query))
@@ -138,18 +93,10 @@ class PostRepositoryTest {
 
         val result = postRepository.searchPostsByTitle(query)
 
-        assertTrue(result.isFailure, "검색 실패")
-        assertTrue(result.exceptionOrNull() is IllegalStateException,
-            "IllegalStateException 발생해야함.")
+        assertTrue("검색 실패해야 함", result.isFailure)
+        assertTrue("IllegalStateException 발생해야함.", result.exceptionOrNull() is IllegalStateException)
     }
 
-    /**
-     * 테스트 4: 빈 검색 결과 처리
-     *
-     * Given : API가 빈 리스트를 반환할 때
-     * When : searchPostsByTitle() 호출
-     * Then : 빈 리스트와 함께 Result.success가 반환되어야 함
-     */
     @Test
     fun testSearchPostEmptyResult() = runTest {
         val query = "검색결과없음"
@@ -161,37 +108,45 @@ class PostRepositoryTest {
 
         val result = postRepository.searchPostsByTitle(query)
 
-        assertTrue(result.isSuccess, "검색은 성공이어야 한다.")
-        assertEquals(emptyList, result.getOrNull(), "빈 리스트 반환")
+        assertTrue("검색은 성공이어야 한다.", result.isSuccess)
+        assertEquals("빈 리스트 반환", emptyList, result.getOrNull())
     }
 
-    /**
-     * 테스트 5: 게시물 생성 성공 시나리오
-     *
-     * Given : API가 정상적으로 게시물을 생성할 때
-     * When : createPost() 호출
-     * Then : Result.success와 함께 생성된 게시물이 반환되어야 함
-     *
-     * Mock 설정 설명:
-     * - any<RequestBody>(): 어떤 RequestBody 인자가 와도 매칭
-     * - any<Array<MultipartBody.Part>>(): 어떤 Array 인자가 와도 매칭
-     * - thenReturn(mockResponse): 위 조건이 만족되면 mockResponse 반환
-     */
+    fun testGetAllPostsSuccess() = runTest {
+        val expectedPosts = listOf(samplePost, samplePost.copy(id = "2", title = "부산 여행"))
+        val mockResponse = Response.success(expectedPosts)
+
+        whenever(mockPostApiService.getAllPosts()).thenReturn(mockResponse)
+
+        val result = postRepository.getAllPosts()
+
+        assertTrue("전제 조회 성공", result.isSuccess)
+        assertEquals("리스트 일치", expectedPosts, result.getOrNull())
+    }
+
+    @Test // ⭐️ 실패 케이스도 추가
+    fun testGetAllPostsFailure() = runTest {
+        val expectException = RuntimeException("API 서버 다운")
+        whenever(mockPostApiService.getAllPosts()).thenThrow(expectException)
+
+        val result = postRepository.getAllPosts()
+
+        assertTrue("전체 조회 실패해야 함", result.isFailure)
+        assertEquals("예외 전달 확인", expectException, result.exceptionOrNull())
+    }
+
     @Test
     fun testCreatePostSuccess() = runTest {
         val mockResponse = Response.success(samplePost)
 
-        // 실제 함수 시그니처에 맞게 Mock 설정
-        // createPost(category, title, content, tags, images) 순서대로 매칭
         whenever(mockPostApiService.createPost(
-            any<RequestBody>(),  // category
-            any<RequestBody>(),  // title
-            any<RequestBody>(),  // content
-            any<RequestBody>(),  // tags
-            any<Array<MultipartBody.Part>>()  // images (Array!)
+            any<RequestBody>(),
+            any<RequestBody>(),
+            any<RequestBody>(),
+            any<RequestBody>(),
+            any<Array<MultipartBody.Part>>()
         )).thenReturn(mockResponse)
 
-        // when: Repo의 게시물 생성 함수
         val result = postRepository.createPost(
             category = "여행",
             title = "제주도 여행 후기!",
@@ -200,30 +155,21 @@ class PostRepositoryTest {
             imageUris = emptyList()
         )
 
-        // Then: 결과 검증
-        assertTrue(result.isSuccess, "게시물 생성은 성공")
-        assertEquals(samplePost, result.getOrNull(), "생성된 게시물 반환")
+        assertTrue("게시물 생성은 성공", result.isSuccess)
+        assertEquals("생성된 게시물 반환", samplePost, result.getOrNull())
     }
 
-    /**
-     * 테스트 6: 게시물 생성 실패 시나리오
-     *
-     * Given : API 호출 시 예외가 발생할 때
-     * When : createPost() 호출
-     * Then : Result.failure가 반환되어야 함
-     */
     @Test
     fun testCreatePostFailure() = runTest {
         val expectException = RuntimeException("서버 연결 실패")
 
-        // 실제 함수 시그니처에 맞게 Mock 설정
         whenever(
             mockPostApiService.createPost(
-                any<RequestBody>(),  // category
-                any<RequestBody>(),  // title
-                any<RequestBody>(),  // content
-                any<RequestBody>(),  // tags
-                any<Array<MultipartBody.Part>>()  // images (Array!)
+                any<RequestBody>(),
+                any<RequestBody>(),
+                any<RequestBody>(),
+                any<RequestBody>(),
+                any<Array<MultipartBody.Part>>()
             )
         ).thenThrow(expectException)
 
@@ -235,7 +181,6 @@ class PostRepositoryTest {
             imageUris = emptyList()
         )
 
-        // 실패 검증
-        assertTrue(result.isFailure, "게시물 생성 실패")
+        assertTrue("게시물 생성 실패", result.isFailure)
     }
 }

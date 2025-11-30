@@ -45,7 +45,6 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         val properties = Properties()
-        // local.properties 파일이 없을 경우를 대비한 안전한 처리
         if (project.rootProject.file("local.properties").exists()) {
             properties.load(project.rootProject.file("local.properties").inputStream())
         }
@@ -78,11 +77,16 @@ android {
     composeOptions {
         kotlinCompilerExtensionVersion = "2.0.21"
     }
+
+    // 리소스 충돌 방지
+    packaging {
+        resources {
+            excludes += "/META-INF/{AL2.0,LGPL2.1}"
+        }
+    }
 }
 
-tasks.withType<Test> {
-    useJUnitPlatform()
-}
+// JUnit 4를 사용하므로 JUnit Platform 설정은 제거합니다.
 
 dependencies {
     implementation(libs.androidx.core.ktx)
@@ -97,11 +101,12 @@ dependencies {
     implementation(libs.googleid)
     implementation(libs.play.services.auth)
 
-    // Test dependencies (JUnit 5 + Kotlin Coroutines + Mockito)
-    testImplementation(libs.junit.jupiter)
+    // Test dependencies (JUnit 4)
+    testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.1")
     testImplementation("org.mockito.kotlin:mockito-kotlin:5.3.1")
 
+    // AndroidTest dependencies (JUnit 4)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))
@@ -109,10 +114,14 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
 
-    // AndroidTest dependencies
     androidTestImplementation("org.mockito:mockito-android:5.7.0")
     androidTestImplementation("org.mockito.kotlin:mockito-kotlin:5.4.0")
     androidTestImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.0")
+
+    // ⭐️ [핵심 해결책] kotlin-reflect 버전을 메인과 테스트 양쪽에 모두 강제로 2.0.21로 고정합니다.
+    // 이 설정이 이전 충돌 에러를 해결합니다.
+    implementation("org.jetbrains.kotlin:kotlin-reflect:2.0.21")
+    androidTestImplementation("org.jetbrains.kotlin:kotlin-reflect:2.0.21")
 
     // Third Party Libraries
     implementation("com.kakao.sdk:v2-all:2.20.1")
@@ -128,5 +137,6 @@ dependencies {
     implementation("com.squareup.okhttp3:logging-interceptor:4.11.0")
     implementation("io.coil-kt:coil-compose:2.6.0")
     implementation("com.naver.maps:map-sdk:3.23.0")
+    implementation("io.github.fornewid:naver-map-compose:1.7.2")
     implementation("androidx.exifinterface:exifinterface:1.3.6")
 }

@@ -21,7 +21,7 @@ interface PostApiService {
     // HTTP 응답 상태 코드 등 더 많은 정보를 포함하는 Response 객체로 래핑함.
 
     @GET("posts") // 모든 게시물 가져오기
-    suspend fun getPosts(): Response<List<Post>>
+    suspend fun getAllPosts(): Response<List<Post>>
 
     @GET("api/posts") // 제목으로 검색
     suspend fun searchPosts(@Query("search") query: String): Response<List<Post>>
