@@ -1,0 +1,213 @@
+Index: app/build.gradle.kts
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+>import java.util.Properties\r\n\r\nplugins {\r\n    alias(libs.plugins.android.application)\r\n    alias(libs.plugins.kotlin.android)\r\n    alias(libs.plugins.kotlin.compose)\r\n    alias(libs.plugins.kotlin.kapt)\r\n    alias(libs.plugins.hilt.android)\r\n    id(\"com.google.android.libraries.mapsplatform.secrets-gradle-plugin\") version \"2.0.1\" apply false\r\n}\r\n\r\nval localProperties = Properties()\r\nval localPropertiesFile = rootProject.file(\"local.properties\")\r\nif(localPropertiesFile.exists()) {\r\n    localProperties.load(localPropertiesFile.inputStream())\r\n}\r\n\r\nandroid {\r\n    namespace = \"com.example.travelapp\"\r\n    compileSdk {\r\n        version = release(36)\r\n    }\r\n\r\n    buildTypes {\r\n        getByName(\"debug\") {\r\n            // local.properties에서 BASE_URL 값을 읽어오거나, 없으면 기본값을 사용합니다.\r\n            val baseUrl = localProperties.getProperty(\"BASE_URL\")\r\n            buildConfigField(\"String\", \"BASE_URL\", \"\\\"$baseUrl\\\"\")\r\n        }\r\n        getByName(\"release\") {\r\n            // 릴리즈(출시) 빌드에서는 실제 배포된 서버 주소 사용\r\n            // 지금은 없으니 임시주소\r\n            val baseUrl = localProperties.getProperty(\"RELEASE_BASE_URL\", \"\\\"https://api.your-domain.com\\\"\")\r\n            buildConfigField(\"String\", \"BASE_URL\", \"\\\"$baseUrl\\\"\")\r\n\r\n            isMinifyEnabled = false\r\n            // 이 코드는 앱을 정식으로 배포(Release)할 때, 앱의 크기를 줄이고 코드를 알아보기 힘들게 만드는(난독화) 설정 파일들을 지정하는 명령어입니다.\r\n            proguardFiles(getDefaultProguardFile(\"proguard-android-optimize.txt\"), \"proguard-rules.pro\")\r\n        }\r\n    }\r\n\r\n    defaultConfig {\r\n        applicationId = \"com.example.travelapp\"\r\n        minSdk = 24\r\n        targetSdk = 36\r\n        versionCode = 1\r\n        versionName = \"1.0\"\r\n\r\n        testInstrumentationRunner = \"androidx.test.runner.AndroidJUnitRunner\"\r\n\r\n        val properties = Properties()\r\n        properties.load(project.rootProject.file(\"local.properties\").inputStream())\r\n        val kakaoKey = properties.getProperty(\"kakao.native.app.key\") ?: \"\"\r\n        buildConfigField(\"String\", \"KAKAO_NATIVE_APP_KEY\", \"\\\"$kakaoKey\\\"\")\r\n\r\n        val naverClientId = properties.getProperty(\"naver.client.id\") ?: \"\"\r\n        buildConfigField(\"String\", \"NAVER_CLIENT_ID\", \"\\\"$naverClientId\\\"\")\r\n\r\n        val naverClientSecret = properties.getProperty(\"naver.client.secret\") ?: \"\"\r\n        buildConfigField(\"String\", \"NAVER_CLIENT_SECRET\", \"\\\"$naverClientSecret\\\"\")\r\n\r\n        val googleWebClientId = properties.getProperty(\"google.web.client.id\") ?: \"\"\r\n        buildConfigField(\"String\", \"GOOGLE_WEB_CLIENT_ID\", \"\\\"$googleWebClientId\\\"\")\r\n\r\n        // 카카오 콜백위해 꼭 있어야함.\r\n        manifestPlaceholders[\"kakao_app_key\"] = \"kakao${kakaoKey}\"\r\n    }\r\n\r\n    buildTypes {\r\n        release {\r\n            isMinifyEnabled = false\r\n            proguardFiles(\r\n                getDefaultProguardFile(\"proguard-android-optimize.txt\"),\r\n                \"proguard-rules.pro\"\r\n            )\r\n        }\r\n    }\r\n    compileOptions {\r\n        sourceCompatibility = JavaVersion.VERSION_11\r\n        targetCompatibility = JavaVersion.VERSION_11\r\n    }\r\n    kotlinOptions {\r\n        jvmTarget = \"11\"\r\n    }\r\n    buildFeatures {\r\n        compose = true\r\n        buildConfig = true\r\n    }\r\n}\r\n\r\ndependencies {\r\n    implementation(libs.androidx.core.ktx)\r\n    implementation(libs.androidx.lifecycle.runtime.ktx)\r\n    implementation(libs.androidx.activity.compose)\r\n    implementation(platform(libs.androidx.compose.bom))\r\n    implementation(libs.androidx.compose.ui)\r\n    implementation(libs.androidx.compose.ui.graphics)\r\n    implementation(libs.androidx.compose.ui.tooling.preview)\r\n    implementation(libs.androidx.compose.material3)\r\n    implementation(libs.androidx.navigation.compose)\r\n    implementation(libs.googleid)\r\n    implementation(libs.play.services.auth)\r\n\r\n    // Test and Debug dependencies\r\n    testImplementation(libs.junit)\r\n    androidTestImplementation(libs.androidx.junit)\r\n    androidTestImplementation(libs.androidx.espresso.core)\r\n    androidTestImplementation(platform(libs.androidx.compose.bom))\r\n    androidTestImplementation(libs.androidx.compose.ui.test.junit4)\r\n    debugImplementation(libs.androidx.compose.ui.tooling)\r\n    debugImplementation(libs.androidx.compose.ui.test.manifest)\r\n\r\n    // 카카오 로그인\r\n    implementation(\"com.kakao.sdk:v2-all:2.20.1\")\r\n\r\n    // Naver Login\r\n    implementation(\"com.navercorp.nid:oauth:5.10.0\")\r\n//    implementation(\"androidx.browser:browser:1.7.0\")\r\n\r\n    // 네비게이션 라이브러리 추가\r\n    implementation(\"androidx.navigation:navigation-compose:2.7.7\")\r\n\r\n    // 구글 로그인\r\n    implementation(\"com.google.android.gms:play-services-auth:21.2.0\")\r\n\r\n    // Material 3와 호환되는 아이콘 라이브러리\r\n    implementation(\"androidx.compose.material:material-icons-extended-android:1.6.7\")\r\n\r\n    // Hilt\r\n    implementation(libs.hilt.android)\r\n    kapt(libs.hilt.compiler)\r\n\r\n    // Hilt Navigation Compose (추가)\r\n    implementation(\"androidx.hilt:hilt-navigation-compose:1.2.0\")\r\n\r\n    // Retrofit\r\n    implementation(\"com.squareup.retrofit2:retrofit:2.9.0\")\r\n    implementation(\"com.squareup.retrofit2:converter-gson:2.9.0\") // JSON 파싱을 위한 GSON 컨버터\r\n    implementation(\"com.squareup.okhttp3:logging-interceptor:4.11.0\") // HTTP 요청 로깅 (디버그용)\r\n\r\n    // Coil (이미지 로딩 라이브러리)\r\n    implementation(\"io.coil-kt:coil-compose:2.6.0\")\r\n}\r\n
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/app/build.gradle.kts b/app/build.gradle.kts
+--- a/app/build.gradle.kts	(revision 11da724314447341f5eb89a5feba2d98a6a504e8)
++++ b/app/build.gradle.kts	(date 1764060188483)
+@@ -21,24 +21,6 @@
+         version = release(36)
+     }
+ 
+-    buildTypes {
+-        getByName("debug") {
+-            // local.properties에서 BASE_URL 값을 읽어오거나, 없으면 기본값을 사용합니다.
+-            val baseUrl = localProperties.getProperty("BASE_URL")
+-            buildConfigField("String", "BASE_URL", "\"$baseUrl\"")
+-        }
+-        getByName("release") {
+-            // 릴리즈(출시) 빌드에서는 실제 배포된 서버 주소 사용
+-            // 지금은 없으니 임시주소
+-            val baseUrl = localProperties.getProperty("RELEASE_BASE_URL", "\"https://api.your-domain.com\"")
+-            buildConfigField("String", "BASE_URL", "\"$baseUrl\"")
+-
+-            isMinifyEnabled = false
+-            // 이 코드는 앱을 정식으로 배포(Release)할 때, 앱의 크기를 줄이고 코드를 알아보기 힘들게 만드는(난독화) 설정 파일들을 지정하는 명령어입니다.
+-            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+-        }
+-    }
+-
+     defaultConfig {
+         applicationId = "com.example.travelapp"
+         minSdk = 24
+@@ -67,12 +49,19 @@
+     }
+ 
+     buildTypes {
++        getByName("debug") {
++            val baseUrl = localProperties.getProperty("BASE_URL")
++            if (baseUrl == null) {
++                throw GradleException("BASE_URL is not defined in local.properties. Please add it with your local server address (e.g., BASE_URL=http://10.0.2.2:3000/)")
++            }
++            buildConfigField("String", "BASE_URL", "\"$baseUrl\"")
++        }
+         release {
++            val baseUrl = localProperties.getProperty("RELEASE_BASE_URL", "\"https://api.your-domain.com\"")
++            buildConfigField("String", "BASE_URL", "\"$baseUrl\"")
++
+             isMinifyEnabled = false
+-            proguardFiles(
+-                getDefaultProguardFile("proguard-android-optimize.txt"),
+-                "proguard-rules.pro"
+-            )
++            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+         }
+     }
+     compileOptions {
+Index: travelAppBackend/src/api/post.js
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+>const express = require('express');\r\nconst router = express.Router();\r\nconst db = require('../db'); // 위에서 만든 db연결 가져옴.\r\nconst jwt = require('jsonwebtoken');\r\nconst multer = require('multer');\r\nconst JWT_SECRET_KEY = 'my-secret-for-travel-app';\r\n\r\nconst storage = multer.diskStorage({\r\n    // 파일이 저장될 목적지 설정\r\n    destination: function(req, file, cb) {\r\n        cb(null, 'uploads/')\r\n    },\r\n    // 파일 이름 설정\r\n    filename: function(req, file, cb) {\r\n        cb(null, file.fieldname + '-' + Date.now() + path.extname(file.originalname));\r\n    }\r\n});\r\n\r\nconst upload = multer({ storage: storage });\r\n\r\n// POST /api/posts - 새 게시물 생성\r\n// upload.single('image') 미들웨어 추가해 image라는 이름으로 들어오는 파일 1개 처리함.\r\nrouter.post('/', upload.array('image', 5), async(req, res) => {\r\n    const authHeader = req.headers.authorization;\r\n    if(!authHeader) {\r\n        return res.status(401).json({ message: '인증 토큰이 필요합니다.' });\r\n    }\r\n\r\n    // DB 클라이언트를 트랜잭션용으로 가져옴\r\n    const client = await db.getClient();\r\n\r\n    try {\r\n        const token = authHeader.split(' ')[1];\r\n\r\n        // 토큰 검증 및 디코딩\r\n        const decodedToken = jwt.verify(token, JWT_SECRET_KEY);\r\n\r\n        // 토큰에서 userId 추출\r\n        const userId = decodedToken.userId;\r\n\r\n        if(!userId) {\r\n            return res.status(401).json({ message: '인증 토큰이 유효하지 않습니다.' });\r\n        }\r\n\r\n        // 앱에서 보낸 데이터\r\n        const { category, title, content, tags, imgUrl } = req.body;\r\n        // 각 파일의 경로를 추출해 배열로 만듦\r\n        const imageUrls = req.files ? req.files.map(file => file.path) : [];\r\n\r\n        // 데이터 유효성 검사\r\n        if(!category || !title) {\r\n            return res.status(400).json({ message: '카테고리, 제목은 필수 항목입니다.'});\r\n        }\r\n\r\n        // 트랜잭션 시작\r\n        await client.query('BEGIN');\r\n\r\n        const categoryId = (category === \"국내여행\") ? 1 : 2;\r\n\r\n        // DB에 데이터를 삽입하는 SQL 쿼리\r\n        // image_url과 create_ad은 DB 스키마에 정의된 컬럼명으로 가정함.\r\n        const postQuery = `\r\n            INSERT INTO post(user_id, category_id, title, content, created_at, updated_at)\r\n            VALUES ($1, $2, $3, $4, NOW(), NOW())\r\n            RETURNING post_id, user_id, category_id, title, content\r\n        `;\r\n        const postValues = [userId, categoryId, title, content];\r\n        const postResult = await client.query(postQuery, postValues);\r\n        const newPost = postResult.rows[0];\r\n        const newPostId = newPost.post_id;\r\n\r\n        if(imageUrls.length > 0) {\r\n            const imageInsertPromises = imageUrls.map(url => {\r\n                const imageQuery = `\r\n                    INSERT INTO post_image(post_id, image_url, created_at)\r\n                    VALUES($1, $2, NOW())\r\n                `;\r\n                return client.query(imageQuery, [newPostId, url]);\r\n            });\r\n\r\n            // 모든 이미지 저장 쿼리가 완료될 떄까지 기다림.\r\n            await Promise.all(imageInsertPromises);\r\n        }\r\n\r\n        // 모든 작업이 성공하면 트랜잭션 커밋\r\n        await client.query('COMMIT');\r\n\r\n        // 성공적으로 생성된 게시물 정보를 클라이언트에 반환(201 Created)\r\n        res.status(201).json({\r\n            ...newPost,\r\n            images: imageUrls\r\n        });\r\n     } catch(err) {\r\n        // 에러 발생 시 트랜잭션 롤백\r\n        await client.query('ROLLBACK');\r\n\r\n        if(err.name === 'JsonWebTokenError' || err.name === 'TokenExpiredError') {\r\n            console.error('토큰 관련 오류:', err.message);\r\n            return res.status(401).json({ message: '유효하지 않은 토큰입니다.' })\r\n        }\r\n        // 그 외 서버 에러 처리\r\n        console.error('게시물 생성 중 오류 발생: ', err.stack);\r\n        res.status(500).json({ message: '서버 오류로 인해 게시물을 생성할 수 없습니다.' });\r\n    } finally {\r\n        // 사용 DB 클라이언트 반환\r\n        client.release();\r\n    }\r\n})\r\nmodule.exports = router;
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/travelAppBackend/src/api/post.js b/travelAppBackend/src/api/post.js
+--- a/travelAppBackend/src/api/post.js	(revision 11da724314447341f5eb89a5feba2d98a6a504e8)
++++ b/travelAppBackend/src/api/post.js	(date 1764057079672)
+@@ -3,6 +3,7 @@
+ const db = require('../db'); // 위에서 만든 db연결 가져옴.
+ const jwt = require('jsonwebtoken');
+ const multer = require('multer');
++const path = require('path');
+ const JWT_SECRET_KEY = 'my-secret-for-travel-app';
+ 
+ const storage = multer.diskStorage({
+@@ -20,7 +21,7 @@
+ 
+ // POST /api/posts - 새 게시물 생성
+ // upload.single('image') 미들웨어 추가해 image라는 이름으로 들어오는 파일 1개 처리함.
+-router.post('/', upload.array('image', 5), async(req, res) => {
++router.post('/', upload.array('images', 5), async(req, res) => {
+     const authHeader = req.headers.authorization;
+     if(!authHeader) {
+         return res.status(401).json({ message: '인증 토큰이 필요합니다.' });
+Index: app/src/main/java/com/example/travelapp/ui/viewModel/LoginViewModel.kt
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+>package com.example.travelapp.ui.viewModel\r\n\r\nimport android.content.Context\r\nimport android.util.Log\r\nimport androidx.lifecycle.ViewModel\r\nimport androidx.lifecycle.viewModelScope\r\nimport com.example.travelapp.BuildConfig\r\nimport com.example.travelapp.data.api.NaverAuthApiService\r\nimport com.example.travelapp.data.model.SocialLoginRequest\r\nimport com.example.travelapp.data.model.User\r\nimport com.example.travelapp.data.repository.AuthRepository\r\nimport com.example.travelapp.util.TokenManager\r\nimport com.google.android.gms.auth.api.signin.GoogleSignInAccount\r\nimport com.google.android.gms.common.api.ApiException\r\nimport com.google.android.gms.tasks.Task\r\nimport com.kakao.sdk.common.model.ClientError\r\nimport com.kakao.sdk.common.model.ClientErrorCause\r\nimport com.kakao.sdk.user.UserApiClient\r\nimport com.navercorp.nid.NaverIdLoginSDK\r\nimport com.navercorp.nid.oauth.OAuthLoginCallback\r\nimport dagger.hilt.android.lifecycle.HiltViewModel\r\nimport kotlinx.coroutines.flow.MutableSharedFlow\r\nimport kotlinx.coroutines.flow.MutableStateFlow\r\nimport kotlinx.coroutines.flow.asSharedFlow\r\nimport kotlinx.coroutines.flow.asStateFlow\r\nimport kotlinx.coroutines.launch\r\nimport javax.inject.Inject\r\n\r\ndata class LoginUiState(\r\n    val isLoading: Boolean = false,\r\n    val loginSuccessUser: User? = null,\r\n    val error: String? = null\r\n)\r\n\r\n@HiltViewModel\r\nclass LoginViewModel @Inject constructor(\r\n    private val authRepository: AuthRepository,\r\n    private val tokenManager: TokenManager,\r\n    private val naverAuthApiService: NaverAuthApiService\r\n) : ViewModel() {\r\n\r\n    private val _loginEvent = MutableSharedFlow<LoginEvent>()\r\n    val loginEvent = _loginEvent.asSharedFlow()\r\n\r\n    private val _loginUiState = MutableStateFlow(LoginUiState())\r\n    val loginUiState = _loginUiState.asStateFlow()\r\n\r\n    private val appName = \"MoyeoLog\"\r\n    private val TAG = \"LoginViewModel\"\r\n\r\n\r\n    fun loginWithNaver(context: Context) {\r\n        viewModelScope.launch {\r\n            try {\r\n                NaverIdLoginSDK.initialize(\r\n                    context,\r\n                    BuildConfig.NAVER_CLIENT_ID,\r\n                    BuildConfig.NAVER_CLIENT_SECRET,\r\n                    appName\r\n                )\r\n                NaverIdLoginSDK.authenticate(context, object : OAuthLoginCallback {\r\n                    override fun onSuccess() {\r\n                        fetchNaverUserProfile()\r\n                    }\r\n\r\n                    override fun onFailure(httpStatus: Int, message: String) {\r\n                        viewModelScope.launch {\r\n                            val errorCode = NaverIdLoginSDK.getLastErrorCode().code\r\n                            val errorDescription = NaverIdLoginSDK.getLastErrorDescription()\r\n                            Log.e(TAG, \"네이버 로그인 실패 - 코드: $errorCode, 설명: $errorDescription\")\r\n                            emitLoginFailed(\"네이버 로그인에 실패했습니다.\")\r\n                        }\r\n                    }\r\n\r\n                    override fun onError(errorCode: Int, message: String) {\r\n                        onFailure(errorCode, message)\r\n                    }\r\n                })\r\n            } catch (e: Exception) {\r\n                Log.e(TAG, \"네이버 로그인 SDK 초기화 또는 인증 요청 실패\", e)\r\n                emitLoginFailed(\"네이버 로그인 중 오류가 발생했습니다.\")\r\n            }\r\n        }\r\n    }\r\n\r\n    private fun fetchNaverUserProfile() {\r\n        viewModelScope.launch {\r\n            val accessToken = NaverIdLoginSDK.getAccessToken()\r\n            if (accessToken == null) {\r\n                emitLoginFailed(\"네이버 접근 토큰을 가져오는데 실패했습니다.\")\r\n                return@launch\r\n            }\r\n\r\n            try {\r\n                val response = naverAuthApiService.getNaverUserProfile(\"Bearer $accessToken\")\r\n\r\n                // [수정] isSuccessful 오타를 수정하고, 실패 시 에러 메시지를 보내는 로직을 추가합니다.\r\n                if (response.isSuccessful && response.body() != null) {\r\n                    val profile = response.body()!!.response\r\n                    Log.i(TAG, \"네이버 프로필 조회 성공. 서버에 로그인 요청 시작.\")\r\n                    requestSocialLogin(\r\n                        email = profile.email,\r\n                        nickname = profile.nickname,\r\n                        profileImage = profile.profileImage,\r\n                        provider = \"naver\",\r\n                        socialId = profile.id\r\n                    )\r\n                } else {\r\n                    Log.e(TAG, \"네이버 프로필 조회 실패: ${response.code()} ${response.message()}\")\r\n                    emitLoginFailed(\"네이버 사용자 정보를 가져오는데 실패했습니다.\")\r\n                }\r\n            } catch (e: Exception) {\r\n                Log.e(TAG, \"네이버 프로필 조회 중 오류 발생\", e)\r\n                emitLoginFailed(\"네이버 프로필 조회 중 오류가 발생했습니다.\")\r\n            }\r\n        }\r\n    }\r\n\r\n    fun handleGoogleSignInResult(task: Task<GoogleSignInAccount>) {\r\n        try {\r\n            val account: GoogleSignInAccount? = task.getResult(ApiException::class.java)\r\n            if (account != null) {\r\n                Log.i(TAG, \"구글 로그인 성공. 서버에 로그인 요청 시작.\")\r\n\r\n                val userEmail = account.email\r\n                val userId = account.id\r\n\r\n                if (userEmail != null && userId != null) {\r\n                    requestSocialLogin(\r\n                        email = userEmail,\r\n                        nickname = account.displayName,\r\n                        profileImage = account.photoUrl?.toString(),\r\n                        provider = \"google\",\r\n                        socialId = userId\r\n                    )\r\n                } else {\r\n                    Log.e(TAG, \"Google 로그인 실패: email 또는 id가 null입니다.\")\r\n                    emitLoginFailed(\"구글 계정 정보를 가져오는데 실패했습니다.\")\r\n                }\r\n            } else {\r\n                Log.e(TAG, \"구글 로그인 실패: account is null\")\r\n                emitLoginFailed(\"구글 로그인 정보를 가져오는데 실패했습니다.\")\r\n            }\r\n        } catch (e: ApiException) {\r\n            val errorMessage = when (e.statusCode) {\r\n                10 -> \"개발자 콘솔에 등록된 앱과 서명(SHA-1)이 일치하지 않습니다.\"\r\n                12500 -> \"Google Play 서비스 업데이트가 필요하거나, 로그인 설정에 문제가 있습니다.\"\r\n                12501 -> \"사용자가 로그인을 취소했습니다.\"\r\n                else -> \"구글 로그인 실패: ${e.statusCode}\"\r\n            }\r\n            Log.e(TAG, \"Google Sign-In failed with ApiException: ${e.statusCode}\", e)\r\n            emitLoginFailed(errorMessage)\r\n        } catch (e: Exception) {\r\n            Log.e(TAG, \"An unexpected error occurred during Google Sign-In\", e)\r\n            emitLoginFailed(\"예상치 못한 오류가 발생했습니다.\")\r\n        }\r\n    }\r\n\r\n    private fun requestSocialLogin(email: String, nickname: String?, profileImage: String?, provider: String, socialId: String) {\r\n        viewModelScope.launch {\r\n            _loginUiState.value = LoginUiState(isLoading = true)\r\n            try {\r\n                val request = SocialLoginRequest(email, nickname, profileImage, provider, socialId)\r\n                val response = authRepository.socialLogin(request)\r\n\r\n                if (response.isSuccessful && response.body() != null) {\r\n                    val loginData = response.body()!!\r\n                    loginData.token?.let { tokenManager.saveToken(it) }\r\n                    _loginUiState.value = LoginUiState(loginSuccessUser = loginData.user)\r\n                    _loginEvent.emit(LoginEvent.LoginSuccess)\r\n                } else {\r\n                    _loginUiState.value = LoginUiState(error = \"서버 로그인 실패: ${response.code()}\")\r\n                    emitLoginFailed(\"서버 로그인에 실패했습니다.\")\r\n                }\r\n            } catch (e: Exception) {\r\n                _loginUiState.value = LoginUiState(error = \"서버 통신 오류: ${e.message}\")\r\n                emitLoginFailed(\"로그인 중 오류가 발생했습니다.\")\r\n            }\r\n        }\r\n    }\r\n\r\n    fun emitLoginFailed(message: String) {\r\n        viewModelScope.launch {\r\n            _loginEvent.emit(LoginEvent.LoginFailed(message))\r\n        }\r\n    }\r\n\r\n    fun loginWithKakaoTalk(context: Context) {\r\n        if (UserApiClient.instance.isKakaoTalkLoginAvailable(context)) {\r\n            UserApiClient.instance.loginWithKakaoTalk(context) { token, error ->\r\n                if (error != null) {\r\n                    if (error is ClientError && error.reason == ClientErrorCause.Cancelled) {\r\n                        emitLoginFailed(\"카카오톡 로그인이 취소되었습니다.\")\r\n                        return@loginWithKakaoTalk\r\n                    }\r\n                    loginWithKakaoAccount(context)\r\n                } else if (token != null) {\r\n                    handleKakaoLoginSuccess(token.accessToken)\r\n                }\r\n            }\r\n        } else {\r\n            loginWithKakaoAccount(context)\r\n        }\r\n    }\r\n\r\n    private fun loginWithKakaoAccount(context: Context) {\r\n        UserApiClient.instance.loginWithKakaoAccount(context) { token, error ->\r\n            if (error != null) {\r\n                emitLoginFailed(\"카카오계정 로그인 실패: ${error.message}\")\r\n            } else if (token != null) {\r\n                handleKakaoLoginSuccess(token.accessToken)\r\n            }\r\n        }\r\n    }\r\n\r\n    private fun handleKakaoLoginSuccess(accessToken: String) {\r\n        UserApiClient.instance.me { user, error ->\r\n            if (error != null) {\r\n                Log.e(TAG, \"카카오 사용자 정보 요청 실패\", error)\r\n                emitLoginFailed(\"카카오 사용자 정보를 가져오는데 실패했습니다.\")\r\n            } else if (user != null) {\r\n                Log.i(TAG, \"카카오 사용자 정보 요청 성공. 서버에 로그인 요청 시작.\")\r\n\r\n                val userEmail = user.kakaoAccount?.email\r\n                val userId = user.id\r\n\r\n                if (userEmail != null && userId != null) {\r\n                    requestSocialLogin(\r\n                        email = userEmail,\r\n                        nickname = user.kakaoAccount?.profile?.nickname,\r\n                        profileImage = user.kakaoAccount?.profile?.thumbnailImageUrl,\r\n                        provider = \"kakao\",\r\n                        socialId = userId.toString()\r\n                    )\r\n                } else {\r\n                    Log.e(TAG, \"Kakao 로그인 실패: email 또는 id가 null입니다.\")\r\n                    emitLoginFailed(\"카카오 계정 정보를 가져오는데 실패했습니다.\")\r\n                }\r\n            }\r\n        }\r\n    }\r\n}\r\n\r\nsealed class LoginEvent {\r\n    object LoginSuccess : LoginEvent()\r\n    data class LoginFailed(val message: String) : LoginEvent()\r\n}
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/app/src/main/java/com/example/travelapp/ui/viewModel/LoginViewModel.kt b/app/src/main/java/com/example/travelapp/ui/viewModel/LoginViewModel.kt
+--- a/app/src/main/java/com/example/travelapp/ui/viewModel/LoginViewModel.kt	(revision 11da724314447341f5eb89a5feba2d98a6a504e8)
++++ b/app/src/main/java/com/example/travelapp/ui/viewModel/LoginViewModel.kt	(date 1764059192443)
+@@ -187,6 +187,7 @@
+ 
+     fun loginWithKakaoTalk(context: Context) {
+         if (UserApiClient.instance.isKakaoTalkLoginAvailable(context)) {
++            val scopes = listOf("account_email")
+             UserApiClient.instance.loginWithKakaoTalk(context) { token, error ->
+                 if (error != null) {
+                     if (error is ClientError && error.reason == ClientErrorCause.Cancelled) {
+@@ -195,7 +196,7 @@
+                     }
+                     loginWithKakaoAccount(context)
+                 } else if (token != null) {
+-                    handleKakaoLoginSuccess(token.accessToken)
++                    handleKakaoLoginSuccess(context, token.accessToken)
+                 }
+             }
+         } else {
+@@ -204,37 +205,52 @@
+     }
+ 
+     private fun loginWithKakaoAccount(context: Context) {
++        val scopes = listOf("account_email")
+         UserApiClient.instance.loginWithKakaoAccount(context) { token, error ->
+             if (error != null) {
+                 emitLoginFailed("카카오계정 로그인 실패: ${error.message}")
+             } else if (token != null) {
+-                handleKakaoLoginSuccess(token.accessToken)
++                handleKakaoLoginSuccess(context, token.accessToken)
+             }
+         }
+     }
+ 
+-    private fun handleKakaoLoginSuccess(accessToken: String) {
++        private fun handleKakaoLoginSuccess(context: Context, accessToken: String) {
+         UserApiClient.instance.me { user, error ->
+             if (error != null) {
+                 Log.e(TAG, "카카오 사용자 정보 요청 실패", error)
+                 emitLoginFailed("카카오 사용자 정보를 가져오는데 실패했습니다.")
+             } else if (user != null) {
+-                Log.i(TAG, "카카오 사용자 정보 요청 성공. 서버에 로그인 요청 시작.")
+-
+-                val userEmail = user.kakaoAccount?.email
+-                val userId = user.id
+-
+-                if (userEmail != null && userId != null) {
+-                    requestSocialLogin(
+-                        email = userEmail,
+-                        nickname = user.kakaoAccount?.profile?.nickname,
+-                        profileImage = user.kakaoAccount?.profile?.thumbnailImageUrl,
+-                        provider = "kakao",
+-                        socialId = userId.toString()
+-                    )
+-                } else {
+-                    Log.e(TAG, "Kakao 로그인 실패: email 또는 id가 null입니다.")
+-                    emitLoginFailed("카카오 계정 정보를 가져오는데 실패했습니다.")
++                val scopes = mutableListOf<String>()
++                if (user.kakaoAccount?.emailNeedsAgreement == true) { scopes.add("account_email") }
++
++                if (scopes.isNotEmpty()) {
++                    UserApiClient.instance.loginWithNewScopes(context, scopes) { token, scopeError ->
++                        if (scopeError != null) {
++                            Log.e(TAG, "카카오 추가 동의 실패", scopeError)
++                            emitLoginFailed("이메일 정보 제공에 동의해야 로그인이 가능합니다.")
++                        } else {
++                            // 동의 성공 후 다시 사용자 정보 요청
++                            handleKakaoLoginSuccess(context, token?.accessToken ?: "")
++                        }
++                    }
++                } else {
++                    // 필요한 동의가 모두 완료된 경우
++                    Log.i(TAG, "카카오 사용자 정보 요청 성공. 서버에 로그인 요청 시작.")
++                    val userEmail = user.kakaoAccount?.email
++                    val userId = user.id
++                    if (userEmail != null && userId != null) {
++                        requestSocialLogin(
++                            email = userEmail,
++                            nickname = user.kakaoAccount?.profile?.nickname,
++                            profileImage = user.kakaoAccount?.profile?.thumbnailImageUrl,
++                            provider = "kakao",
++                            socialId = userId.toString()
++                        )
++                    } else {
++                        Log.e(TAG, "Kakao 로그인 실패: email 또는 id가 null입니다.")
++                        emitLoginFailed("카카오 계정 정보를 가져오는데 실패했습니다.")
++                    }
+                 }
+             }
+         }
+Index: .idea/deploymentTargetSelector.xml
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+><?xml version=\"1.0\" encoding=\"UTF-8\"?>\r\n<project version=\"4\">\r\n  <component name=\"deploymentTargetSelector\">\r\n    <selectionStates>\r\n      <SelectionState runConfigName=\"app\">\r\n        <option name=\"selectionMode\" value=\"DROPDOWN\" />\r\n      </SelectionState>\r\n      <SelectionState runConfigName=\"MainActivity\">\r\n        <option name=\"selectionMode\" value=\"DROPDOWN\" />\r\n        <DropdownSelection timestamp=\"2025-11-24T11:01:28.483524300Z\">\r\n          <Target type=\"DEFAULT_BOOT\">\r\n            <handle>\r\n              <DeviceId pluginId=\"PhysicalDevice\" identifier=\"serial=R3CY10AGH6D\" />\r\n            </handle>\r\n          </Target>\r\n        </DropdownSelection>\r\n        <DialogSelection />\r\n      </SelectionState>\r\n    </selectionStates>\r\n  </component>\r\n</project>
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/.idea/deploymentTargetSelector.xml b/.idea/deploymentTargetSelector.xml
+--- a/.idea/deploymentTargetSelector.xml	(revision 11da724314447341f5eb89a5feba2d98a6a504e8)
++++ b/.idea/deploymentTargetSelector.xml	(date 1764033120334)
+@@ -5,17 +5,6 @@
+       <SelectionState runConfigName="app">
+         <option name="selectionMode" value="DROPDOWN" />
+       </SelectionState>
+-      <SelectionState runConfigName="MainActivity">
+-        <option name="selectionMode" value="DROPDOWN" />
+-        <DropdownSelection timestamp="2025-11-24T11:01:28.483524300Z">
+-          <Target type="DEFAULT_BOOT">
+-            <handle>
+-              <DeviceId pluginId="PhysicalDevice" identifier="serial=R3CY10AGH6D" />
+-            </handle>
+-          </Target>
+-        </DropdownSelection>
+-        <DialogSelection />
+-      </SelectionState>
+     </selectionStates>
+   </component>
+ </project>
+\ No newline at end of file
