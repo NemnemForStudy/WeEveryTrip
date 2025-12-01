@@ -31,9 +31,8 @@ object NetworkModule {
         }
     }
 
+    // 인증이 필요없는 클라이언트
     // 네이버 API 호출 시 AuthInterceptor가 필요 없으므로
-    // OkHttpClient 두 종류로 만들자.
-    // 기본 OkHttpClient(로깅 인터셉트 포함)
     @Provides
     @Singleton
     @Named("DefaultOkHttpClient") // Hilt가 구분할 수 있도록 이름 지정
@@ -45,7 +44,8 @@ object NetworkModule {
             .build()
     }
 
-    // 인증 토큰이 필요한 OkHttpClient
+    // 인증 토큰(JWT)이 포함된 클라이언트 (게시글 작성, 조회 등)
+    // AuthInterceptor가 여기서 자동으로 헤더를 붙여줍니다.
     @Provides
     @Singleton
     @Named("AuthOkHttpClient")
@@ -59,23 +59,8 @@ object NetworkModule {
             .build()
     }
 
-    // provideOkHttpClient 함수가 AuthInterceptor를 파라미터로 받도록 변경
-    @Provides
-    @Singleton
-    fun provideOkHttpClient(
-        loggingInterceptor: HttpLoggingInterceptor,
-        authInterceptor: AuthInterceptor // Hilt가 AuthInterceptor 인스턴스 주입
-    ) : OkHttpClient {
-        return OkHttpClient.Builder()
-            .addInterceptor(loggingInterceptor)
-        // 모든 요청에 AuthInterceptor 적용되도록 추가
-            .addInterceptor(authInterceptor)
-            .build()
-    }
-
-    // Retrofit 인스턴스 제공
-    // OkHttpClient와 BaseURL, Converter Factory 설정
-    // AuthOkHttpClient 사용하도록 수정 11-24 20:27
+    // 우리 앱 서버용 Retrofit (AuthOkHttpClient 사용)
+    // 여기서 AuthOkHttpClient 사용하므로, Retrofit으로 만든 API는 자동으로 토큰이 붙음.
     @Provides
     @Singleton
     @Named("AppRetrofit")
@@ -108,8 +93,9 @@ object NetworkModule {
         return retrofit.create(PostApiService::class.java)
     }
 
-    // AuthApiService 구현체를 Retrofit을 통해 생성해 제공함.
-    // 이제 Hilt는 AuthRepo가 필요하는 AuthApiService를 어떻게 만들지 알게 됨
+    // 인증 API (로그인/회원가입)
+    // ⭐️ 로그인 요청 시에는 토큰이 없으므로 AuthInterceptor가 있어도 헤더에 추가하지 않습니다(Safe).
+    // 따라서 그냥 AppRetrofit을 같이 써도 무방합니다.
     @Provides
     @Singleton
     fun provideAuthApiService(@Named("AppRetrofit") retrofit: Retrofit): AuthApiService {
@@ -117,6 +103,7 @@ object NetworkModule {
     }
 
     // NaverAuthApiService는 NaverRetrofit 사용하도록 새로 추가
+    // 네이버 인증 API
     @Provides
     @Singleton
     fun provideNaverAuthApiService(@Named("NaverRetrofit") retrofit: Retrofit): NaverAuthApiService {

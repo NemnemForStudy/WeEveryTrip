@@ -1,8 +1,8 @@
 package com.example.travelapp.util
 
 import android.content.Context
+import android.media.ExifInterface
 import android.net.Uri
-import androidx.exifinterface.media.ExifInterface
 import okio.IOException
 import java.io.InputStream
 
@@ -29,11 +29,12 @@ object ExifUtils {
             val exif = ExifInterface(inputStream)
 
             // getLatLong()은 위도, 경도 배열(double[2]) 반환하거나 정보 없으면 null 반환
-            val latLong = exif.latLong
+            val latLong = FloatArray(2)
+            val hasLatLong = exif.getLatLong(latLong)
 
-            if(latLong != null) {
+            if(hasLatLong) {
                 // latLong[0] = 위도, latLong[1] = 경도
-                return Pair(latLong[0], latLong[1])
+                return Pair(latLong[0].toDouble(), latLong[1].toDouble())
             }
         } catch (e: IOException) {
             e.printStackTrace()

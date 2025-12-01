@@ -2,7 +2,8 @@ package com.example.travelapp.util
 
 import android.content.Context
 import android.net.Uri
-import androidx.exifinterface.media.ExifInterface
+// ⭐️ [변경] androidx.exifinterface -> android.media (내장 라이브러리 사용)
+import android.media.ExifInterface
 import java.io.InputStream
 
 /**
@@ -51,13 +52,14 @@ object ExifDataExtractor {
      * @return ExifLocationData
      */
     private fun extractLocationFromExif(exifInterface: ExifInterface): ExifLocationData {
-        // ExifInterface의 getLatLong() 메서드는 Double 배열 반환
+        // Native 방식은 getLatLong(float[])을 사용합니다.
         // [0] = 위도, [1] = 경도
-        val latLong = exifInterface.latLong
+        val latLong = FloatArray(2)
+        val hasLatLong = exifInterface.getLatLong(latLong)
 
         return if (latLong != null && latLong.size == 2) {
-            val latitude = latLong[0]
-            val longitude = latLong[1]
+            val latitude = latLong[0].toDouble()
+            val longitude = latLong[1].toDouble()
             val isDomestic = isKoreanLocation(latitude, longitude)
 
             ExifLocationData(

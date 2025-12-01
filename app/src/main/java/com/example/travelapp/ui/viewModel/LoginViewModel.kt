@@ -5,9 +5,6 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.travelapp.BuildConfig
-import com.example.travelapp.data.api.NaverAuthApiService
-import com.example.travelapp.data.model.SocialLoginRequest
-import com.example.travelapp.data.model.User
 import com.example.travelapp.data.repository.AuthRepository
 import com.example.travelapp.util.TokenManager
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount
@@ -28,15 +25,19 @@ import javax.inject.Inject
 
 data class LoginUiState(
     val isLoading: Boolean = false,
-    val loginSuccessUser: User? = null,
     val error: String? = null
 )
+
+sealed class LoginEvent {
+    object LoginSuccess : LoginEvent()
+    data class LoginFailed(val message: String) : LoginEvent()
+}
 
 @HiltViewModel
 class LoginViewModel @Inject constructor(
     private val authRepository: AuthRepository,
-    private val tokenManager: TokenManager,
-    private val naverAuthApiService: NaverAuthApiService
+    private val tokenManager: TokenManager
+    // NaverAuthApiService는 이제 필요 없습니다. (앱에서 프로필 조회 안 함)
 ) : ViewModel() {
 
     private val _loginEvent = MutableSharedFlow<LoginEvent>()
@@ -48,7 +49,9 @@ class LoginViewModel @Inject constructor(
     private val appName = "MoyeoLog"
     private val TAG = "LoginViewModel"
 
-
+    // ------------------------------------------------------------------------
+    // 1. 네이버 로그인
+    // ------------------------------------------------------------------------
     fun loginWithNaver(context: Context) {
         viewModelScope.launch {
             try {
@@ -60,16 +63,20 @@ class LoginViewModel @Inject constructor(
                 )
                 NaverIdLoginSDK.authenticate(context, object : OAuthLoginCallback {
                     override fun onSuccess() {
-                        fetchNaverUserProfile()
+                        // 성공 시 바로 토큰을 가져와서 서버로 보냅니다. (프로필 조회 X)
+                        val accessToken = NaverIdLoginSDK.getAccessToken()
+                        if (accessToken != null) {
+                            requestSocialLogin(provider = "NAVER", token = accessToken)
+                        } else {
+                            emitLoginFailed("네이버 토큰을 가져오지 못했습니다.")
+                        }
                     }
 
                     override fun onFailure(httpStatus: Int, message: String) {
-                        viewModelScope.launch {
-                            val errorCode = NaverIdLoginSDK.getLastErrorCode().code
-                            val errorDescription = NaverIdLoginSDK.getLastErrorDescription()
-                            Log.e(TAG, "네이버 로그인 실패 - 코드: $errorCode, 설명: $errorDescription")
-                            emitLoginFailed("네이버 로그인에 실패했습니다.")
-                        }
+                        val errorCode = NaverIdLoginSDK.getLastErrorCode().code
+                        val errorDescription = NaverIdLoginSDK.getLastErrorDescription()
+                        Log.e(TAG, "네이버 로그인 실패: $errorCode, $errorDescription")
+                        emitLoginFailed("네이버 로그인 실패: $message")
                     }
 
                     override fun onError(errorCode: Int, message: String) {
@@ -77,125 +84,28 @@ class LoginViewModel @Inject constructor(
                     }
                 })
             } catch (e: Exception) {
-                Log.e(TAG, "네이버 로그인 SDK 초기화 또는 인증 요청 실패", e)
+                Log.e(TAG, "네이버 로그인 예외", e)
                 emitLoginFailed("네이버 로그인 중 오류가 발생했습니다.")
             }
         }
     }
 
-    private fun fetchNaverUserProfile() {
-        viewModelScope.launch {
-            val accessToken = NaverIdLoginSDK.getAccessToken()
-            if (accessToken == null) {
-                emitLoginFailed("네이버 접근 토큰을 가져오는데 실패했습니다.")
-                return@launch
-            }
-
-            try {
-                val response = naverAuthApiService.getNaverUserProfile("Bearer $accessToken")
-
-                // [수정] isSuccessful 오타를 수정하고, 실패 시 에러 메시지를 보내는 로직을 추가합니다.
-                if (response.isSuccessful && response.body() != null) {
-                    val profile = response.body()!!.response
-                    Log.i(TAG, "네이버 프로필 조회 성공. 서버에 로그인 요청 시작.")
-                    requestSocialLogin(
-                        email = profile.email,
-                        nickname = profile.nickname,
-                        profileImage = profile.profileImage,
-                        provider = "naver",
-                        socialId = profile.id
-                    )
-                } else {
-                    Log.e(TAG, "네이버 프로필 조회 실패: ${response.code()} ${response.message()}")
-                    emitLoginFailed("네이버 사용자 정보를 가져오는데 실패했습니다.")
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "네이버 프로필 조회 중 오류 발생", e)
-                emitLoginFailed("네이버 프로필 조회 중 오류가 발생했습니다.")
-            }
-        }
-    }
-
-    fun handleGoogleSignInResult(task: Task<GoogleSignInAccount>) {
-        try {
-            val account: GoogleSignInAccount? = task.getResult(ApiException::class.java)
-            if (account != null) {
-                Log.i(TAG, "구글 로그인 성공. 서버에 로그인 요청 시작.")
-
-                val userEmail = account.email
-                val userId = account.id
-
-                if (userEmail != null && userId != null) {
-                    requestSocialLogin(
-                        email = userEmail,
-                        nickname = account.displayName,
-                        profileImage = account.photoUrl?.toString(),
-                        provider = "google",
-                        socialId = userId
-                    )
-                } else {
-                    Log.e(TAG, "Google 로그인 실패: email 또는 id가 null입니다.")
-                    emitLoginFailed("구글 계정 정보를 가져오는데 실패했습니다.")
-                }
-            } else {
-                Log.e(TAG, "구글 로그인 실패: account is null")
-                emitLoginFailed("구글 로그인 정보를 가져오는데 실패했습니다.")
-            }
-        } catch (e: ApiException) {
-            val errorMessage = when (e.statusCode) {
-                10 -> "개발자 콘솔에 등록된 앱과 서명(SHA-1)이 일치하지 않습니다."
-                12500 -> "Google Play 서비스 업데이트가 필요하거나, 로그인 설정에 문제가 있습니다."
-                12501 -> "사용자가 로그인을 취소했습니다."
-                else -> "구글 로그인 실패: ${e.statusCode}"
-            }
-            Log.e(TAG, "Google Sign-In failed with ApiException: ${e.statusCode}", e)
-            emitLoginFailed(errorMessage)
-        } catch (e: Exception) {
-            Log.e(TAG, "An unexpected error occurred during Google Sign-In", e)
-            emitLoginFailed("예상치 못한 오류가 발생했습니다.")
-        }
-    }
-
-    private fun requestSocialLogin(email: String, nickname: String?, profileImage: String?, provider: String, socialId: String) {
-        viewModelScope.launch {
-            _loginUiState.value = LoginUiState(isLoading = true)
-            try {
-                val request = SocialLoginRequest(email, nickname, profileImage, provider, socialId)
-                val response = authRepository.socialLogin(request)
-
-                if (response.isSuccessful && response.body() != null) {
-                    val loginData = response.body()!!
-                    loginData.token?.let { tokenManager.saveToken(it) }
-                    _loginUiState.value = LoginUiState(loginSuccessUser = loginData.user)
-                    _loginEvent.emit(LoginEvent.LoginSuccess)
-                } else {
-                    _loginUiState.value = LoginUiState(error = "서버 로그인 실패: ${response.code()}")
-                    emitLoginFailed("서버 로그인에 실패했습니다.")
-                }
-            } catch (e: Exception) {
-                _loginUiState.value = LoginUiState(error = "서버 통신 오류: ${e.message}")
-                emitLoginFailed("로그인 중 오류가 발생했습니다.")
-            }
-        }
-    }
-
-    fun emitLoginFailed(message: String) {
-        viewModelScope.launch {
-            _loginEvent.emit(LoginEvent.LoginFailed(message))
-        }
-    }
-
+    // ------------------------------------------------------------------------
+    // 2. 카카오 로그인
+    // ------------------------------------------------------------------------
     fun loginWithKakaoTalk(context: Context) {
+        // 카카오톡 설치 여부 확인
         if (UserApiClient.instance.isKakaoTalkLoginAvailable(context)) {
             UserApiClient.instance.loginWithKakaoTalk(context) { token, error ->
                 if (error != null) {
                     if (error is ClientError && error.reason == ClientErrorCause.Cancelled) {
-                        emitLoginFailed("카카오톡 로그인이 취소되었습니다.")
-                        return@loginWithKakaoTalk
+                        return@loginWithKakaoTalk // 사용자가 취소
                     }
+                    // 카카오톡 로그인 실패 시 카카오계정 로그인 시도
                     loginWithKakaoAccount(context)
                 } else if (token != null) {
-                    handleKakaoLoginSuccess(token.accessToken)
+                    // 성공 시 바로 서버로 토큰 전송
+                    requestSocialLogin(provider = "KAKAO", token = token.accessToken)
                 }
             }
         } else {
@@ -206,42 +116,61 @@ class LoginViewModel @Inject constructor(
     private fun loginWithKakaoAccount(context: Context) {
         UserApiClient.instance.loginWithKakaoAccount(context) { token, error ->
             if (error != null) {
-                emitLoginFailed("카카오계정 로그인 실패: ${error.message}")
+                Log.e(TAG, "카카오 계정 로그인 실패", error)
+                emitLoginFailed("카카오 로그인에 실패했습니다.")
             } else if (token != null) {
-                handleKakaoLoginSuccess(token.accessToken)
+                requestSocialLogin(provider = "KAKAO", token = token.accessToken)
             }
         }
     }
 
-    private fun handleKakaoLoginSuccess(accessToken: String) {
-        UserApiClient.instance.me { user, error ->
-            if (error != null) {
-                Log.e(TAG, "카카오 사용자 정보 요청 실패", error)
-                emitLoginFailed("카카오 사용자 정보를 가져오는데 실패했습니다.")
-            } else if (user != null) {
-                Log.i(TAG, "카카오 사용자 정보 요청 성공. 서버에 로그인 요청 시작.")
-
-                val userEmail = user.kakaoAccount?.email
-                val userId = user.id
-
-                if (userEmail != null && userId != null) {
-                    requestSocialLogin(
-                        email = userEmail,
-                        nickname = user.kakaoAccount?.profile?.nickname,
-                        profileImage = user.kakaoAccount?.profile?.thumbnailImageUrl,
-                        provider = "kakao",
-                        socialId = userId.toString()
-                    )
+    // ------------------------------------------------------------------------
+    // 3. 구글 로그인
+    // ------------------------------------------------------------------------
+    fun handleGoogleSignInResult(task: Task<GoogleSignInAccount>) {
+        try {
+            val account = task.getResult(ApiException::class.java)
+            if (account != null) {
+                // 구글은 idToken을 서버 검증용으로 주로 사용합니다.
+                val idToken = account.idToken
+                if (idToken != null) {
+                    requestSocialLogin(provider = "GOOGLE", token = idToken)
                 } else {
-                    Log.e(TAG, "Kakao 로그인 실패: email 또는 id가 null입니다.")
-                    emitLoginFailed("카카오 계정 정보를 가져오는데 실패했습니다.")
+                    emitLoginFailed("구글 ID 토큰이 없습니다.")
                 }
+            } else {
+                emitLoginFailed("구글 계정 정보를 가져오지 못했습니다.")
+            }
+        } catch (e: ApiException) {
+            Log.e(TAG, "구글 로그인 API 예외", e)
+            emitLoginFailed("구글 로그인 실패 (코드: ${e.statusCode})")
+        }
+    }
+
+    // ------------------------------------------------------------------------
+    // [공통] 서버로 소셜 로그인 요청
+    // ------------------------------------------------------------------------
+    private fun requestSocialLogin(provider: String, token: String) {
+        viewModelScope.launch {
+            _loginUiState.value = LoginUiState(isLoading = true)
+
+            // AuthRepository는 이제 (provider, token) 두 개만 받아서 처리합니다.
+            // SocialLoginRequest 생성도 Repository 내부나 여기서 깔끔하게 처리됩니다.
+            val result = authRepository.socialLogin(provider, token)
+
+            result.onSuccess {
+                _loginUiState.value = LoginUiState(isLoading = false)
+                _loginEvent.emit(LoginEvent.LoginSuccess)
+            }.onFailure { e ->
+                _loginUiState.value = LoginUiState(isLoading = false, error = e.message)
+                emitLoginFailed("로그인 실패: ${e.message}")
             }
         }
     }
-}
 
-sealed class LoginEvent {
-    object LoginSuccess : LoginEvent()
-    data class LoginFailed(val message: String) : LoginEvent()
+    fun emitLoginFailed(message: String) {
+        viewModelScope.launch {
+            _loginEvent.emit(LoginEvent.LoginFailed(message))
+        }
+    }
 }
