@@ -14,7 +14,10 @@ import com.kakao.sdk.common.model.ClientError
 import com.kakao.sdk.common.model.ClientErrorCause
 import com.kakao.sdk.user.UserApiClient
 import com.navercorp.nid.NaverIdLoginSDK
+import com.navercorp.nid.oauth.NidOAuthLogin
 import com.navercorp.nid.oauth.OAuthLoginCallback
+import com.navercorp.nid.profile.NidProfileCallback
+import com.navercorp.nid.profile.data.NidProfileResponse
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -63,13 +66,37 @@ class LoginViewModel @Inject constructor(
                 )
                 NaverIdLoginSDK.authenticate(context, object : OAuthLoginCallback {
                     override fun onSuccess() {
-                        // 성공 시 바로 토큰을 가져와서 서버로 보냅니다. (프로필 조회 X)
-                        val accessToken = NaverIdLoginSDK.getAccessToken()
-                        if (accessToken != null) {
-                            requestSocialLogin(provider = "NAVER", token = accessToken)
-                        } else {
+                        val accessToken = NaverIdLoginSDK.getAccessToken() ?: run {
                             emitLoginFailed("네이버 토큰을 가져오지 못했습니다.")
+                            return
                         }
+
+                        // 프로필 정보 요청
+                        NidOAuthLogin().callProfileApi(object : NidProfileCallback<NidProfileResponse> {
+                            override fun onSuccess(response: NidProfileResponse) {
+                                val email = response.profile?.email
+                                val id = response.profile?.id?.toString()
+
+                                if (email != null && id != null) {
+                                    requestSocialLogin(
+                                        provider = "NAVER",
+                                        token = accessToken,
+                                        email = email,
+                                        socialId = id
+                                    )
+                                } else {
+                                    emitLoginFailed("네이버 프로필 정보를 가져오지 못했습니다.")
+                                }
+                            }
+
+                            override fun onError(errorCode: Int, message: String) {
+                                emitLoginFailed("네이버 프로필 조회 실패: $message")
+                            }
+
+                            override fun onFailure(httpStatus: Int, message: String) {
+                                emitLoginFailed("네이버 프로필 조회 실패: $message")
+                            }
+                        })
                     }
 
                     override fun onFailure(httpStatus: Int, message: String) {
@@ -104,8 +131,26 @@ class LoginViewModel @Inject constructor(
                     // 카카오톡 로그인 실패 시 카카오계정 로그인 시도
                     loginWithKakaoAccount(context)
                 } else if (token != null) {
-                    // 성공 시 바로 서버로 토큰 전송
-                    requestSocialLogin(provider = "KAKAO", token = token.accessToken)
+                    // 성공 시 사용자 정보 조회 후 서버로 전송
+                    UserApiClient.instance.me { user, error ->
+                        if (error != null) {
+                            emitLoginFailed("카카오 사용자 정보를 가져오지 못했습니다.")
+                        } else if (user != null) {
+                            val email = user.kakaoAccount?.email
+                            val id = user.id.toString()
+
+                            if (email != null) {
+                                requestSocialLogin(
+                                    provider = "KAKAO",
+                                    token = token.accessToken,
+                                    email = email,
+                                    socialId = id
+                                )
+                            } else {
+                                emitLoginFailed("이메일 동의가 필요합니다.")
+                            }
+                        }
+                    }
                 }
             }
         } else {
@@ -119,7 +164,25 @@ class LoginViewModel @Inject constructor(
                 Log.e(TAG, "카카오 계정 로그인 실패", error)
                 emitLoginFailed("카카오 로그인에 실패했습니다.")
             } else if (token != null) {
-                requestSocialLogin(provider = "KAKAO", token = token.accessToken)
+                UserApiClient.instance.me { user, error ->
+                    if (error != null) {
+                        emitLoginFailed("카카오 사용자 정보를 가져오지 못했습니다.")
+                    } else if (user != null) {
+                        val email = user.kakaoAccount?.email
+                        val id = user.id.toString()
+
+                        if (email != null) {
+                            requestSocialLogin(
+                                provider = "KAKAO",
+                                token = token.accessToken,
+                                email = email,
+                                socialId = id
+                            )
+                        } else {
+                            emitLoginFailed("이메일 동의가 필요합니다.")
+                        }
+                    }
+                }
             }
         }
     }
@@ -131,12 +194,20 @@ class LoginViewModel @Inject constructor(
         try {
             val account = task.getResult(ApiException::class.java)
             if (account != null) {
-                // 구글은 idToken을 서버 검증용으로 주로 사용합니다.
+                // 구글은 idToken을 서버 검증용으로 사용하고, 이메일과 ID를 추출합니다.
                 val idToken = account.idToken
-                if (idToken != null) {
-                    requestSocialLogin(provider = "GOOGLE", token = idToken)
+                val email = account.email
+                val id = account.id
+
+                if (idToken != null && email != null && id != null) {
+                    requestSocialLogin(
+                        provider = "GOOGLE",
+                        token = idToken,
+                        email = email,
+                        socialId = id
+                    )
                 } else {
-                    emitLoginFailed("구글 ID 토큰이 없습니다.")
+                    emitLoginFailed("구글 계정 정보를 가져오지 못했습니다.")
                 }
             } else {
                 emitLoginFailed("구글 계정 정보를 가져오지 못했습니다.")
@@ -150,20 +221,28 @@ class LoginViewModel @Inject constructor(
     // ------------------------------------------------------------------------
     // [공통] 서버로 소셜 로그인 요청
     // ------------------------------------------------------------------------
-    private fun requestSocialLogin(provider: String, token: String) {
+    private fun requestSocialLogin(provider: String, token: String, email: String, socialId: String) {
         viewModelScope.launch {
             _loginUiState.value = LoginUiState(isLoading = true)
 
-            // AuthRepository는 이제 (provider, token) 두 개만 받아서 처리합니다.
-            // SocialLoginRequest 생성도 Repository 내부나 여기서 깔끔하게 처리됩니다.
-            val result = authRepository.socialLogin(provider, token)
+            try {
+                val result = authRepository.socialLogin(
+                    provider = provider,
+                    token = token,
+                    email = email,
+                    socialId = socialId
+                )
 
-            result.onSuccess {
-                _loginUiState.value = LoginUiState(isLoading = false)
-                _loginEvent.emit(LoginEvent.LoginSuccess)
-            }.onFailure { e ->
+                result.onSuccess {
+                    _loginUiState.value = LoginUiState(isLoading = false)
+                    _loginEvent.emit(LoginEvent.LoginSuccess)
+                }.onFailure { e ->
+                    _loginUiState.value = LoginUiState(isLoading = false, error = e.message)
+                    emitLoginFailed("로그인 실패: ${e.message}")
+                }
+            } catch (e: Exception) {
                 _loginUiState.value = LoginUiState(isLoading = false, error = e.message)
-                emitLoginFailed("로그인 실패: ${e.message}")
+                emitLoginFailed("로그인 처리 중 오류가 발생했습니다: ${e.message}")
             }
         }
     }

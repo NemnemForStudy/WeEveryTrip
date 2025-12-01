@@ -17,13 +17,16 @@ class AuthRepository @Inject constructor(
     // ViewModel에서 함수 호출하게 됨.
     // 파라미터로 받은 SocialLoginRequest 객체를 ApiService에 그대로 전달
     // Request(요청서)를 서버로 보내고 Response에 담에서 그대로 되돌려줌.
-    suspend fun socialLogin(provider: String, token: String): Result<Boolean> {
+    suspend fun socialLogin(provider: String, token: String, email: String, socialId: String): Result<Boolean> {
         return try {
-            val request = SocialLoginRequest(provider, token)
+            val request = SocialLoginRequest(
+                email = email,
+                socialProvider = provider,
+                socialId = socialId
+            )
             val response = authApiService.socialLogin(request)
 
             if(response.isSuccessful && response.body() != null) {
-                // 성공 시 토큰 저장
                 val tokenString = response.body()!!.token
                 tokenManager.saveToken(tokenString)
                 Result.success(true)
@@ -38,7 +41,11 @@ class AuthRepository @Inject constructor(
     // 일반 로그인
     suspend fun login(email: String, pass: String): Result<Boolean> {
         return try {
-            val request = SocialLoginRequest(email, pass)
+            val request = SocialLoginRequest(
+                email = email,
+                socialProvider = "EMAIL",  // 또는 적절한 provider 값
+                socialId = email  // 이메일 로그인의 경우 email을 socialId로 사용
+            )
             val response = authApiService.socialLogin(request)
 
             if(response.isSuccessful && response.body() != null) {

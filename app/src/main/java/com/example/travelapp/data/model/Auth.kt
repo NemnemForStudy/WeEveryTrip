@@ -27,12 +27,14 @@ data class User(
  * 서버가 이 토큰으로 직접 유효성을 검증합니다.
  */
 data class SocialLoginRequest(
-    // 보안 문제로 인해 provider, token만 보내는걸로 변경.
-    @SerializedName("provider")
-    val provider: String,
+    @SerializedName("email")
+    val email: String,
 
-    @SerializedName("token")
-    val token: String
+    @SerializedName("social_provider")
+    val socialProvider: String,
+
+    @SerializedName("social_id")
+    val socialId: String
 )
 
 data class LoginRequest(

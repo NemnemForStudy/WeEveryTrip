@@ -17,26 +17,20 @@ if(localPropertiesFile.exists()) {
 
 android {
     namespace = "com.example.travelapp"
-    compileSdk {
-        version = release(36)
-    }
+    compileSdk = 36
 
     buildTypes {
         getByName("debug") {
-            // local.properties에서 BASE_URL 값을 읽어오거나, 없으면 기본값을 사용합니다.
-            val baseUrl = localProperties.getProperty("BASE_URL")
+            val baseUrl = localProperties.getProperty("BASE_URL") ?: "http://10.0.2.2:3000"
             val phoneBaseUrl = localProperties.getProperty("PHONE_BASE_URL", baseUrl)
             buildConfigField("String", "BASE_URL", "\"$baseUrl\"")
             buildConfigField("String", "PHONE_BASE_URL", "\"$phoneBaseUrl\"")
         }
         getByName("release") {
-            // 릴리즈(출시) 빌드에서는 실제 배포된 서버 주소 사용
-            // 지금은 없으니 임시주소
             val baseUrl = localProperties.getProperty("RELEASE_BASE_URL", "https://api.your-domain.com")
             buildConfigField("String", "BASE_URL", "\"$baseUrl\"")
 
             isMinifyEnabled = false
-            // 이 코드는 앱을 정식으로 배포(Release)할 때, 앱의 크기를 줄이고 코드를 알아보기 힘들게 만드는(난독화) 설정 파일들을 지정하는 명령어입니다.
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
@@ -51,7 +45,10 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         val properties = Properties()
-        properties.load(project.rootProject.file("local.properties").inputStream())
+        if (project.rootProject.file("local.properties").exists()) {
+            properties.load(project.rootProject.file("local.properties").inputStream())
+        }
+
         val kakaoKey = properties.getProperty("kakao.native.app.key") ?: ""
         buildConfigField("String", "KAKAO_NATIVE_APP_KEY", "\"$kakaoKey\"")
 
@@ -64,7 +61,6 @@ android {
         val googleWebClientId = properties.getProperty("google.web.client.id") ?: ""
         buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"$googleWebClientId\"")
 
-        // 카카오 콜백위해 꼭 있어야함.
         manifestPlaceholders["kakao_app_key"] = "kakao${kakaoKey}"
     }
     compileOptions {
@@ -81,6 +77,17 @@ android {
     composeOptions {
         kotlinCompilerExtensionVersion = "2.0.21"
     }
+
+    packaging {
+        resources {
+            excludes += "/META-INF/{AL2.0,LGPL2.1}"
+        }
+    }
+}
+
+// ⭐️ [필수 추가] Hilt 컴파일러가 에러 타입을 올바르게 수정하도록 설정 (NPE 방지)
+kapt {
+    correctErrorTypes = true
 }
 
 dependencies {
@@ -96,8 +103,17 @@ dependencies {
     implementation(libs.googleid)
     implementation(libs.play.services.auth)
 
-    // Test and Debug dependencies
-    testImplementation(libs.junit)
+    // --- Hilt (의존성 주입) ---
+    implementation(libs.hilt.android)
+    kapt(libs.hilt.compiler)
+    kaptAndroidTest(libs.hilt.compiler)
+
+    // --- Test (JUnit 4) ---
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.1")
+    testImplementation("org.mockito.kotlin:mockito-kotlin:5.3.1")
+
+    // --- Android Test (JUnit 4) ---
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))
@@ -105,38 +121,38 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
 
-    // 카카오 로그인
+    androidTestImplementation("org.mockito:mockito-android:5.7.0")
+    androidTestImplementation("org.mockito.kotlin:mockito-kotlin:5.4.0")
+    androidTestImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.0")
+
+    // [유지] kotlin-reflect 충돌 방지용 강제 버전 지정
+    implementation("org.jetbrains.kotlin:kotlin-reflect:2.0.21")
+    androidTestImplementation("org.jetbrains.kotlin:kotlin-reflect:2.0.21")
+
+    // ⭐️ [필수 추가] Hilt Testing 라이브러리 (kaptAndroidTest가 동작하려면 이 라이브러리가 꼭 필요합니다!)
+    // 버전은 사용 중인 Hilt 버전에 맞춰야 합니다. (보통 2.48 ~ 2.51.1)
+    androidTestImplementation("com.google.dagger:hilt-android-testing:2.51.1")
+
+    // --- Third Party ---
     implementation("com.kakao.sdk:v2-all:2.20.1")
-
-    // Naver Login
     implementation("com.navercorp.nid:oauth:5.10.0")
-//    implementation("androidx.browser:browser:1.7.0")
-
-    // 네비게이션 라이브러리 추가
-        implementation("androidx.navigation:navigation-compose")
-
-    // 구글 로그인
+    implementation("androidx.navigation:navigation-compose")
     implementation("com.google.android.gms:play-services-auth:21.2.0")
+    implementation("androidx.compose.material:material-icons-extended")
 
-    // Material 3와 호환되는 아이콘 라이브러리
-        implementation("androidx.compose.material:material-icons-extended")
-
-    // Hilt
-    implementation(libs.hilt.android)
-    kapt(libs.hilt.compiler)
-
-    // Hilt Navigation Compose (추가)
+    // Hilt Navigation
     implementation("androidx.hilt:hilt-navigation-compose:1.2.0")
 
-    // Retrofit
+    // Retrofit & OkHttp
     implementation("com.squareup.retrofit2:retrofit:2.9.0")
-    implementation("com.squareup.retrofit2:converter-gson:2.9.0") // JSON 파싱을 위한 GSON 컨버터
-    implementation("com.squareup.okhttp3:logging-interceptor:4.11.0") // HTTP 요청 로깅 (디버그용)
+    implementation("com.squareup.retrofit2:converter-gson:2.9.0")
+    implementation("com.squareup.okhttp3:logging-interceptor:4.11.0")
 
-    // 네이버 지도 SDK 및 Compose 라이브러리
+    // Image Loading
+    implementation("io.coil-kt:coil-compose:2.6.0")
+
+    // Map & Location
     implementation("com.naver.maps:map-sdk:3.23.0")
     implementation("io.github.fornewid:naver-map-compose:1.7.2")
-
-    // Coil (이미지 로딩 라이브러리)
-    implementation("io.coil-kt:coil-compose:2.6.0")
+    implementation("androidx.exifinterface:exifinterface:1.3.6")
 }

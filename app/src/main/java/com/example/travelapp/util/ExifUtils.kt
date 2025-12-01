@@ -3,8 +3,12 @@ package com.example.travelapp.util
 import android.content.Context
 import android.media.ExifInterface
 import android.net.Uri
+import android.os.Build
+import android.provider.MediaStore
 import okio.IOException
 import java.io.InputStream
+import java.text.SimpleDateFormat
+import java.util.Locale
 
 /**
  * 이미지 파일의 메타데이터(EXIF)를 다루는 유틸리티 객체입니다.
@@ -44,6 +48,44 @@ object ExifUtils {
             } catch (e: IOException) {
                 e.printStackTrace()
             }
+        }
+        return null
+    }
+
+    /**
+     * 이미지에서 촬영 일시(DateTimeOriginal)를 추출하여 밀리초(Long)로 반환합니다.
+     * 날짜 정보가 없으면 null을 반환합니다.
+     */
+    fun extractDate(context: Context, uri: Uri): Long? {
+        var inputStream: InputStream? = null
+        try {
+            val finalUri = if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                try {
+                    MediaStore.setRequireOriginal(uri)
+                } catch (e: UnsupportedOperationException) {
+                    uri
+                }
+            } else {
+                uri
+            }
+
+            inputStream = context.contentResolver.openInputStream(finalUri)
+            if(inputStream != null) {
+                val exif = ExifInterface(inputStream)
+                // 촬영 시간 태그 읽기
+                val dateString = exif.getAttribute(ExifInterface.TAG_DATETIME_ORIGINAL)
+                    ?:exif.getAttribute(ExifInterface.TAG_DATETIME)
+
+                if(dateString != null) {
+                    // 날짜 형식을 파싱해 Long 변환
+                    val sdf = SimpleDateFormat("yyyy.MM.dd HH:mm:ss", Locale.getDefault())
+                    return sdf.parse(dateString)?.time
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        } finally {
+            inputStream?.close()
         }
         return null
     }
