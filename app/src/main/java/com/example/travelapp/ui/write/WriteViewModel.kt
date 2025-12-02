@@ -12,10 +12,21 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.util.UUID
 import javax.inject.Inject
 
+
+data class PostImage(
+    val id: String = UUID.randomUUID().toString(), // 고유 ID
+    val uri: Uri,
+    val timestamp: Long,
+    val dayNumber: Int
+)
 // HiltViewModel - Hilt가 이 ViewModel 생성하고 필요한 의존성 주입할 수 있도록 함.
 @HiltViewModel
 class WriteViewModel @Inject constructor(
@@ -42,14 +53,29 @@ class WriteViewModel @Inject constructor(
     private val _tripDays = MutableStateFlow<List<Long>>(emptyList())
     val tripDays: StateFlow<List<Long>> = _tripDays.asStateFlow()
 
+    // 이미지 그룹핑 타입 변경
     // 날짜별로 그룹핑되고 시간순으로 정렬된 이미지 맵
-    // Key: 날짜(자정 기준 Long), Value: 정렬된 이미지 Uri 리스트
-    private val _groupedImages = MutableStateFlow<Map<Long, List<Uri>>>(emptyMap())
-    val groupedImages: StateFlow<Map<Long, List<Uri>>> = _groupedImages.asStateFlow()
+    // 변경: Map<Int, List<Uri>> (Day 1, Day 2 같은 '일차' 기준)
+    // Key가 1이면 Day 1, 2면 Day 2를 의미함.
+    private val _groupedImages = MutableStateFlow<Map<Int, List<PostImage>>>(emptyMap())
+    val groupedImages: StateFlow<Map<Int, List<PostImage>>> = _groupedImages.asStateFlow()
 
     private val _postCreationStatus = MutableStateFlow<PostCreationStatus>(PostCreationStatus.Idle) // 초기 상태 아무것도 하지않음.
     val postCreationStatus: StateFlow<PostCreationStatus> = _postCreationStatus.asStateFlow()
 
+    // 초기화 블록: 날짜가 변경되면 tripDays 자동 계산
+    init {
+        // combine은 startDate, endDate 둘 중 하나라도 바뀌면 실행됨
+        _startDate.combine(_endDate) { start, end ->
+            if(start != null && end != null) {
+                generateDaysBetween(start, end)
+            } else {
+                emptyList()
+            }
+        }.onEach { days -> 
+            _tripDays.value = days
+        }.launchIn(viewModelScope) // 생명주기에 맞춰 실행
+    }
     /**
      * 사용자가 지도에서 직접 마커를 움직여 위치를 변경했을 때 호출됩니다.
      */
@@ -66,27 +92,72 @@ class WriteViewModel @Inject constructor(
     /**
      * 선택된 사진들을 날짜별로 묶고, 시간순으로 정렬합니다.
      * WriteScreen에서 갤러리 선택 직후 호출해주세요.
+     * 사진 선택하면 'Day N' 기준으로 자동 분류
      */
-    fun processSeletedImages(context: Context, uris: List<Uri>) {
+    fun processSelectedImages(context: Context, uris: List<Uri>) {
         viewModelScope.launch {
+            // 현재 설정된 여행 날짜 리스트 가져오기
+            val currentTripDays = _tripDays.value
+
             // EXIF 추출은 IO 작업이므로 백그라운드 스레드에서 실행
-            val groupedAndSorted = withContext(Dispatchers.IO) {
+            val processedImages = withContext(Dispatchers.IO) {
                 uris.map { uri ->
                     // 각 사진 촬영 시간 추출(없으면 0)
                     val time = ExifUtils.extractDate(context, uri) ?: 0L
-                    Pair(uri, time)
-                }.groupBy { (_, time) ->
-                    // 날짜별로 그룹핑 키 생성
-                    getDayStartMillis(time)
-                }.mapValues { (_, list) ->
-                    // 각 그룹 내부에서 시간순 정렬
-                    list.sortedBy { it.second }  // Pair 두 번째 값으로 정렬
-                        .map { it.first }       // 정렬 후 Uri만 남김
-                }.toSortedMap() // 날짜 키 자체도 오름차순
-            }
+                    val dayStartMillis = getDayStartMillis(time)
 
-            // 결과 업데이트
-            _groupedImages.value = groupedAndSorted
+                    // 사진 찍은 날짜가 여행 기간 중 몇 번째 날인지 찾기(없으면 -1)
+                    val index = currentTripDays.indexOf(dayStartMillis)
+                    val dayNumber = if(index != -1) index + 1 else 0 // 0은 "날짜 미정" 혹은 "범위 밖"
+
+                    PostImage(
+                        uri = uri,
+                        timestamp = time,
+                        dayNumber = dayNumber
+                    )
+                }
+                .filter { it.dayNumber > 0 } // 여행 기간에 포함된 사진만 필터링
+                .sortedBy { it.timestamp } // 날짜+시간 순 정렬
+            }
+            // Map으로 그룹핑
+            val newGrouped = processedImages.groupBy { it.dayNumber }
+
+            // 기존 데이터 유지하면서 병합하거나 새로 덮어쓰기
+            _groupedImages.value = newGrouped
+
+            // 첫 번째 사진 위치 정보로 업데이트
+            if(processedImages.isNotEmpty()) {
+                val firstUri = processedImages.first().uri
+                val location = ExifUtils.extractLocation(context, firstUri)
+                if(location != null) {
+                    updateLocation(location.first, location.second)
+                }
+            }
+        }
+    }
+
+    // 순서 변경 로직(Swap)
+    // dayNumber에 해당하는 이미지 리스트에서 fromIndex위치 이미지를 toIndex 위치로 이동시키고 State 갱신.
+    /**
+     * 흐름
+     * State(Map) -> MutableMap -> MutableList -> MutableList -> MutableMap -> UI업데이트
+     */
+    fun swapImages(dayNumber: Int, fromIndex: Int, toIndex: Int) {
+        // 불변 Map을 그대로 수정하면 Compost가 감지 못함. 반드시 .toMutableMap()으로 새 인스턴스 생성.
+        val currentMap = _groupedImages.value.toMutableMap()
+        // dayNumber 값가져오고 없으면 null이니 return 해준다.
+        // toMutableList() 쓰는 이유 -> 순서 변경하려면 MutableList가 필요함. State 내부 값 직접 건드리지 말고 복사해 수정.
+        val list = currentMap[dayNumber]?.toMutableList() ?: return
+
+        // 인덱스 범위 치크. indices = 0 until list.size임. 반드시 필요한 방어 코드임.
+        if(fromIndex in list.indices && toIndex in list.indices) {
+            // fromIndex에 있는 이미지 꺼냄.
+            val item = list.removeAt(fromIndex)
+            // 꺼낸 이미지 toIndex 위치에 삽입.
+            list.add(toIndex, item)
+            currentMap[dayNumber] = list
+            // State에 새로운 Map 인스턴스 할당. Compose가 상태 변경을 감지해서 UI 재구성 함.
+            _groupedImages.value = currentMap
         }
     }
 

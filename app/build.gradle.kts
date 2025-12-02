@@ -154,5 +154,5 @@ dependencies {
     // Map & Location
     implementation("com.naver.maps:map-sdk:3.23.0")
     implementation("io.github.fornewid:naver-map-compose:1.7.2")
-    implementation("androidx.exifinterface:exifinterface:1.3.6")
+    implementation("androidx.exifinterface:exifinterface:1.3.7")
 }

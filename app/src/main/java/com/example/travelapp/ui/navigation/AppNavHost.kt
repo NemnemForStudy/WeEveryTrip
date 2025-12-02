@@ -44,10 +44,16 @@ fun AppNavHost(
     NavHost(navController = navController, startDestination = Screen.Splash.route) {
         composable(Screen.Splash.route) {
             SplashScreen(onTimeout = {
+
+                // 서버 있는 곳에서 환경
                 // 스플래시 화면에서 화면 종료 시, 토큰 유효성을 검사해 분기함.
-                val destination = if(tokenManager.isTokenValid()) Screen.Home.route else Screen.Login.route
-                navController.navigate(destination) {
-                    // 스플래시 화면을 백스택에서 제거하여 뒤로가기 시 스플래시 화면으로 돌아가지 않도록 합니다.
+//                val destination = if(tokenManager.isTokenValid()) Screen.Home.route else Screen.Login.route
+//                navController.navigate(destination) {
+//                    // 스플래시 화면을 백스택에서 제거하여 뒤로가기 시 스플래시 화면으로 돌아가지 않도록 합니다.
+//                    popUpTo(Screen.Splash.route) { inclusive = true }
+//                }
+                // 서버 없는 곳에서 환경 변경
+                navController.navigate(Screen.Write.route) {
                     popUpTo(Screen.Splash.route) { inclusive = true }
                 }
             })

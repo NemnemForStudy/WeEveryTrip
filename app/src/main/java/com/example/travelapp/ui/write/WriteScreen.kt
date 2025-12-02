@@ -1,34 +1,32 @@
 package com.example.travelapp.ui.write
 
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.CalendarMonth
-import androidx.compose.material.icons.filled.CameraAlt
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.LocationOn
-import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -44,11 +42,13 @@ import androidx.navigation.compose.rememberNavController
 import coil.compose.rememberAsyncImagePainter
 import com.example.travelapp.ui.theme.TravelAppTheme
 import com.example.travelapp.ui.theme.Beige
-import com.example.travelapp.util.ExifUtils
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import androidx.compose.runtime.getValue
+import androidx.core.content.ContextCompat
+import android.Manifest
 
 /**
  * 1. [Stateful] WriteScreen
@@ -60,12 +60,14 @@ fun WriteScreen(
 ) {
     val context = LocalContext.current
 
+    // ViewModel 상태 관찰
     val postCreationStatus by viewModel.postCreationStatus.collectAsStateWithLifecycle()
     val latitude by viewModel.latitude.collectAsStateWithLifecycle()
     val longitude by viewModel.longitude.collectAsStateWithLifecycle()
     val startDate by viewModel.startDate.collectAsStateWithLifecycle()
     val endDate by viewModel.endDate.collectAsStateWithLifecycle()
     val tripDays by viewModel.tripDays.collectAsStateWithLifecycle()
+    val groupedImages by viewModel.groupedImages.collectAsStateWithLifecycle()
 
     // 게시글 등록 결과 처리
     LaunchedEffect(postCreationStatus) {
@@ -92,11 +94,13 @@ fun WriteScreen(
         startDate = startDate,
         endDate = endDate,
         tripDays = tripDays,
+        groupedImages = groupedImages, // ViewModel 데이터 전달
         onUpdateLocation = viewModel::updateLocation,
         onUpdateDateRange = viewModel::updateDateRange,
-        onProcessImages = { uris -> viewModel.processSeletedImages(context, uris) },
+        onProcessImages = { uris -> viewModel.processSelectedImages(context, uris) },
         onCreatePost = viewModel::createPost,
-        onResetStatus = viewModel::resetStatus
+        onResetStatus = viewModel::resetStatus,
+        onSwapImages = viewModel::swapImages
     )
 }
 
@@ -113,44 +117,76 @@ fun WriteScreenContent(
     startDate: Long?,
     endDate: Long?,
     tripDays: List<Long>,
+    groupedImages: Map<Int, List<PostImage>>,
     onUpdateLocation: (Double?, Double?) -> Unit,
     onUpdateDateRange: (Long?, Long?) -> Unit,
     onProcessImages: (List<Uri>) -> Unit,
     onCreatePost: (String, String, String, List<String>, List<Uri>) -> Unit,
-    onResetStatus: () -> Unit
+    onResetStatus: () -> Unit,
+    onSwapImages: (Int, Int, Int) -> Unit // Day, From, To
 ) {
     val context = LocalContext.current
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
 
     // 로컬 UI 상태
-    var showDialog by remember { mutableStateOf(true) }
+    var showDialog by remember { mutableStateOf(false) }
     var showDatePickerDialog by remember { mutableStateOf(false) }
     var category by remember { mutableStateOf("카테고리") }
     var title by remember { mutableStateOf("") }
     var content by remember { mutableStateOf("") }
     var tagsInput by remember { mutableStateOf("") }
-    var selectedImageUris by remember { mutableStateOf<List<Uri>>(emptyList()) }
 
-    // 갤러리 런처
+    // 현재 선택된 Day탭 (0이면 전체, 1이면 Day1)
+    var selectedDayTab by remember { mutableIntStateOf(0) }
+
+    // ViewModel에 있는 startDate, endDate를 초기값으로 넣어주자
+    val dateRangePickerState = rememberDateRangePickerState(
+        initialSelectedStartDateMillis = startDate,
+        initialSelectedEndDateMillis = endDate,
+        yearRange = 2000..2050
+    )
+
+    // 임시로 선택된 URI 저장할 변수 (권한 허용 후 처리를 위해)
+    var tempSelectedUris by remember { mutableStateOf<List<Uri>>(emptyList()) }
+
+    // 권한 요청 런처 (사용자가 허용/거부 눌렀을 때 실행됨)
+    val locationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if(isGranted) {
+            // 허용하면 선택한 사진들 처리 시작
+            if(tempSelectedUris.isNotEmpty()) {
+                onProcessImages(tempSelectedUris)
+            }
+        } else {
+            // 거부하면 위치 정보 없이 토스트 메세지
+            Toast.makeText(context, "위치 정보를 가져오려면 권한이 필요합니다!", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    // 갤러리 런처(사진 선택 후 권한 체크)
     val galleryLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetMultipleContents()
     ) { uris: List<Uri> ->
-        selectedImageUris = uris
         if (uris.isNotEmpty()) {
-            Toast.makeText(context, "${uris.size}개의 사진이 선택되었습니다.", Toast.LENGTH_SHORT).show()
+            tempSelectedUris = uris // 선택한 URI 임시 저장
 
-            onProcessImages(uris)
-
-            val firstLocation = uris.asSequence()
-                .mapNotNull { ExifUtils.extractLocation(context, it) }
-                .firstOrNull()
-
-            if (firstLocation != null) {
-                onUpdateLocation(firstLocation.first, firstLocation.second)
-                Toast.makeText(context, "사진 위치 정보를 불러왔습니다!", Toast.LENGTH_SHORT).show()
+            if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                val hasPermission = ContextCompat.checkSelfPermission(
+                    context,
+                    Manifest.permission.ACCESS_MEDIA_LOCATION
+                ) == PackageManager.PERMISSION_GRANTED
+                if(hasPermission) {
+                    // 이미 권한이 있으면 바로 처리
+                    onProcessImages(uris)
+                } else {
+                    // 권한 없으면 요청 팝업 띄우기
+                    locationPermissionLauncher.launch(Manifest.permission.ACCESS_MEDIA_LOCATION)
+                }
             } else {
-                onUpdateLocation(null, null)
+                // 안드로이드 9이하는 그냥 처리
+                onProcessImages(uris)
             }
         }
     }
@@ -170,9 +206,8 @@ fun WriteScreenContent(
         )
     }
 
-    // ⭐️ [수정됨] 날짜 선택 다이얼로그
+    // 날짜 선택 다이얼로그 (수정됨)
     if (showDatePickerDialog) {
-        val dateRangePickerState = rememberDateRangePickerState()
         DatePickerDialog(
             onDismissRequest = { showDatePickerDialog = false },
             confirmButton = {
@@ -195,39 +230,33 @@ fun WriteScreenContent(
                 title = {
                     Text(
                         text = "여행 기간 선택",
-                        modifier = Modifier.padding(16.dp),
+                        modifier = Modifier.padding(start = 24.dp, end = 12.dp, top = 16.dp),
                         fontWeight = FontWeight.Bold
                     )
                 },
+                // 🔥 [핵심 수정] headline을 직접 정의해서 글자 깨짐 방지
                 headline = {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(start = 16.dp, bottom = 12.dp),
-                        horizontalArrangement = Arrangement.Center
-                    ) {
-                        val startMills = dateRangePickerState.selectedStartDateMillis
-                        val endMills = dateRangePickerState.selectedEndDateMillis
+                    val startDate = dateRangePickerState.selectedStartDateMillis
+                    val endDate = dateRangePickerState.selectedEndDateMillis
+                    val sdf = SimpleDateFormat("yyyy.MM.dd", Locale.KOREA)
 
-                        val headlineText = if(startMills != null && endMills != null) {
-                            val sdf = SimpleDateFormat("yyyy.MM.dd", Locale.KOREA)
-                            "${sdf.format(Date(startMills))} - ${sdf.format(Date(endMills))}"
-                        } else if(startMills != null) {
-                            val sdf = SimpleDateFormat("yyyy.MM.dd", Locale.KOREA)
-                            "${sdf.format(Date(startMills))} - 종료일"
-                        } else {
-                            "시작일 - 종료일"
-                        }
-                        Text(
-                            text = headlineText,
-                            style = MaterialTheme.typography.headlineMedium,
-
-
-                        )
+                    val dateText = if (startDate != null && endDate != null) {
+                        "${sdf.format(Date(startDate))} ~ ${sdf.format(Date(endDate))}"
+                    } else if (startDate != null) {
+                        "${sdf.format(Date(startDate))} ~ 선택 중"
+                    } else {
+                        "시작일 ~ 종료일"
                     }
+
+                    Text(
+                        text = dateText,
+                        modifier = Modifier.padding(start = 24.dp, end = 12.dp, bottom = 12.dp),
+                        style = MaterialTheme.typography.headlineSmall, // 글자 크기 적절히 조절
+                        fontWeight = FontWeight.Bold
+                    )
                 },
-                modifier = Modifier.fillMaxWidth().height(500.dp),
-                showModeToggle = false
+                modifier = Modifier.fillMaxWidth().height(500.dp), // 높이 제한
+                showModeToggle = true // 연필 아이콘(직접 입력 모드) 숨김 (필요하면 true)
             )
         }
     }
@@ -238,45 +267,114 @@ fun WriteScreenContent(
             drawerState = drawerState,
             drawerContent = {
                 CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                    ModalDrawerSheet(modifier = Modifier.width(300.dp)) {
+                    ModalDrawerSheet(modifier = Modifier.width(320.dp)) {
                         Spacer(Modifier.height(12.dp))
                         Text("메뉴", modifier = Modifier.padding(16.dp), style = MaterialTheme.typography.titleLarge)
                         HorizontalDivider()
 
                         if(tripDays.isNotEmpty()) {
-                            Text(
-                                "여행 일정 (${tripDays.size}일",
-                                modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 8.dp),
-                                style = MaterialTheme.typography.titleMedium,
-                                color = MaterialTheme.colorScheme.primary
-                            )
+                            // 드롭다운 리스트 구현
+                            LazyColumn(modifier = Modifier.fillMaxSize()) {
+                                items(tripDays.size) { index ->
+                                    val dayNumber = index + 1
+                                    val dayMillis = tripDays[index]
+                                    val dayImages = groupedImages[dayNumber] ?: emptyList()
 
-                            val sdf = SimpleDateFormat("MM/dd (E)", Locale.KOREA)
+                                    // 각 Day별 확장 상태 관리
+                                    // 초기값은 false임. var은 상태 바껴야 해서.
+                                    var isExpanded by remember { mutableStateOf(false) }
+                                    // var은 값을 바꿀 수 있어야 하는데 애니메이션 상탠 바꿀 수 없다.
+                                    // 왜 val? -> isExpanded가 바뀌면 Compose가 알아서 0f에서 180로 부드럽게 숫자를 계산해주는 결과임.
+                                    val rotationState by animateFloatAsState(targetValue = if (isExpanded) 180f else 0f, label = "arrow")
+                                    Column {
+                                        // Day 헤더 (클릭 시 확장/축소)
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                // 클릭할 때마다 isExpanded 값을 true, false로 바꿈.
+                                                .clickable { isExpanded = !isExpanded }
+                                                .padding(16.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            val sdf = SimpleDateFormat("MM.dd (E)", Locale.KOREA)
+                                            Column {
+                                                Text("Day $dayNumber", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                                                Text(sdf.format(Date(dayMillis)), style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                                            }
 
-                            tripDays.forEachIndexed { index, dayMillis ->
-                                NavigationDrawerItem(
-                                    label = { Text("Day ${index + 1}: ${sdf.format(Date(dayMillis))}") },
-                                    selected = false,
-                                    onClick = {
-                                        // TODO: 해당 날짜의 사진만 필터링해서 보여주는 기능 연결
-                                        scope.launch { drawerState.close() }
-                                    },
-                                    modifier = Modifier.padding(horizontal = 12.dp)
-                                )
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Text("${dayImages.size}장", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                                                Icon(
+                                                    Icons.Default.ArrowDropDown,
+                                                    contentDescription = "Drop Down",
+                                                    modifier = Modifier.rotate(rotationState)
+                                                )
+                                            }
+                                        }
+                                        HorizontalDivider(color = Color.LightGray.copy(alpha = 0.5f))
+
+                                        // 확장된 이미지 리스트(순서 변경 가능)
+                                        AnimatedVisibility(visible = isExpanded) {
+                                            Column {
+                                                dayImages.forEachIndexed { imgIndex, image ->
+                                                    Row(
+                                                        modifier = Modifier
+                                                            .fillMaxWidth()
+                                                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                                                        verticalAlignment = Alignment.CenterVertically
+                                                    ) {
+                                                        // 썸네일
+                                                        Image(
+                                                            painter = rememberAsyncImagePainter(image.uri),
+                                                            contentDescription = null,
+                                                            modifier = Modifier
+                                                                .size(60.dp)
+                                                                .clip(RoundedCornerShape(8.dp)),
+                                                            contentScale = ContentScale.Crop
+                                                        )
+                                                        Spacer(modifier = Modifier.width(12.dp))
+
+                                                        // 시간 정보
+                                                        val timeSdf = SimpleDateFormat("a hh:mm", Locale.KOREA)
+                                                        Column(modifier = Modifier.weight(1f)) {
+                                                            Text(timeSdf.format(Date(image.timestamp)), style = MaterialTheme.typography.bodyMedium)
+                                                        }
+                                                        // 순서 변경 버튼(드래그 대신 클릭 - 안정성 확보)
+                                                        Column {
+                                                            if(imgIndex > 0) { // 위로 이동
+                                                                Icon(
+                                                                    Icons.Default.KeyboardArrowUp,
+                                                                    contentDescription = "Up",
+                                                                    modifier = Modifier.clickable { onSwapImages(dayNumber, imgIndex, imgIndex - 1) }
+                                                                )
+                                                            }
+                                                            if(imgIndex < dayImages.size - 1) { // 아래로 이동
+                                                                Icon(
+                                                                    Icons.Default.KeyboardArrowDown,
+                                                                    contentDescription = "Down",
+                                                                    modifier = Modifier.clickable { onSwapImages(dayNumber, imgIndex, imgIndex + 1) }
+                                                                )
+                                                            }
+                                                        }
+                                                        // 드래그 핸들 아이콘(시각적 표시)
+                                                        Spacer(modifier = Modifier.width(8.dp))
+                                                        Icon(Icons.Default.DragHandle, contentDescription = "Drag", tint = Color.Gray)
+                                                    }
+
+                                                    if(imgIndex < dayImages.size - 1) Divider(modifier = Modifier.padding(start = 88.dp))
+                                                }
+                                                if(dayImages.isEmpty()) {
+                                                    Text("사진 없음", modifier = Modifier.padding(16.dp), style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
                             }
-                            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                        } else {
+                            Text("날짜를 먼저 선택해주세요", modifier = Modifier.padding(16.dp), color = Color.Gray)
                         }
-
-                        NavigationDrawerItem(
-                            label = { Text("임시 저장 목록") },
-                            selected = false,
-                            onClick = { /* TODO */ }
-                        )
-                        NavigationDrawerItem(
-                            label = { Text("설정") },
-                            selected = false,
-                            onClick = { /* TODO */ }
-                        )
                     }
                 }
             }
@@ -292,16 +390,15 @@ fun WriteScreenContent(
                                 }
                             },
                             actions = {
-                                IconButton(onClick = {
-                                    scope.launch { drawerState.open() }
-                                }) {
+                                IconButton(onClick = { scope.launch { drawerState.open() } }) {
                                     Icon(Icons.Default.Menu, contentDescription = "메뉴")
                                 }
-
                                 TextButton(onClick = {
                                     if (title.isNotEmpty() && content.isNotEmpty() && category != "카테고리") {
                                         val tagsList = tagsInput.split(" ", ",", "#").map { it.trim() }.filter { it.isNotEmpty() }
-                                        onCreatePost(category, title, content, tagsList, selectedImageUris)
+                                        // PostImage 객체 리스트를 Uri 리스트로 변환
+                                        val allImages = groupedImages.values.flatten().map { it.uri }
+                                        onCreatePost(category, title, content, tagsList, allImages)
                                     } else {
                                         Toast.makeText(context, "카테고리, 제목, 내용을 모두 입력해주세요.", Toast.LENGTH_SHORT).show()
                                     }
@@ -313,6 +410,9 @@ fun WriteScreenContent(
                         )
                     },
                     containerColor = Beige
+                    // innerPadding : Compose에서 부모가 준 여백 값을 의미 함.
+                    // 이거 안쓰면 TopAppBar 아래에 그려야 할 콘텐츠가 AppBar 뒤에 가려짐.
+                    // BottomBar에 내용이 막힘.
                 ) { innerPadding ->
                     Column(
                         modifier = Modifier
@@ -323,7 +423,7 @@ fun WriteScreenContent(
                     ) {
                         // [카테고리 & 제목]
                         Row(
-                            modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
+                            modifier = Modifier.padding(top = 16.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Box(
@@ -356,7 +456,7 @@ fun WriteScreenContent(
 
                         Divider(color = Color(0xFFEEEEEE), thickness = 1.dp, modifier = Modifier.padding(vertical = 8.dp))
 
-                        // ⭐️ [날짜 선택 UI]
+                        // [날짜 선택 UI]
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -364,16 +464,13 @@ fun WriteScreenContent(
                                 .padding(vertical = 12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(Icons.Default.CalendarMonth, contentDescription = "날짜 선택", tint = Color.Gray)
+                            Icon(Icons.Default.CalendarMonth, contentDescription = null, tint = Color.Gray)
                             Spacer(modifier = Modifier.width(8.dp))
 
-                            // ⭐️ [확인] 여기서 한국어 포맷(Locale.KOREA)을 사용하여 결과를 표시합니다.
                             val dateText = if (startDate != null && endDate != null) {
                                 val sdf = SimpleDateFormat("yyyy.MM.dd", Locale.KOREA)
                                 "${sdf.format(Date(startDate))} ~ ${sdf.format(Date(endDate))}"
-                            } else {
-                                "여행 기간을 선택해주세요"
-                            }
+                            } else "여행 기간을 선택해주세요"
 
                             Text(text = dateText, color = if (startDate != null) Color.Black else Color.Gray)
                         }
@@ -388,18 +485,34 @@ fun WriteScreenContent(
                                 .padding(vertical = 12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(Icons.Default.CameraAlt, contentDescription = "사진 첨부", tint = Color.Gray)
+                            Icon(Icons.Default.CameraAlt, contentDescription = null, tint = Color.Gray)
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text(text = "사진 첨부하기 (${selectedImageUris.size})", color = Color.Gray)
+
+                            val totalCount = groupedImages.values.flatten().size
+                            Text(text = "사진 첨부하기 ($totalCount)", color = Color.Gray)
                         }
 
-                        // [이미지 미리보기 리스트]
-                        if (selectedImageUris.isNotEmpty()) {
+                        // [이미지 리스트] (Day 필터링 적용)
+                        val imagesToShow = remember(groupedImages, selectedDayTab) {
+                            if (selectedDayTab == 0) groupedImages.values.flatten()
+                            else groupedImages[selectedDayTab] ?: emptyList()
+                        }
+
+                        if (selectedDayTab != 0 && imagesToShow.isNotEmpty()) {
+                            Text(
+                                "Day $selectedDayTab 사진만 보는 중",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(bottom = 4.dp)
+                            )
+                        }
+
+                        if (imagesToShow.isNotEmpty()) {
                             LazyRow(
                                 modifier = Modifier.padding(vertical = 8.dp),
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                items(selectedImageUris) { uri ->
+                                items(imagesToShow) { uri ->
                                     Box(modifier = Modifier.size(100.dp)) {
                                         Image(
                                             painter = rememberAsyncImagePainter(uri),
@@ -407,96 +520,52 @@ fun WriteScreenContent(
                                             modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(8.dp)),
                                             contentScale = ContentScale.Crop
                                         )
-                                        IconButton(
-                                            onClick = { selectedImageUris = selectedImageUris - uri },
-                                            modifier = Modifier.align(Alignment.TopEnd).size(24.dp).background(Color.Black.copy(0.3f), CircleShape)
-                                        ) {
-                                            Icon(Icons.Default.Close, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
-                                        }
+                                        // 삭제 버튼 등 추가 가능
                                     }
                                 }
                             }
                         }
 
-                        // ⭐️ [지도 미리보기 & 삭제 버튼]
+                        // [지도 미리보기]
                         if (latitude != null && longitude != null) {
                             Spacer(modifier = Modifier.height(16.dp))
-
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(Icons.Default.LocationOn, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = "사진 위치 정보가 감지되었습니다.",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.weight(1f)
-                                )
-                                // 위치 삭제 버튼
-                                IconButton(onClick = {
-                                    Toast.makeText(context, "위치 정보가 초기화되었습니다.", Toast.LENGTH_SHORT).show()
-                                    onUpdateLocation(null, null)
-                                }) {
+                                Text("위치 정보 감지됨", color = MaterialTheme.colorScheme.primary, modifier = Modifier.weight(1f))
+                                IconButton(onClick = { onUpdateLocation(null, null) }) {
                                     Icon(Icons.Default.Close, contentDescription = "삭제", tint = Color.Gray)
                                 }
                             }
                             Spacer(modifier = Modifier.height(8.dp))
-
                             OutlinedButton(
                                 onClick = { navController.navigate("map?lat=$latitude&lon=$longitude") },
                                 modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(8.dp)
-                            ) {
-                                Text("📍 지도에서 위치 미리보기")
-                            }
-                            Spacer(modifier = Modifier.height(16.dp))
-                        } else if (selectedImageUris.isNotEmpty()) {
-                            // 사진은 있지만 위치 정보가 없는 경우
-                            Spacer(modifier = Modifier.height(16.dp))
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.Info, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(16.dp))
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text("선택한 사진에 위치 정보가 없습니다.", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
-                            }
-                            Spacer(modifier = Modifier.height(16.dp))
+                            ) { Text("📍 지도에서 위치 미리보기") }
                         }
 
-                        Divider(color = Color(0xFFEEEEEE), thickness = 1.dp)
+                        // [나머지 입력 필드들] - 이전에 괄호가 잘못 닫혀서 에러났던 부분 해결됨
+                        Divider(modifier = Modifier.padding(vertical = 8.dp))
 
-                        // [태그 입력]
                         TextField(
-                            value = tagsInput,
-                            onValueChange = { tagsInput = it },
+                            value = tagsInput, onValueChange = { tagsInput = it },
                             placeholder = { Text("#태그 입력") },
                             modifier = Modifier.fillMaxWidth(),
-                            colors = TextFieldDefaults.colors(
-                                focusedContainerColor = Color.Transparent,
-                                unfocusedContainerColor = Color.Transparent,
-                                focusedIndicatorColor = Color.Transparent,
-                                unfocusedIndicatorColor = Color.Transparent
-                            )
+                            colors = TextFieldDefaults.colors(focusedContainerColor = Color.Transparent, unfocusedContainerColor = Color.Transparent)
                         )
-                        Divider(color = Color(0xFFEEEEEE), thickness = 1.dp)
+                        Divider()
 
-                        // [본문 입력]
                         TextField(
-                            value = content,
-                            onValueChange = { content = it },
+                            value = content, onValueChange = { content = it },
                             placeholder = { Text("내용을 입력하세요...") },
                             modifier = Modifier.fillMaxWidth().height(200.dp),
-                            colors = TextFieldDefaults.colors(
-                                focusedContainerColor = Color.Transparent,
-                                unfocusedContainerColor = Color.Transparent,
-                                focusedIndicatorColor = Color.Transparent,
-                                unfocusedIndicatorColor = Color.Transparent
-                            )
+                            colors = TextFieldDefaults.colors(focusedContainerColor = Color.Transparent, unfocusedContainerColor = Color.Transparent)
                         )
 
                         Spacer(modifier = Modifier.height(50.dp))
-                    }
-                }
+                    } // Column 닫기
+                } // Scaffold 닫기
             }
         }
     }
@@ -517,11 +586,13 @@ fun WriteScreenPreview() {
             startDate = null,
             endDate = null,
             tripDays = listOf(1733065200000, 1733151600000), // 프리뷰용 더미 날짜
+            groupedImages = emptyMap(), // 🔥 [중요] Preview에 파라미터 추가!
             onUpdateLocation = { _, _ -> },
             onUpdateDateRange = { _, _ -> },
             onProcessImages = {},
             onCreatePost = { _, _, _, _, _ -> },
-            onResetStatus = {}
+            onResetStatus = {},
+            onSwapImages = { _, _, _ -> } // Day, From, To
         )
     }
 }

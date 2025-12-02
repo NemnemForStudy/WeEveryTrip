@@ -59,6 +59,7 @@ object ExifUtils {
     fun extractDate(context: Context, uri: Uri): Long? {
         var inputStream: InputStream? = null
         try {
+            // Android 10 이상에서 "원본" 데이터를 강제로 요청 (편집된 사진 등에서 EXIF 유실 방지)
             val finalUri = if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 try {
                     MediaStore.setRequireOriginal(uri)
@@ -76,16 +77,44 @@ object ExifUtils {
                 val dateString = exif.getAttribute(ExifInterface.TAG_DATETIME_ORIGINAL)
                     ?:exif.getAttribute(ExifInterface.TAG_DATETIME)
 
-                if(dateString != null) {
-                    // 날짜 형식을 파싱해 Long 변환
-                    val sdf = SimpleDateFormat("yyyy.MM.dd HH:mm:ss", Locale.getDefault())
+                // 예외가 발생하지 않도록 try-catch로 감싸서 파싱합니다.
+                try {
+                    val sdf = SimpleDateFormat("yyyy:MM:dd HH:mm:ss", Locale.getDefault())
                     return sdf.parse(dateString)?.time
+                } catch (e: Exception) {
+                    // 만약 형식이 다르면 다른 형식으로 재시도 등 처리가 가능하나, 보통은 여기서 걸립니다.
+                    e.printStackTrace()
                 }
             }
         } catch (e: Exception) {
             e.printStackTrace()
         } finally {
-            inputStream?.close()
+            try {
+               inputStream?.close()            
+            } catch (e: IOException) {
+                // 무시
+            }
+        }
+
+        // EXIF가 없어서 위에서 return 못했을 때, 갤러리 DB에서 날짜 조회
+        try {
+            val cursor = context.contentResolver.query(
+                uri,
+                arrayOf(MediaStore.Images.Media.DATE_TAKEN),
+                null,
+                null,
+                null
+            )
+            cursor?.use {
+                if(it.moveToFirst()) {
+                    val dateTaken = it.getLong(0)
+                    if(dateTaken > 0) {
+                        return dateTaken
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
         return null
     }
