@@ -35,6 +35,8 @@ interface PostApiService {
         @Part("content") content: RequestBody,
         @Part("tags") tags: RequestBody,
         // 2. 이미지 파트의 이름도 명시적으로 "images"로 지정합니다.
-        @Part images: Array<MultipartBody.Part>
+        @Part images: Array<MultipartBody.Part>,
+        // GeoJSON 형태 위치 정보 RequestBody 추가
+        @Part("coordinates") coordinates: RequestBody?,
     ): Response<Post>
 }

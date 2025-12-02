@@ -14,6 +14,7 @@ import org.junit.Test
 import org.mockito.Mock
 import org.mockito.MockitoAnnotations
 import org.mockito.kotlin.any
+import org.mockito.kotlin.anyOrNull
 import org.mockito.kotlin.whenever
 import retrofit2.Response
 
@@ -112,6 +113,7 @@ class PostRepositoryTest {
         assertEquals("빈 리스트 반환", emptyList, result.getOrNull())
     }
 
+    @Test
     fun testGetAllPostsSuccess() = runTest {
         val expectedPosts = listOf(samplePost, samplePost.copy(id = "2", title = "부산 여행"))
         val mockResponse = Response.success(expectedPosts)
@@ -140,11 +142,12 @@ class PostRepositoryTest {
         val mockResponse = Response.success(samplePost)
 
         whenever(mockPostApiService.createPost(
-            any<RequestBody>(),
-            any<RequestBody>(),
-            any<RequestBody>(),
-            any<RequestBody>(),
-            any<Array<MultipartBody.Part>>()
+            any(), // category
+            any(), // title
+            any(), // content
+            any(), // tags
+            anyOrNull(), // ⭐️ coordinates (새로 추가된 파라미터 대응)
+            any()  // ⭐️ images (Array<MultipartBody.Part> -> 그냥 any()로 해결)
         )).thenReturn(mockResponse)
 
         val result = postRepository.createPost(
@@ -165,11 +168,12 @@ class PostRepositoryTest {
 
         whenever(
             mockPostApiService.createPost(
-                any<RequestBody>(),
-                any<RequestBody>(),
-                any<RequestBody>(),
-                any<RequestBody>(),
-                any<Array<MultipartBody.Part>>()
+                any(),
+                any(),
+                any(),
+                any(),
+                anyOrNull(), // coordinates
+                any()        // images
             )
         ).thenThrow(expectException)
 

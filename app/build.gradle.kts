@@ -7,6 +7,7 @@ plugins {
     alias(libs.plugins.kotlin.kapt)
     alias(libs.plugins.hilt.android)
     id("com.google.android.libraries.mapsplatform.secrets-gradle-plugin") version "2.0.1" apply false
+    id("org.jetbrains.kotlin.plugin.serialization") version "1.9.0"
 }
 
 val localProperties = Properties()
@@ -155,4 +156,5 @@ dependencies {
     implementation("com.naver.maps:map-sdk:3.23.0")
     implementation("io.github.fornewid:naver-map-compose:1.7.2")
     implementation("androidx.exifinterface:exifinterface:1.3.7")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.0")
 }

@@ -3,8 +3,8 @@ package com.example.travelapp.data.repository
 import android.content.Context
 import android.net.Uri
 import com.example.travelapp.data.api.PostApiService
+import com.example.travelapp.data.model.GeoJsonPoint
 import com.example.travelapp.data.model.Post
-import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
@@ -14,8 +14,9 @@ import java.io.File
 import java.io.FileOutputStream
 import java.util.UUID
 import javax.inject.Inject
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.encodeToString
 
-//@HiltViewModel
 open class PostRepository @Inject constructor(
     private val postApiService: PostApiService,
     @ApplicationContext private val context: Context
@@ -35,9 +36,19 @@ open class PostRepository @Inject constructor(
             val contentBody = content.toRequestBody("text/plain".toMediaTypeOrNull())
             val tagsBody = tags.joinToString(",").toRequestBody("text/plain".toMediaTypeOrNull())
 
-            // 위치 정보도 RequestBody로 변환(null이면 안 보냄)
-            val latBody = longitude?.toString()?.toRequestBody("text/plain".toMediaTypeOrNull())
-            val lonBody = latitude?.toString()?.toRequestBody("text/plain".toMediaTypeOrNull())
+            // lat, lon -> coordinate
+            val coordinatesBody = if(latitude != null && longitude != null) {
+                // 객체 생성
+                val geoPoint = GeoJsonPoint(
+                    coordinates = listOf(longitude, latitude)
+                )
+                // GeoJSON 표준 : 경도(lon), 위도(lat) 순서
+                // 좌표 정보를 GeoJSON 형식으로 만든다.
+                val jsonString = Json.encodeToString(geoPoint) // kotlinx.serialization 사용 가정
+                jsonString.toRequestBody("application/json".toMediaTypeOrNull())
+            } else {
+                null
+            }
 
             // imageUris(List)를 MultipartBody.Part의 Array로 변환합니다.
             val imageParts = imageUris.mapNotNull { uri ->
@@ -56,17 +67,17 @@ open class PostRepository @Inject constructor(
                     e.printStackTrace()
                     null
                 }
-            }.toTypedArray() // 이 부분이 핵심적인 변경점입니다.
+            }.toTypedArray() // 이 부분이 핵심적인 변경점
 
-            // ⭐️ [수정] API 호출 시 위치 정보도 함께 전송
-            // 주의: PostApiService.createPost 함수에도 latitude, longitude 인자가 추가되어야 합니다.
-            // 만약 API가 아직 위치를 안 받는다면 latBody, lonBody는 빼고 보내세요.
+            // API 호출 시 위치 정보도 함께 전송
+            // 주의: PostApiService.createPost 함수에도 latitude, longitude 인자가 추가되어야 한다.
             val response = postApiService.createPost(
                 category = categoryBody,
                 title = titleBody,
                 content = contentBody,
                 tags = tagsBody,
-                images = imageParts
+                images = imageParts,
+                coordinates = coordinatesBody // API 호출 시 위치 정보 추가
             )
 
             if (response.isSuccessful) {
@@ -82,7 +93,8 @@ open class PostRepository @Inject constructor(
         }
     }
 
-    suspend fun searchPostsByTitle(query: String): Result<List<Post>> {
+    // 여기에 open을 해야 mocking이 된다
+    open suspend fun searchPostsByTitle(query: String): Result<List<Post>> {
         println("Repository에서 검색 시작: query=$query")
         return try {
             val response = postApiService.searchPosts(query)
@@ -110,7 +122,7 @@ open class PostRepository @Inject constructor(
                     Result.success(it)
                 } ?: Result.failure(IllegalStateException("API 응답 본문이 비어있습니다."))
             } else {
-                Result.failure(IllegalStateException("전체 조회 실패: ${response.code()} - ${response.message()}"))
+                Result.failure(RuntimeException("전체 조회 실패: ${response.code()} - ${response.message()}"))
             }
         } catch (e: Exception) {
             e.printStackTrace()
