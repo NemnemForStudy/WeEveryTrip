@@ -4,11 +4,12 @@
   "description": "여행 앱 백엔드 서버",
   "main": "dist/index.js",
   "scripts": {
-  "build": "tsc",
-  "build:watch": "tsc --watch",
-  "start": "node dist/index.js",
-  "dev": "nodemon --watch src --exec \"ts-node -r dotenv/config src/index.ts\""
-},
+    "build": "tsc",
+    "build:watch": "tsc --watch",
+    "start": "ts-node -r dotenv/config src/index.ts",
+    "dev": "nodemon --watch src --exec npm start",
+    "debug": "node --inspect=0.0.0.0:9229 -r dotenv/config -r ts-node/register src/index.ts"
+  },
   "dependencies": {
     "dotenv": "^17.2.3",
     "express": "^5.1.0",
