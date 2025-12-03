@@ -1,5 +1,9 @@
 package com.example.travelapp.di
 
+import android.content.Context
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
+import android.os.Build
 import com.example.travelapp.BuildConfig
 import com.example.travelapp.util.AuthInterceptor
 import com.example.travelapp.data.api.AuthApiService
@@ -8,8 +12,8 @@ import com.example.travelapp.data.api.PostApiService
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
+import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
-import okhttp3.OkHttp
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
@@ -64,11 +68,20 @@ object NetworkModule {
     @Provides
     @Singleton
     @Named("AppRetrofit")
-    fun provideAppRetrofit(@Named("AuthOkHttpClient") okHttpClient: OkHttpClient): Retrofit {
+    fun provideAppRetrofit(
+        @Named("AuthOkHttpClient") okHttpClient: OkHttpClient,
+        @ApplicationContext context: Context
+    ): Retrofit {
+        val baseUrl = if (isWifiConnected(context)) {
+            BuildConfig.BASE_URL
+        } else {
+            BuildConfig.PHONE_BASE_URL
+        }
+
         return Retrofit.Builder()
-            .baseUrl(BuildConfig.PHONE_BASE_URL)
+            .baseUrl(baseUrl)
             .client(okHttpClient)
-            .addConverterFactory(GsonConverterFactory.create()) // JSON 파싱 위한 GSON 컨버팅
+            .addConverterFactory(GsonConverterFactory.create())
             .build()
     }
 
@@ -94,7 +107,7 @@ object NetworkModule {
     }
 
     // 인증 API (로그인/회원가입)
-    // ⭐️ 로그인 요청 시에는 토큰이 없으므로 AuthInterceptor가 있어도 헤더에 추가하지 않습니다(Safe).
+    // 로그인 요청 시에는 토큰이 없으므로 AuthInterceptor가 있어도 헤더에 추가하지 않습니다(Safe).
     // 따라서 그냥 AppRetrofit을 같이 써도 무방합니다.
     @Provides
     @Singleton
@@ -108,5 +121,17 @@ object NetworkModule {
     @Singleton
     fun provideNaverAuthApiService(@Named("NaverRetrofit") retrofit: Retrofit): NaverAuthApiService {
         return retrofit.create(NaverAuthApiService::class.java)
+    }
+
+    private fun isWifiConnected(context: Context): Boolean {
+        val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val network = connectivityManager.activeNetwork ?: return false
+            val capabilities = connectivityManager.getNetworkCapabilities(network) ?: return false
+            return capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
+        } else {
+            val networkInfo = connectivityManager.activeNetworkInfo ?: return false
+            return networkInfo.type == ConnectivityManager.TYPE_WIFI && networkInfo.isConnected
+        }
     }
 }

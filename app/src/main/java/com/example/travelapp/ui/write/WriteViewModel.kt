@@ -236,13 +236,25 @@ class WriteViewModel @Inject constructor(
             // 서버로 전송할때는 정렬된 _groupedImages.value 활용할 수 있다.
             // 지금은 UI에서 넘겨준 imgUris 그대로 사용.
             try {
-                // TODO: 리포지토리의 createPost 함수에 lat, lon 파라미터를 추가해서 넘겨야 합니다.
-                // postRepository.createPost(category, title, content, tags, imgUris, currentLat, currentLon)
+                val result = postRepository.createPost(
+                    category = category,
+                    title = title,
+                    content = content,
+                    tags = tags,
+                    imageUris = imgUris,
+                    latitude = currentLat,
+                    longitude = currentLon,
+                    isDomestic = true
+                )
 
-                kotlinx.coroutines.delay(1000) // 네트워크 딜레이 시뮬레이션
-                _postCreationStatus.value = PostCreationStatus.Success("temp_post_id_123")
+                result.onSuccess {
+                    _postCreationStatus.value = PostCreationStatus.Success(it.id)
+                }.onFailure { e ->
+                    _postCreationStatus.value = PostCreationStatus.Error(e.message ?: "등록 실패")
+                }
             } catch (e: Exception) {
                 _postCreationStatus.value = PostCreationStatus.Error(e.localizedMessage ?: "예외 발생")
+                e.printStackTrace()
             }
         }
     }

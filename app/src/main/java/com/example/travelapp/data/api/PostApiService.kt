@@ -20,23 +20,21 @@ interface PostApiService {
     // Response<Post>는 Retrofit이 서버 응답을 Post 데이터 클래스로 변환해 반환,
     // HTTP 응답 상태 코드 등 더 많은 정보를 포함하는 Response 객체로 래핑함.
 
-    @GET("posts") // 모든 게시물 가져오기
+    @GET("api/posts") // 모든 게시물 가져오기
     suspend fun getAllPosts(): Response<List<Post>>
 
     @GET("api/posts") // 제목으로 검색
     suspend fun searchPosts(@Query("search") query: String): Response<List<Post>>
 
     @Multipart
-    @POST("api/posts") // TODO: 실제 백엔드 API 엔드포인트 경로로 변경해야 함.
+    @POST("api/posts")
     suspend fun createPost(
-        // 1. @PartMap을 개별 @Part로 변경합니다.
-        @Part("category") category: RequestBody,
         @Part("title") title: RequestBody,
         @Part("content") content: RequestBody,
-        @Part("tags") tags: RequestBody,
-        // 2. 이미지 파트의 이름도 명시적으로 "images"로 지정합니다.
-        @Part images: Array<MultipartBody.Part>,
-        // GeoJSON 형태 위치 정보 RequestBody 추가
+        @Part("category") category: RequestBody,
         @Part("coordinates") coordinates: RequestBody?,
-    ): Response<Post>
+        @Part("isDomestic") isDomestic: RequestBody,
+        @Part("tags") tags: RequestBody?,
+        @Part images: List<MultipartBody.Part>
+    ): Response<Post> // ApiResponse 제거하고 Post로 직접 반환
 }

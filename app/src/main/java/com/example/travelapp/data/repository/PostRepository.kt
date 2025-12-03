@@ -12,10 +12,10 @@ import okhttp3.RequestBody.Companion.asRequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.File
 import java.io.FileOutputStream
-import java.util.UUID
 import javax.inject.Inject
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.encodeToString
+import java.io.IOException
 
 open class PostRepository @Inject constructor(
     private val postApiService: PostApiService,
@@ -28,66 +28,91 @@ open class PostRepository @Inject constructor(
         tags: List<String>,
         imageUris: List<Uri>,
         latitude: Double? = null,
-        longitude: Double? = null
+        longitude: Double? = null,
+        isDomestic: Boolean = true
     ): Result<Post> {
+        println("📝 게시물 생성 시작 - 제목: $title, 이미지 개수: ${imageUris.size}")
+        
+        // 필수 필드 검증
+        if (title.isBlank() || content.isBlank()) {
+            val error = "제목과 내용은 필수 입력 사항입니다."
+            println("❌ $error")
+            return Result.failure(IllegalArgumentException(error))
+        }
+
         return try {
+            // 요청 본문 생성
             val categoryBody = category.toRequestBody("text/plain".toMediaTypeOrNull())
             val titleBody = title.toRequestBody("text/plain".toMediaTypeOrNull())
             val contentBody = content.toRequestBody("text/plain".toMediaTypeOrNull())
             val tagsBody = tags.joinToString(",").toRequestBody("text/plain".toMediaTypeOrNull())
+            val isDomesticBody = isDomestic.toString().toRequestBody("text/plain".toMediaTypeOrNull())
 
-            // lat, lon -> coordinate
-            val coordinatesBody = if(latitude != null && longitude != null) {
-                // 객체 생성
+            // 위치 정보 처리
+            val coordinatesBody = if (latitude != null && longitude != null) {
+                println("📍 위치 정보 포함: 위도=$latitude, 경도=$longitude")
                 val geoPoint = GeoJsonPoint(
-                    coordinates = listOf(longitude, latitude)
-                )
-                // GeoJSON 표준 : 경도(lon), 위도(lat) 순서
-                // 좌표 정보를 GeoJSON 형식으로 만든다.
-                val jsonString = Json.encodeToString(geoPoint) // kotlinx.serialization 사용 가정
+                    type = "Point",
+                    coordinates = listOf(longitude, latitude))
+                val jsonString = Json.encodeToString(geoPoint)
                 jsonString.toRequestBody("application/json".toMediaTypeOrNull())
             } else {
+                println("ℹ️ 위치 정보 없음")
                 null
             }
 
-            // imageUris(List)를 MultipartBody.Part의 Array로 변환합니다.
-            val imageParts = imageUris.mapNotNull { uri ->
+            // 이미지 처리
+            println("🖼️ 이미지 처리 중... (${imageUris.size}개)")
+            val imageParts = imageUris.mapIndexed { index, uri ->
                 try {
-                    val inputStream = context.contentResolver.openInputStream(uri) ?: return@mapNotNull null
-                    val file = File(context.cacheDir, "${UUID.randomUUID()}.jpg")
-                    val outputStream = FileOutputStream(file)
-                    inputStream.use { input ->
-                        outputStream.use { output ->
-                            input.copyTo(output)
+                    context.contentResolver.openInputStream(uri)?.use { inputStream ->
+                        val file = File(context.cacheDir, "img_${System.currentTimeMillis()}_$index.jpg")
+                        FileOutputStream(file).use { outputStream ->
+                            inputStream.copyTo(outputStream)
                         }
-                    }
-                    val requestFile = file.asRequestBody("image/jpeg".toMediaTypeOrNull())
-                    MultipartBody.Part.createFormData("images", file.name, requestFile)
+                        val requestFile = file.asRequestBody("image/*".toMediaTypeOrNull())
+                        MultipartBody.Part.createFormData("images", file.name, requestFile)
+                    } ?: throw IOException("이미지 파일을 열 수 없습니다: $uri")
                 } catch (e: Exception) {
-                    e.printStackTrace()
-                    null
+                    println("⚠️ 이미지 처리 실패 (${uri.lastPathSegment}): ${e.message}")
+                    throw IOException("이미지 처리 중 오류가 발생했습니다: ${e.message}", e)
                 }
-            }.toTypedArray() // 이 부분이 핵심적인 변경점
+            }
+            
+            if (imageParts.isEmpty()) {
+                println("⚠️ 유효한 이미지가 없습니다. 빈 리스트로 계속 진행합니다.")
+            }
 
-            // API 호출 시 위치 정보도 함께 전송
-            // 주의: PostApiService.createPost 함수에도 latitude, longitude 인자가 추가되어야 한다.
+            println("🚀 서버에 게시물 전송 중...")
             val response = postApiService.createPost(
                 category = categoryBody,
                 title = titleBody,
                 content = contentBody,
                 tags = tagsBody,
                 images = imageParts,
-                coordinates = coordinatesBody // API 호출 시 위치 정보 추가
+                coordinates = coordinatesBody,
+                isDomestic = isDomesticBody
             )
 
-            if (response.isSuccessful) {
-                response.body()?.let {
-                    Result.success(it)
-                } ?: Result.failure(IllegalStateException("API 응답 본문이 비어있습니다."))
-            } else {
-                Result.failure(RuntimeException("게시물 생성 실패: ${response.code()} - ${response.message()}"))
+            if (!response.isSuccessful) {
+                val errorBody = response.errorBody()?.string() ?: ""
+                val errorMsg = "게시물 생성 실패 (${response.code()}): ${response.message()}\n$errorBody"
+                println("❌ $errorMsg")
+                return Result.failure(IOException(errorMsg))
             }
+
+            response.body()?.let { post ->
+                println("✅ 게시물이 성공적으로 생성되었습니다. ID: ${post.id}")
+                Result.success(post)
+            } ?: run {
+                val errorMsg = "서버 응답이 올바르지 않습니다."
+                println("❌ $errorMsg")
+                Result.failure(IllegalStateException(errorMsg))
+            }
+            
         } catch (e: Exception) {
+            val errorMsg = "게시물 생성 중 오류 발생: ${e.message}"
+            println("❌ $errorMsg")
             e.printStackTrace()
             Result.failure(e)
         }
@@ -95,36 +120,56 @@ open class PostRepository @Inject constructor(
 
     // 여기에 open을 해야 mocking이 된다
     open suspend fun searchPostsByTitle(query: String): Result<List<Post>> {
-        println("Repository에서 검색 시작: query=$query")
+        println("🔍 Repository - 검색 시작: query=$query")
+        if (query.isBlank()) {
+            return Result.failure(IllegalArgumentException("검색어를 입력해주세요."))
+        }
+
         return try {
             val response = postApiService.searchPosts(query)
 
-            if (response.isSuccessful) {
-                response.body()?.let {
-                    Result.success(it)
-                } ?: Result.failure(IllegalStateException("API 응답 본문이 비어있습니다."))
-            } else {
-                Result.failure(IllegalStateException("검색 실패: ${response.code()} - ${response.message()}"))
+            if (!response.isSuccessful) {
+                val errorBody = response.errorBody()?.string() ?: ""
+                println("❌ 검색 실패: ${response.code()} - ${response.message()}, 에러: $errorBody")
+                return Result.failure(
+                    IllegalStateException("검색에 실패했습니다. (${response.code()}: ${response.message()})")
+                )
+            }
+
+            response.body()?.let { posts ->
+                println("✅ 검색 성공: ${posts.size}개의 게시물을 찾았습니다.")
+                Result.success(posts)
+            } ?: run {
+                println("⚠️ 검색 결과가 비어있습니다.")
+                Result.success(emptyList())
             }
         } catch (e: Exception) {
+            println("❌ 검색 중 오류 발생: ${e.message}")
             e.printStackTrace()
             Result.failure(e)
         }
     }
     suspend fun getAllPosts(): Result<List<Post>> {
+        println("📋 전체 게시물 조회 시작")
         return try {
-            // PostApiService에 getAllPosts() 함수가 필요합니다.
-            // 만약 없다면, 임시로 searchPostsByTitle("") 등을 호출하거나 빈 리스트를 반환
             val response = postApiService.getAllPosts()
-
-            if(response.isSuccessful) {
-                response.body()?.let {
-                    Result.success(it)
-                } ?: Result.failure(IllegalStateException("API 응답 본문이 비어있습니다."))
-            } else {
-                Result.failure(RuntimeException("전체 조회 실패: ${response.code()} - ${response.message()}"))
+            
+            if (!response.isSuccessful) {
+                val errorMsg = "게시물 목록을 가져오는데 실패했습니다. (${response.code()}: ${response.message()})"
+                println("❌ $errorMsg")
+                return Result.failure(IOException(errorMsg))
+            }
+            
+            response.body()?.let { posts ->
+                println("✅ ${posts.size}개의 게시물을 불러왔습니다.")
+                Result.success(posts)
+            } ?: run {
+                println("⚠️ 게시물이 없거나 응답 형식이 올바르지 않습니다.")
+                Result.success(emptyList())
             }
         } catch (e: Exception) {
+            val errorMsg = "게시물 목록을 불러오는 중 오류가 발생했습니다: ${e.message}"
+            println("❌ $errorMsg")
             e.printStackTrace()
             Result.failure(e)
         }
