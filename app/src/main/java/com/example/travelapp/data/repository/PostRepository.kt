@@ -1,11 +1,16 @@
 package com.example.travelapp.data.repository
 
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.net.Uri
+import coil.decode.DecodeUtils.calculateInSampleSize
 import com.example.travelapp.data.api.PostApiService
 import com.example.travelapp.data.model.GeoJsonPoint
 import com.example.travelapp.data.model.Post
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.asRequestBody
@@ -16,6 +21,7 @@ import javax.inject.Inject
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.encodeToString
 import java.io.IOException
+import java.util.UUID
 
 open class PostRepository @Inject constructor(
     private val postApiService: PostApiService,
@@ -30,60 +36,73 @@ open class PostRepository @Inject constructor(
         latitude: Double? = null,
         longitude: Double? = null,
         isDomestic: Boolean = true
-    ): Result<Post> {
-        println("📝 게시물 생성 시작 - 제목: $title, 이미지 개수: ${imageUris.size}")
-        
-        // 필수 필드 검증
-        if (title.isBlank() || content.isBlank()) {
-            val error = "제목과 내용은 필수 입력 사항입니다."
-            println("❌ $error")
-            return Result.failure(IllegalArgumentException(error))
-        }
-
-        return try {
-            // 요청 본문 생성
+    ): Result<Post> = withContext(Dispatchers.IO) {
+        // 🔥 [핵심 1] withContext(Dispatchers.IO)로 감싸서 백그라운드에서 실행 (앱 안 멈춤)
+        return@withContext try {
             val categoryBody = category.toRequestBody("text/plain".toMediaTypeOrNull())
             val titleBody = title.toRequestBody("text/plain".toMediaTypeOrNull())
             val contentBody = content.toRequestBody("text/plain".toMediaTypeOrNull())
             val tagsBody = tags.joinToString(",").toRequestBody("text/plain".toMediaTypeOrNull())
             val isDomesticBody = isDomestic.toString().toRequestBody("text/plain".toMediaTypeOrNull())
 
-            // 위치 정보 처리
-            val coordinatesBody = if (latitude != null && longitude != null) {
-                println("📍 위치 정보 포함: 위도=$latitude, 경도=$longitude")
+            val coordinatesBody = if(latitude != null && longitude != null) {
                 val geoPoint = GeoJsonPoint(
                     type = "Point",
-                    coordinates = listOf(longitude, latitude))
+                    coordinates = listOf(longitude, latitude)
+                )
                 val jsonString = Json.encodeToString(geoPoint)
                 jsonString.toRequestBody("application/json".toMediaTypeOrNull())
             } else {
-                println("ℹ️ 위치 정보 없음")
                 null
             }
 
-            // 이미지 처리
-            println("🖼️ 이미지 처리 중... (${imageUris.size}개)")
-            val imageParts = imageUris.mapIndexed { index, uri ->
+            //  이미지 압축 및 변환 로직
+            // null 이 반환되면 항목은 리스트에서 제외함. 성공한 이미지만 모아서 리스트로 만듦.
+            val imageParts = imageUris.mapNotNull { uri ->
                 try {
-                    context.contentResolver.openInputStream(uri)?.use { inputStream ->
-                        val file = File(context.cacheDir, "img_${System.currentTimeMillis()}_$index.jpg")
-                        FileOutputStream(file).use { outputStream ->
-                            inputStream.copyTo(outputStream)
-                        }
-                        val requestFile = file.asRequestBody("image/*".toMediaTypeOrNull())
+                    // 비트맵으로 읽어오기 (메모리 절약을 위해 사이즈 확인)
+                    val inputStream = context.contentResolver.openInputStream(uri) ?: return@mapNotNull null
+
+                    // 옵션 설정: 너무 큰 이미지는 줄여서 읽기
+                    val options = BitmapFactory.Options()
+                    // 메모리 절약을 위한 사이즈 확인 (inJustDecodeBounds)
+                    // 비트맵 객체를 생성하지 않고 메타데이터만 읽음.
+                    options.inJustDecodeBounds = true
+                    BitmapFactory.decodeStream(inputStream, null, options)
+                    inputStream.close()
+
+                    // 적절한 샘플 사이즈 계산 (예: 1024px 정도로 리사이징)
+                    val scale = calculateInSampleSize(options, 1024, 1024)
+
+                    // 실제 로딩
+                    val options2 = BitmapFactory.Options()
+                    // 실제 이미지 메모리에 로딩하는데, 아까 계산한 비율만큼 축소해서 로딩함. 메모리 훨 작게 씀.
+                    options2.inSampleSize = scale
+                    val realInputStream = context.contentResolver.openInputStream(uri)
+                    val bitmap = BitmapFactory.decodeStream(realInputStream, null, options2)
+                    realInputStream?.close()
+
+                    if (bitmap != null) {
+                        // 2. 압축해서 임시 파일로 저장 (Quality 70%)
+                        val file = File(context.cacheDir, "resized_${UUID.randomUUID()}.jpg")
+                        val outputStream = FileOutputStream(file)
+                        // 압축 및 임시 파일 저장 - compress, 품질 70%
+                        bitmap.compress(Bitmap.CompressFormat.JPEG, 70, outputStream)
+                        outputStream.flush()
+                        outputStream.close()
+
+                        // 3. Multipart 변환
+                        val requestFile = file.asRequestBody("image/jpeg".toMediaTypeOrNull())
                         MultipartBody.Part.createFormData("images", file.name, requestFile)
-                    } ?: throw IOException("이미지 파일을 열 수 없습니다: $uri")
+                    } else {
+                        null
+                    }
                 } catch (e: Exception) {
-                    println("⚠️ 이미지 처리 실패 (${uri.lastPathSegment}): ${e.message}")
-                    throw IOException("이미지 처리 중 오류가 발생했습니다: ${e.message}", e)
+                    e.printStackTrace()
+                    null
                 }
             }
-            
-            if (imageParts.isEmpty()) {
-                println("⚠️ 유효한 이미지가 없습니다. 빈 리스트로 계속 진행합니다.")
-            }
 
-            println("🚀 서버에 게시물 전송 중...")
             val response = postApiService.createPost(
                 category = categoryBody,
                 title = titleBody,
@@ -94,28 +113,32 @@ open class PostRepository @Inject constructor(
                 isDomestic = isDomesticBody
             )
 
-            if (!response.isSuccessful) {
-                val errorBody = response.errorBody()?.string() ?: ""
-                val errorMsg = "게시물 생성 실패 (${response.code()}): ${response.message()}\n$errorBody"
-                println("❌ $errorMsg")
-                return Result.failure(IOException(errorMsg))
+            if (response.isSuccessful) {
+                response.body()?.let {
+                    Result.success(it)
+                } ?: Result.failure(IllegalStateException("API 응답 본문이 비어있습니다."))
+            } else {
+                Result.failure(RuntimeException("게시물 생성 실패: ${response.code()} - ${response.message()}"))
             }
-
-            response.body()?.let { post ->
-                println("✅ 게시물이 성공적으로 생성되었습니다. ID: ${post.id}")
-                Result.success(post)
-            } ?: run {
-                val errorMsg = "서버 응답이 올바르지 않습니다."
-                println("❌ $errorMsg")
-                Result.failure(IllegalStateException(errorMsg))
-            }
-            
         } catch (e: Exception) {
-            val errorMsg = "게시물 생성 중 오류 발생: ${e.message}"
-            println("❌ $errorMsg")
             e.printStackTrace()
             Result.failure(e)
         }
+    }
+
+    private fun calculateInSampleSize(options: BitmapFactory.Options, reqWidth: Int, reqHeight: Int): Int {
+        val (height: Int, width: Int) = options.run { outHeight to outWidth }
+        var inSampleSize = 1
+
+        if(height > reqHeight || width > reqWidth) {
+            val halfHeight: Int = height / 2
+            val halfWidth: Int = height / 2
+
+            while(halfHeight / inSampleSize >= reqHeight && halfWidth / inSampleSize >= reqWidth) {
+                inSampleSize *= 2
+            }
+        }
+        return inSampleSize
     }
 
     // 여기에 open을 해야 mocking이 된다

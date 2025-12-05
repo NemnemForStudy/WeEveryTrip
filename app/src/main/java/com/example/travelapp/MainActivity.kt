@@ -1,6 +1,7 @@
 package com.example.travelapp
 
 import android.content.Intent
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.ManagedActivityResultLauncher
@@ -15,6 +16,7 @@ import androidx.navigation.compose.rememberNavController
 import com.example.travelapp.ui.navigation.AppNavHost
 import com.example.travelapp.ui.theme.TravelAppTheme
 import com.example.travelapp.util.TokenManager
+import com.naver.maps.map.NaverMapSdk
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 
@@ -26,6 +28,14 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        val clientId = BuildConfig.NAVER_MAP_CLIENT_ID
+        android.util.Log.d("NaverKey", "Current Client ID: $clientId")
+        // 네이버 지도 SDK 클라이언트 ID 설정
+        NaverMapSdk.getInstance(this).client =
+            NaverMapSdk.NaverCloudPlatformClient(clientId)
+
+        enableEdgeToEdge()
         setContent {
             TravelAppTheme {
                 Surface(

@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.example.travelapp"
     xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
@@ -42,6 +43,9 @@
                 <data android:host="oauth" android:scheme="${kakao_app_key}" />
             </intent-filter>
         </activity>
+        <meta-data
+            android:name="com.naver.maps.map.CLIENT_ID"
+            android:value="${NAVER_MAP_CLIENT_ID}" />
         
         <!-- 네이버 로그인 (최신 SDK에서는 자동으로 처리됨) -->
     </application>

@@ -63,6 +63,13 @@ android {
         buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"$googleWebClientId\"")
 
         manifestPlaceholders["kakao_app_key"] = "kakao${kakaoKey}"
+
+        val naverMapClientId = properties.getProperty("naver.map.client.id") ?: ""
+        buildConfigField("String", "NAVER_MAP_CLIENT_ID", "\"$naverMapClientId\"")
+        // 메니페스트(XML)용 변수 연결
+        manifestPlaceholders["NAVER_MAP_CLIENT_ID"] = naverMapClientId
+
+        println("🗺️ Naver Map Client ID: $naverMapClientId")
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
