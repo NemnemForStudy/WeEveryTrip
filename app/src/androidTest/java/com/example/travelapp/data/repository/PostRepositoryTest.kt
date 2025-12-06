@@ -5,7 +5,6 @@ import com.example.travelapp.data.api.PostApiService
 import com.example.travelapp.data.model.Post
 import kotlinx.coroutines.test.runTest
 import okhttp3.MultipartBody
-import okhttp3.RequestBody
 // ⭐️ [변경] JUnit 4용 Import 사용 (jupiter 아님)
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -147,7 +146,8 @@ class PostRepositoryTest {
             any(), // content
             any(), // tags
             anyOrNull(), // ⭐️ coordinates (새로 추가된 파라미터 대응)
-            any()  // ⭐️ images (Array<MultipartBody.Part> -> 그냥 any()로 해결)
+            any(),
+            any<List<MultipartBody.Part>>()// ⭐️ images (Array<MultipartBody.Part> -> 그냥 any()로 해결)
         )).thenReturn(mockResponse)
 
         val result = postRepository.createPost(
@@ -173,7 +173,8 @@ class PostRepositoryTest {
                 any(),
                 any(),
                 anyOrNull(), // coordinates
-                any()        // images
+                any(),
+                any<List<MultipartBody.Part>>()       // images
             )
         ).thenThrow(expectException)
 

@@ -2,6 +2,7 @@ package com.example.travelapp.ui.home
 
 import android.util.Log
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -93,7 +94,6 @@ fun HomeScreen(
                                 onSearch = {
                                     Log.d("HomeScreen", "onSearch triggered! 검색어: $searchQuery")
                                     keyboardController?.hide()
-                                    // 검색 로직 추가
                                     // 검색 실행도 ViewModel에 위임합니다.
                                     viewModel.performSearch(searchQuery)
                                 }
@@ -161,7 +161,13 @@ fun HomeScreen(
                 }
 
                 // 자유 게시판
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier
+                        .clickable {
+                            navController.navigate(Screen.Feed.route)
+                        }
+                ) {
                     Icon(
                         imageVector = Icons.Default.ChatBubbleOutline,
                         contentDescription = "자유 게시판",
@@ -195,7 +201,7 @@ fun HomeScreen(
             }
         }
     ) { paddingValues ->
-        // 메인 콘텐츠 영역
+        // 텐츠 영역
         Column(
             modifier = Modifier.fillMaxSize()
                 .padding(paddingValues)
@@ -233,7 +239,7 @@ fun HomeScreen(
                     }
                 }
             }
-            Text(text = "메인 콘텐츠 영역", style = MaterialTheme.typography.bodyLarge)
+            Text(text = "텐츠 영역", style = MaterialTheme.typography.bodyLarge)
         }
     }
 }

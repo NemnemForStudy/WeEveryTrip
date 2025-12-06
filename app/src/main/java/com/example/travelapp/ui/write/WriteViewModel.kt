@@ -5,6 +5,9 @@ import android.icu.util.Calendar
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.travelapp.data.api.PostApiService
+import com.example.travelapp.data.model.RoutePoint
+import com.example.travelapp.data.model.RouteRequest
 import com.example.travelapp.data.repository.PostRepository
 import com.example.travelapp.util.ExifUtils
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -59,6 +62,9 @@ class WriteViewModel @Inject constructor(
     // Key가 1이면 Day 1, 2면 Day 2를 의미함.
     private val _groupedImages = MutableStateFlow<Map<Int, List<PostImage>>>(emptyMap())
     val groupedImages: StateFlow<Map<Int, List<PostImage>>> = _groupedImages.asStateFlow()
+
+    private val _routePoints = MutableStateFlow<List<RoutePoint>>(emptyList())
+    val routePoints: StateFlow<List<RoutePoint>> = _routePoints.asStateFlow()
 
     private val _postCreationStatus = MutableStateFlow<PostCreationStatus>(PostCreationStatus.Idle) // 초기 상태 아무것도 하지않음.
     val postCreationStatus: StateFlow<PostCreationStatus> = _postCreationStatus.asStateFlow()
@@ -267,6 +273,25 @@ class WriteViewModel @Inject constructor(
         _startDate.value = null
         _endDate.value = null
         _groupedImages.value = emptyMap() // 이미지 그룹핑 상태도 초기화
+    }
+
+    fun fetchRoute(locations: List<Pair<Double, Double>>) {
+        viewModelScope.launch {
+            if(locations.size < 2) {
+                _routePoints.value = emptyList()
+                return@launch
+            }
+
+            val routePointsToFetch = locations.map { RoutePoint(it.first, it.second) }
+
+            // Repo 호출
+            val route = postRepository.getRouteForDay(routePointsToFetch)
+            _routePoints.value = route ?: emptyList()
+        }
+    }
+
+    fun clearRoute() {
+        _routePoints.value = emptyList()
     }
 
     // 게시물 생성 상태를 나타내는 sealed 클래스

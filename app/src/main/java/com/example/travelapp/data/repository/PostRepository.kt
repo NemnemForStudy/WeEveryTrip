@@ -4,10 +4,13 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
+import android.util.Log
 import coil.decode.DecodeUtils.calculateInSampleSize
 import com.example.travelapp.data.api.PostApiService
 import com.example.travelapp.data.model.GeoJsonPoint
 import com.example.travelapp.data.model.Post
+import com.example.travelapp.data.model.RoutePoint
+import com.example.travelapp.data.model.RouteRequest
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -195,6 +198,37 @@ open class PostRepository @Inject constructor(
             println("❌ $errorMsg")
             e.printStackTrace()
             Result.failure(e)
+        }
+    }
+
+    /**
+     * 길찾기 API 함수 호출
+     * @param locations: 그날 방문한 사진들의 좌표 목록
+     * @return: 실제 도로 경로를 구성하는 좌표 목록 (실패 시 null)
+     */
+
+    open suspend fun getRouteForDay(locations: List<RoutePoint>): List<RoutePoint>? {
+        return try {
+            // 1. 요청 객체 생성 (DTO로 감싸기)
+            val request = RouteRequest(locations)
+
+            // 2. Retrofit으로 API 호출
+            // (AuthInterceptor가 연결되어 있다면 토큰도 알아서 붙어서 나갑니다 👍)
+            val response = postApiService.getRouteForDay(request)
+
+            // 3. 응답 처리
+            if (response.isSuccessful) {
+                // 성공 시: 응답 본문(body)에서 route 리스트를 꺼내 반환
+                response.body()?.route
+            } else {
+                // 실패 시: 에러 로그 출력
+                Log.e("PostRepository", "경로 조회 실패: ${response.code()} - ${response.message()}")
+                null
+            }
+        } catch (e: Exception) {
+            // 네트워크 오류 등 예외 처리
+            e.printStackTrace()
+            null
         }
     }
 }

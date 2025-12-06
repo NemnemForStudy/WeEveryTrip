@@ -2,6 +2,8 @@ package com.example.travelapp.data.api
 
 import com.example.travelapp.data.model.CreatePostRequest
 import com.example.travelapp.data.model.Post
+import com.example.travelapp.data.model.RouteRequest
+import com.example.travelapp.data.model.RouteResponse
 import okhttp3.MultipartBody
 import okhttp3.RequestBody
 import retrofit2.Response
@@ -37,4 +39,7 @@ interface PostApiService {
         @Part("tags") tags: RequestBody?,
         @Part images: List<MultipartBody.Part>
     ): Response<Post> // ApiResponse 제거하고 Post로 직접 반환
+
+    @POST("api/routes/route-for-day")
+    suspend fun getRouteForDay(@Body request: RouteRequest): Response<RouteResponse>
 }

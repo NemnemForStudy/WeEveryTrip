@@ -46,7 +46,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.navigation.NavController
 import com.example.travelapp.data.model.Post
+import com.example.travelapp.ui.theme.Beige
 
 /**
  * 게시판(피드) 화면 Composable
@@ -58,6 +60,7 @@ import com.example.travelapp.data.model.Post
  */
 @Composable
 fun FeedScreen(
+    navController: NavController,
     viewModel: FeedViewModel = hiltViewModel(),
     // 만약 이 매개변수에 아무것도 넘겨주지 않으면, {} (비어있는 람다 식)이 기본으로 사용
     onPostClick: (Post) -> Unit = {}
@@ -70,7 +73,7 @@ fun FeedScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFFF5F5F5))
+            .background(Beige)
     ) {
         // 상단 검색 바
         CustomSearchBar(

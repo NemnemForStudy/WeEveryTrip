@@ -53,14 +53,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.zIndex
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.travelapp.util.ExifUtils
 import com.example.travelapp.util.ExifUtils.extractLocation
 import com.naver.maps.geometry.LatLng
+import com.naver.maps.map.CameraPosition
 import com.naver.maps.map.compose.rememberCameraPositionState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import com.naver.maps.map.compose.*
+import kotlinx.coroutines.invoke
 
+private const val MAX_PHOTOS = 15
 /**
  * 1. [Stateful] WriteScreen
  */
@@ -112,7 +116,8 @@ fun WriteScreen(
         onProcessImages = { uris -> viewModel.processSelectedImages(context, uris) },
         onCreatePost = viewModel::createPost,
         onResetStatus = viewModel::resetStatus,
-        onSwapImages = viewModel::swapImages
+        onSwapImages = viewModel::swapImages,
+        onFetchRoute = viewModel::fetchRoute
     )
 }
 
@@ -135,7 +140,8 @@ fun WriteScreenContent(
     onProcessImages: (List<Uri>) -> Unit,
     onCreatePost: (String, String, String, List<String>, List<Uri>) -> Unit,
     onResetStatus: () -> Unit,
-    onSwapImages: (Int, Int, Int) -> Unit // Day, From, To
+    onSwapImages: (Int, Int, Int) -> Unit, // Day, From, To
+    onFetchRoute: (List<Pair<Double, Double>>) -> Unit
 ) {
     val context = LocalContext.current
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
@@ -154,7 +160,7 @@ fun WriteScreenContent(
 
     // 🔥 [지도 팝업 상태] WriteScreenContent 내부로 이동
     var showMapDialog by remember { mutableStateOf(false) }
-    var mapDialogLocation by remember { mutableStateOf<Pair<Double, Double>?>(null) }
+    var mapDialogLocations by remember { mutableStateOf<List<Pair<Double, Double>>>(emptyList()) }
     var mapDialogTitle by remember { mutableStateOf("") }
 
     // ViewModel에 있는 startDate, endDate를 초기값으로 넣어주자
@@ -185,6 +191,11 @@ fun WriteScreenContent(
         contract = ActivityResultContracts.GetMultipleContents()
     ) { uris: List<Uri> ->
         if (uris.isNotEmpty()) {
+            if(uris.size > MAX_PHOTOS) {
+                Toast.makeText(context, "최대 ${MAX_PHOTOS}장까지만 첨부할 수 있습니다.", Toast.LENGTH_LONG).show()
+                return@rememberLauncherForActivityResult
+            }
+
             tempSelectedUris = uris
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 val hasPermission = ContextCompat.checkSelfPermission(
@@ -308,17 +319,20 @@ fun WriteScreenContent(
                                                         OutlinedButton(
                                                             onClick = {
                                                                 // 비동기로 위치 추출 후 팝업 열기
-                                                                scope.launch(Dispatchers.IO) {
-                                                                    val location = ExifUtils.extractLocation(context, dayImages[0].uri)
-                                                                    withContext(Dispatchers.Main) {
-                                                                        if (location != null) {
-                                                                            mapDialogLocation = location
+                                                                scope.launch {
+                                                                    val extractedLocations = (Dispatchers.IO) {
+                                                                        dayImages.mapNotNull { ExifUtils.extractLocation(context, it.uri) }
+                                                                    }
+
+                                                                        if(extractedLocations.isNotEmpty()) {
+                                                                            mapDialogLocations = extractedLocations
                                                                             mapDialogTitle = "Day $dayNumber 위치 미리보기"
                                                                             showMapDialog = true
+
+                                                                            onFetchRoute(extractedLocations)
                                                                         } else {
                                                                             Toast.makeText(context, "이 사진에는 위치 정보가 없습니다.", Toast.LENGTH_SHORT).show()
                                                                         }
-                                                                    }
                                                                 }
                                                             },
                                                             contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
@@ -475,7 +489,7 @@ fun WriteScreenContent(
         }
 
         // 🔥 [3] 지도 팝업 (Box 오버레이 방식)
-        if (showMapDialog && mapDialogLocation != null) {
+        if (showMapDialog && mapDialogLocations.isNotEmpty()) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -503,15 +517,41 @@ fun WriteScreenContent(
                             IconButton(onClick = { showMapDialog = false }, modifier = Modifier.size(24.dp)) { Icon(Icons.Default.Close, "닫기") }
                         }
                         Box(modifier = Modifier.fillMaxSize()) {
+                            val firstLocation = mapDialogLocations.first() // 첫번째 위치 중심 좌표 사용.
                             val cameraPositionState = rememberCameraPositionState {
-                                position = com.naver.maps.map.CameraPosition(LatLng(mapDialogLocation!!.first, mapDialogLocation!!.second), 14.0)
+                                position = CameraPosition(
+                                    LatLng(firstLocation.first,firstLocation.second),
+                                    14.0
+                                )
                             }
                             NaverMap(
                                 modifier = Modifier.fillMaxSize(),
                                 cameraPositionState = cameraPositionState,
                                 uiSettings = MapUiSettings(isZoomControlEnabled = true, isScrollGesturesEnabled = true, isZoomGesturesEnabled = true, isLogoClickEnabled = false)
                             ) {
-                                Marker(state = MarkerState(position = LatLng(mapDialogLocation!!.first, mapDialogLocation!!.second)), captionText = "촬영 위치")
+                                mapDialogLocations.forEachIndexed { index, locationPair ->
+                                    Marker(
+                                        state = MarkerState(position = LatLng(locationPair.first, locationPair.second)),
+                                        captionText = "사진 ${index + 1}" // 마커마다 번호 부여
+                                    )
+                                }
+
+                                // (예시)경로 그릴 polylineOverlay
+                                val routePoints = remember {
+                                    listOf(
+                                        LatLng(firstLocation.first, firstLocation.second),
+                                        LatLng(firstLocation.first + 0.001, firstLocation.second + 0.001)
+                                    )
+                                }
+
+                                if(routePoints.isNotEmpty()) {
+                                    PolylineOverlay(
+                                        coords = routePoints, // 순차적 경로 좌표 목록
+                                        color = Color(0xFF42854),
+                                        width = 8.dp,
+                                        zIndex = 100 // 마커 위 표시되도록 조정
+                                    )
+                                }
                             }
                         }
                     }
@@ -542,7 +582,8 @@ fun WriteScreenPreview() {
             onProcessImages = {},
             onCreatePost = { _, _, _, _, _ -> },
             onResetStatus = {},
-            onSwapImages = { _, _, _ -> } // Day, From, To
+            onSwapImages = { _, _, _ -> }, // Day, From, To
+            onFetchRoute = {}
         )
     }
 }

@@ -72,13 +72,7 @@ fun AppNavHost(
         }
 
         composable(Screen.Feed.route) {
-            FeedScreen(
-                onPostClick = { post ->
-                    // TODO: 게시물 상세 화면 이동
-                    // navController.navigate(Screen.Detail.route)
-
-                }
-            )
+            FeedScreen(navController = navController)
         }
     }
 }

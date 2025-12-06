@@ -67,32 +67,13 @@ open class FeedViewModel @Inject constructor(
             _errorMsg.value = null
 
             try {
-                // 실제 구현 시 Repo에서 게시물 목록 가져옴
-                // val result = postRepo.getPosts()
-                // 임시 더미 데이터(테스트 용)
-                val dummyPost = listOf(
-                    Post(
-                        id = "1",
-                        category = "여행 후기",
-                        title = "서울 3일 여행 코스 추천",
-                        content = "서울 명소",
-                        nickname = "여행러",
-                        created_at = "2024-11-20",
-                        tags = listOf("서울", "3일", "추천"),
-                        imgUrl = null
-                    ),
-                    Post(
-                        id = "2",
-                        category = "여행 팁",
-                        title = "비행기 짐",
-                        content = "효율적인 짐 싸기",
-                        nickname = "짐싸기 마스터",
-                        created_at = "2024-11-19",
-                        tags = listOf("팁", "짐", "여행"),
-                        imgUrl = null
-                    )
-                )
-                _post.value = dummyPost
+                val result = postRepository.getAllPosts()
+
+                result.onSuccess { posts ->
+                    _post.value = posts
+                }.onFailure { exception ->
+                    _errorMsg.value = "불러오기 실패: ${exception.message}"
+                }
             } catch (e: Exception) {
                 _errorMsg.value = "게시물 로드 실패: ${e.message}"
             } finally {

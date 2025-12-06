@@ -33,8 +33,7 @@ class MainActivity : ComponentActivity() {
         android.util.Log.d("NaverKey", "Current Client ID: $clientId")
         // 네이버 지도 SDK 클라이언트 ID 설정
         NaverMapSdk.getInstance(this).client =
-            NaverMapSdk.NaverCloudPlatformClient(clientId)
-
+            NaverMapSdk.NcpKeyClient(clientId)
         enableEdgeToEdge()
         setContent {
             TravelAppTheme {
