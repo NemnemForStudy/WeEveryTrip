@@ -239,7 +239,6 @@ fun HomeScreen(
                     }
                 }
             }
-            Text(text = "텐츠 영역", style = MaterialTheme.typography.bodyLarge)
         }
     }
 }

@@ -12,7 +12,7 @@ import retrofit2.http.GET
 import retrofit2.http.Multipart
 import retrofit2.http.POST
 import retrofit2.http.Part
-import retrofit2.http.PartMap
+import retrofit2.http.Path
 import retrofit2.http.Query
 
 interface PostApiService {
@@ -42,4 +42,9 @@ interface PostApiService {
 
     @POST("api/routes/route-for-day")
     suspend fun getRouteForDay(@Body request: RouteRequest): Response<RouteResponse>
+
+    @GET("api/posts/{id}")
+    suspend fun getPostById(
+        @Path("id") postId: String
+    ): Post // 배열이 아니라 단일 객체 반환
 }

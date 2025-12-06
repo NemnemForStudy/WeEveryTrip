@@ -1,14 +1,20 @@
 package com.example.travelapp.ui.navigation
 
+import android.os.Build
+import androidx.annotation.RequiresApi
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.navigation.NavHost
 import androidx.navigation.NavHostController
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.navArgument
+import com.example.travelapp.ui.Detail.PostDetailScreen
 import com.example.travelapp.ui.auth.LoginScreen
 import com.example.travelapp.ui.auth.SplashScreen
 import com.example.travelapp.ui.home.FeedScreen
@@ -27,6 +33,7 @@ sealed class Screen(val route: String) {
     object Home : Screen("home")
     object Write : Screen("write") // 글쓰기 화면 경로 추가
     object Feed : Screen("feed") // 계시판 화면 경로
+    object Detail : Screen("detail/{postId}")
 }
 
 /**
@@ -36,6 +43,7 @@ sealed class Screen(val route: String) {
  *
  * @param navController 화면 이동을 제어하는 컨트롤러
  */
+@RequiresApi(Build.VERSION_CODES.O)
 @Composable
 fun AppNavHost(
     navController: NavHostController,
@@ -67,12 +75,27 @@ fun AppNavHost(
             HomeScreen(navController = navController)
         }
 
-        composable(Screen.Write.route) { // 글쓰기 화면 composable 추가
+        composable(Screen.Write.route) {
             WriteScreen(navController = navController)
         }
 
         composable(Screen.Feed.route) {
             FeedScreen(navController = navController)
+        }
+
+        composable(
+            Screen.Detail.route,
+            arguments = listOf(navArgument("postId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            // ID 꺼내기
+            val postId = backStackEntry.arguments?.getString("postId")
+
+            if(postId != null) {
+                PostDetailScreen(
+                    postId = postId,
+                    onBackClick = { navController.popBackStack() }
+                )
+            }
         }
     }
 }

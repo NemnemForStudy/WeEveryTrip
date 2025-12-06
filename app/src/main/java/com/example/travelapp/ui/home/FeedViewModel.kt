@@ -25,23 +25,23 @@ open class FeedViewModel @Inject constructor(
     protected val postRepository: PostRepository
 ) : ViewModel() {
     // 게시물 목록(읽기 전용)
-    protected  val _post = MutableStateFlow<List<Post>>(emptyList())
+    protected val _post = MutableStateFlow<List<Post>>(emptyList())
     val post = _post.asStateFlow()
 
     // 선택된 카테고리
-    protected  val _selectedCategory = MutableStateFlow("전체")
+    protected val _selectedCategory = MutableStateFlow("전체")
     val selectedCategory = _selectedCategory.asStateFlow()
 
     // 로딩 상태
-    protected  val _isLoading = MutableStateFlow(false)
+    protected val _isLoading = MutableStateFlow(false)
     val isLoading = _isLoading.asStateFlow()
 
     // 에러 메시지
-    protected  val _errorMsg = MutableStateFlow<String?>(null)
+    protected val _errorMsg = MutableStateFlow<String?>(null)
     val errorMsg = _errorMsg.asStateFlow()
 
     // 페이지 번호(무한 스크롤용)
-    protected  val _currentPage = MutableStateFlow(1)
+    protected val _currentPage = MutableStateFlow(1)
 
     // 사용 가능 카테고리 목록
     val categories = listOf("전체", "여행 후기", "여행 팁", "질문", "추천 장소")

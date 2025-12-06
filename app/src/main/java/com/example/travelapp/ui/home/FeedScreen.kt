@@ -1,5 +1,7 @@
 package com.example.travelapp.ui.home
 
+import android.os.Build
+import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -20,6 +22,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -42,13 +45,24 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
+import com.example.travelapp.BuildConfig
 import com.example.travelapp.data.model.Post
 import com.example.travelapp.ui.theme.Beige
+import android.text.format.DateUtils // DateUtils에 필요
+import androidx.annotation.RequiresApi
+import java.time.ZonedDateTime
+import java.time.format.DateTimeFormatter
+import java.util.Locale
+import java.time.Instant
 
 /**
  * 게시판(피드) 화면 Composable
@@ -58,6 +72,7 @@ import com.example.travelapp.ui.theme.Beige
  * - 카테고리 탭
  * - 게시물 목록 (LazyColumn으로 무한 스크롤 구현)
  */
+@RequiresApi(Build.VERSION_CODES.O)
 @Composable
 fun FeedScreen(
     navController: NavController,
@@ -140,10 +155,15 @@ fun FeedScreen(
                     contentPadding = PaddingValues(bottom = 16.dp)
                 ) {
                     items(post.size) { index ->
-                        PostCard(
-                            post = post[index],
-                            onClick = { onPostClick(post[index]) }
-                        )
+                        val currentPost = post[index]
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                            PostCard(
+                                post = currentPost,
+                                onClick = {
+                                    navController.navigate("detail/${currentPost.id}")
+                                }
+                            )
+                        }
                     }
 
                     // 무한 스크롤 트리거
@@ -263,6 +283,7 @@ fun CategoryTabs(
  * - 작성자 및 작성 날짜
  * - 태그 목록
  */
+@RequiresApi(Build.VERSION_CODES.O)
 @Composable
 fun PostCard(
     post: Post,
@@ -291,10 +312,31 @@ fun PostCard(
                     .background(Color(0xFFE0E0E0)),
                 contentAlignment = Alignment.Center
             ) {
-                Text(
-                    text = "📷",
-                    fontSize = 32.sp
-                )
+
+                val base_url = BuildConfig.BASE_URL
+                val full_url = base_url + post.imgUrl
+
+                val context = LocalContext.current // 컴포저블 안에서 컨텍스트 가져오기
+                // 이미지가 있을때는 이미지 보여주기
+                if(post.imgUrl != null) {
+                    Log.d("DEBUG_IMAGE", "실제 요청 주소: ${post.imgUrl}")
+                    AsyncImage(
+                        model = ImageRequest.Builder(context)
+                            .data(full_url)
+                            .crossfade(true) // 이미지가 부드럽게 뜬다고 함.
+                            .size(300, 300) // 300px 크기로 메모리에 로딩
+                            .build(),
+                        contentDescription = "썸네일",
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.Default.Image,
+                        contentDescription = null,
+                        tint = Color.Gray
+                    )
+                }
             }
             // 게시물 정보
             Column(
@@ -328,7 +370,7 @@ fun PostCard(
                         color = Color.Gray
                     )
                     Text(
-                        text = post.created_at,
+                        text = formatRelativeTime(post.created_at),
                         fontSize = 12.sp,
                         color = Color.Gray
                     )
@@ -339,16 +381,18 @@ fun PostCard(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    post.tags.take(2).forEach { tag ->
+                    val safeTags = post.tags ?: emptyList()
+                    // null 이면 빈 리스트
+                    safeTags.take(2).forEach { tag ->
                         Text(
                             text = "#$tag",
                             fontSize = 11.sp,
                             color = Color(0xFF1976D2)
                         )
                     }
-                    if (post.tags.size > 2) {
+                    if (safeTags.size > 2) {
                         Text(
-                            text = "+${post.tags.size - 2}",
+                            text = "+${safeTags.size - 2}",
                             fontSize = 11.sp,
                             color = Color.Gray
                         )
@@ -356,6 +400,43 @@ fun PostCard(
                 }
             }
         }
+    }
+}
+
+@RequiresApi(Build.VERSION_CODES.O)
+fun formatIsoDateTime(isoString: String): String {
+    return try {
+        // 1. ZonedDateTime 객체로 파싱 (끝의 Z는 UTC 기준을 의미하므로 ZonedDateTime 사용)
+        val zonedDateTime = ZonedDateTime.parse(isoString)
+
+        // 원하는 출력 형식 정의
+        val formatter = DateTimeFormatter.ofPattern("yyyy.MM.dd", Locale.getDefault())
+        zonedDateTime.toLocalDateTime().format(formatter)
+    } catch (e: Exception) {
+        "날짜 형식 오류"
+    }
+}
+
+/**
+ * ISO 8601 형식 날짜를 현재 시간과의 상대적인 시간으로 포매팅
+ */
+@RequiresApi(Build.VERSION_CODES.O)
+fun formatRelativeTime(isoString: String): String {
+    return try {
+        // ZonedDateTime.parse(isoString)
+        val zonedDateTime = ZonedDateTime.parse(isoString)
+        val instant = zonedDateTime.toInstant() // 🔥 Instant import 필요!
+
+        val timeInMillis = instant.toEpochMilli()
+
+        // DateUtils.getRelativeTimeSpanString 사용 (android.text.format.DateUtils import 필요!)
+        android.text.format.DateUtils.getRelativeTimeSpanString(
+            timeInMillis,
+            System.currentTimeMillis(),
+            android.text.format.DateUtils.MINUTE_IN_MILLIS
+        ).toString()
+    } catch (e: Exception) {
+        formatIsoDateTime(isoString)
     }
 }
 
@@ -368,6 +449,7 @@ fun PostCard(
  * Preview에서는 hiltViewModel()을 사용할 수 없으므로,
  * 더미 데이터를 직접 전달하여 UI만 미리보기합니다.
  */
+@RequiresApi(Build.VERSION_CODES.O)
 @Composable
 @androidx.compose.ui.tooling.preview.Preview(showBackground = true, heightDp = 800)
 fun FeedScreenPreview() {
