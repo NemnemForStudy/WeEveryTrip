@@ -2,24 +2,6 @@ package com.example.travelapp.data.model
 
 import com.google.gson.annotations.SerializedName
 
-data class User(
-    // @SerializedName을 사용해 JSON의 'user_id'를 코틀린의 'userId' 변수에 매핑합니다.
-    @SerializedName("user_id")
-    val userId: Long,
-
-    @SerializedName("email")
-    val email: String,
-
-    @SerializedName("nickname")
-    val nickname: String,
-
-    @SerializedName("profile_image")
-    val profileImage: String?, // 프로필 이미지는 없을 수 있으므로 Nullable '?'
-
-    @SerializedName("social_provider")
-    val socialProvider: String?
-)
-
 /**
  * 소셜 로그인 요청 데이터
  * 보안을 위해 사용자의 이메일/닉네임을 직접 보내지 않고,

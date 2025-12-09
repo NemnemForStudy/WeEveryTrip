@@ -1,5 +1,7 @@
 package com.example.travelapp.ui.Detail // 패키지명 확인
 
+import android.os.Build
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -12,6 +14,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -53,10 +57,17 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.navigation.NavController
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.example.travelapp.BuildConfig
 import com.example.travelapp.data.model.Post
+import com.example.travelapp.util.UtilTime
+import com.naver.maps.geometry.LatLng
+import com.naver.maps.map.CameraPosition
+import com.naver.maps.map.compose.ExperimentalNaverMapApi
+import com.naver.maps.map.compose.NaverMap
+import com.naver.maps.map.compose.rememberCameraPositionState
 
 // 색상 상수
 val PrimaryBlue = Color(0xFF4A90E2)
@@ -67,8 +78,8 @@ val TextDark = Color(0xFF222222)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PostDetailScreen(
+    navController: NavController,
     postId: String,
-    onBackClick: () -> Unit = {},
     viewModel: PostDetailViewModel = hiltViewModel()
 ) {
     val post by viewModel.post.collectAsState()
@@ -80,7 +91,9 @@ fun PostDetailScreen(
         viewModel.fetchPostDetail(postId)
     }
 
-    Box(modifier = Modifier.fillMaxSize().background(Color.White)) {
+    Box(modifier = Modifier
+        .fillMaxSize()
+        .background(Color.White)) {
         when {
             isLoading -> {
                 CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
@@ -97,13 +110,17 @@ fun PostDetailScreen(
             post != null -> {
                 PostDetailContent(
                     post = post!!,
-                    onBackClick = onBackClick
+                    onBackClick = {
+                        navController.navigate("feed") {
+                            popUpTo("feed") { inclusive = true}
+                        }
+                    }
                 )
             }
         }
     }
 }
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class, ExperimentalNaverMapApi::class)
 @Composable
 fun PostDetailContent(
     post: Post,
@@ -152,23 +169,59 @@ fun PostDetailContent(
                 .padding(bottom = paddingValues.calculateBottomPadding())
         ) {
             // 대형 이미지 헤더
+            val imageList = (post.images ?: emptyList()).ifEmpty { listOfNotNull(post.imgUrl) }
+            val pagerState = rememberPagerState(
+                initialPage = 1000, // 중간에서 시작
+                pageCount = { 2000 } // 큰 수
+            )
+
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(300.dp)
                     .background(Color.LightGray)
             ) {
-                if(post.imgUrl != null) {
-                    val fullUrl = BuildConfig.BASE_URL + post.imgUrl
-                    AsyncImage(
-                        model = ImageRequest.Builder(LocalContext.current)
-                            .data(fullUrl)
-                            .crossfade(true)
-                            .build(),
-                        contentDescription = "게시물 이미지",
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
-                    )
+                if (imageList.isNotEmpty()) {
+                    HorizontalPager(
+                        state = pagerState,
+                        modifier = Modifier.fillMaxSize()
+                    ) { page ->
+                        val actualIndex = page % imageList.size
+                        val fullUrl = BuildConfig.BASE_URL + imageList[actualIndex]
+                        AsyncImage(
+                            model = ImageRequest.Builder(LocalContext.current)
+                                .data(fullUrl)
+                                .crossfade(true)
+                                .build(),
+                            contentDescription = "게시물 이미지",
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop
+                        )
+                    }
+                }
+
+                // 페이지 인디케이터
+                if (imageList.size > 1) {
+                    val currentIndex = pagerState.currentPage % imageList.size
+                    Row(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(16.dp),
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        repeat(imageList.size) { index ->
+                            Box(
+                                modifier = Modifier
+                                    .padding(horizontal = 4.dp)
+                                    .size(8.dp)
+                                    .clip(CircleShape)
+                                    .background(
+                                        if (currentIndex == index) Color.White
+                                        else Color.White.copy(alpha = 0.5f)
+                                    )
+                            )
+                        }
+                    }
                 } else {
                     Column(
                         modifier = Modifier.align(Alignment.Center),
@@ -231,7 +284,13 @@ fun PostDetailContent(
                     Column {
                         Text(text = post.nickname, fontWeight = FontWeight.Bold, fontSize = 14.sp)
                         // 날짜 포맷 함수가 있다면 여기서 적용 (예: formatRelativeTime(post.created_at))
-                        Text(text = post.created_at, color = TextGray, fontSize = 12.sp)
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                            Text(
+                                text = UtilTime.formatRelativeTime(post.created_at),
+                                color = TextGray,
+                                fontSize = 12.sp
+                            )
+                        }
                     }
                 }
 
@@ -251,18 +310,31 @@ fun PostDetailContent(
                 Text("위치 정보", fontWeight = FontWeight.Bold, fontSize = 18.sp)
                 Spacer(modifier = Modifier.height(12.dp))
 
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(150.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(Color(0xFFE3F2FD)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.LocationOn, contentDescription = null, tint = PrimaryBlue)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("지도 보기 (구현 예정)", color = PrimaryBlue, fontWeight = FontWeight.Bold)
+                if (post.latitude != null && post.longitude != null) {
+                    val cameraPositionState = rememberCameraPositionState {
+                        position = CameraPosition(LatLng(post.latitude!!, post.longitude!!), 14.0)
+                    }
+                    NaverMap(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(200.dp)
+                            .clip(RoundedCornerShape(12.dp)),
+                        cameraPositionState = cameraPositionState
+                    )
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(150.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Color(0xFFE3F2FD)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.LocationOn, contentDescription = null, tint = PrimaryBlue)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("위치 정보 없음", color = PrimaryBlue, fontWeight = FontWeight.Bold)
+                        }
                     }
                 }
 
@@ -349,6 +421,7 @@ fun PostDetailScreenPreview() {
         nickname = "바다조아",
         created_at = "2025-12-06",
         tags = listOf("강릉", "카페"),
+        images = emptyList(),
         imgUrl = null
     )
     PostDetailContent(post = dummyPost)

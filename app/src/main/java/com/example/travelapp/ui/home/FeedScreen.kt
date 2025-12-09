@@ -1,6 +1,7 @@
 package com.example.travelapp.ui.home
 
 import android.os.Build
+import android.text.format.DateUtils
 import androidx.annotation.RequiresApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -63,6 +64,7 @@ import com.example.travelapp.data.model.Post
 import com.example.travelapp.ui.components.BottomNavigationBar
 import com.example.travelapp.ui.navigation.Screen
 import com.example.travelapp.ui.theme.Beige
+import com.example.travelapp.util.UtilTime
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -323,20 +325,19 @@ fun PostCard(
                     .background(Color(0xFFF5F5F5)),
                 contentAlignment = Alignment.Center
             ) {
-                val base_url = BuildConfig.BASE_URL
-                val full_url = base_url + post.imgUrl
+                val context = LocalContext.current
+                val thumbnailUrl = post.imgUrl
 
-                val context = LocalContext.current // 컴포저블 안에서 컨텍스트 가져오기
                 // 이미지가 있을때는 이미지 보여주기
-                if(post.imgUrl != null) {
-                    val imageRequest = remember(post.imgUrl) {
+                if (thumbnailUrl != null) {
+                    val imageRequest = remember(thumbnailUrl) {
                         ImageRequest.Builder(context)
-                            .data("${BuildConfig.BASE_URL}${post.imgUrl}")
-                            .crossfade(true) // 이미지가 부드럽게 뜬다고 함.
-                            .size(300) // 300px 크기로 메모리에 로딩
-                            .memoryCacheKey(post.imgUrl) // 메모리 캐시 키 설정
-                            .diskCacheKey(post.imgUrl) // 디스크 캐시 키 설정
-                            .allowHardware(false) // 하드웨어 가속 비활성화
+                            .data("${BuildConfig.BASE_URL}${thumbnailUrl}")
+                            .crossfade(true)
+                            .size(300)
+                            .memoryCacheKey(thumbnailUrl)
+                            .diskCacheKey(thumbnailUrl)
+                            .allowHardware(false)
                             .build()
                     }
 
@@ -410,7 +411,7 @@ fun PostCard(
                         color = Color.Gray
                     )
                     Text(
-                        text = formatRelativeTime(post.created_at),
+                        text = UtilTime.formatRelativeTime(post.created_at),
                         fontSize = 12.sp,
                         color = Color.Gray
                     )
@@ -443,43 +444,6 @@ fun PostCard(
     }
 }
 
-@RequiresApi(Build.VERSION_CODES.O)
-fun formatIsoDateTime(isoString: String): String {
-    return try {
-        // 1. ZonedDateTime 객체로 파싱 (끝의 Z는 UTC 기준을 의미하므로 ZonedDateTime 사용)
-        val zonedDateTime = ZonedDateTime.parse(isoString)
-
-        // 원하는 출력 형식 정의
-        val formatter = DateTimeFormatter.ofPattern("yyyy.MM.dd", Locale.getDefault())
-        zonedDateTime.toLocalDateTime().format(formatter)
-    } catch (e: Exception) {
-        "날짜 형식 오류"
-    }
-}
-
-/**
- * ISO 8601 형식 날짜를 현재 시간과의 상대적인 시간으로 포매팅
- */
-@RequiresApi(Build.VERSION_CODES.O)
-fun formatRelativeTime(isoString: String): String {
-    return try {
-        // ZonedDateTime.parse(isoString)
-        val zonedDateTime = ZonedDateTime.parse(isoString)
-        val instant = zonedDateTime.toInstant() // 🔥 Instant import 필요!
-
-        val timeInMillis = instant.toEpochMilli()
-
-        // DateUtils.getRelativeTimeSpanString 사용 (android.text.format.DateUtils import 필요!)
-        android.text.format.DateUtils.getRelativeTimeSpanString(
-            timeInMillis,
-            System.currentTimeMillis(),
-            android.text.format.DateUtils.MINUTE_IN_MILLIS
-        ).toString()
-    } catch (e: Exception) {
-        formatIsoDateTime(isoString)
-    }
-}
-
 /**
  * Preview: 게시판 화면 미리보기
  *
@@ -503,6 +467,7 @@ fun FeedScreenPreview() {
             nickname = "여행러",
             created_at = "2024-11-28",
             tags = listOf("서울", "3일", "추천"),
+            images = emptyList(),
             imgUrl = null
         ),
         Post(
@@ -513,6 +478,7 @@ fun FeedScreenPreview() {
             nickname = "팩킹마스터",
             created_at = "2024-11-27",
             tags = listOf("팁", "짐", "여행"),
+            images = emptyList(),
             imgUrl = null
         ),
         Post(
@@ -523,6 +489,7 @@ fun FeedScreenPreview() {
             nickname = "카페러버",
             created_at = "2024-11-26",
             tags = listOf("제주도", "카페", "숨은명소"),
+            images = emptyList(),
             imgUrl = null
         )
     )

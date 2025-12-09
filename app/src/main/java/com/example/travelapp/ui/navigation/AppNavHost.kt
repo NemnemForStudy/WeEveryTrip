@@ -95,7 +95,7 @@ fun AppNavHost(
             if(postId != null) {
                 PostDetailScreen(
                     postId = postId,
-                    onBackClick = { navController.popBackStack() }
+                    navController = navController
                 )
             }
         }

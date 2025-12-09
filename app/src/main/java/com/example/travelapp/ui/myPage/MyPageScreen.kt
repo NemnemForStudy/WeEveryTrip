@@ -1,7 +1,5 @@
 package com.example.travelapp.ui.myPage
 
-import android.graphics.drawable.Icon
-import android.view.MenuItem
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -22,10 +20,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.automirrored.outlined.Help
-import androidx.compose.material.icons.automirrored.outlined.Logout
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
@@ -41,6 +36,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -62,6 +59,8 @@ fun MyPageScreen(
     navController: NavController,
     viewModel: MyPageViewModel = hiltViewModel()
 ) {
+    val user by viewModel.user.collectAsState()
+    val isLoading by viewModel.isLoading.collectAsState()
     Scaffold(
         bottomBar = {
             BottomNavigationBar(
@@ -78,17 +77,17 @@ fun MyPageScreen(
                 .verticalScroll(rememberScrollState())
         ) {
             ProfileSection(
-                nickname = "넴넴",
-                email = "Nemnem@naver.com",
+                nickname = user?.nickname ?: "로딩 중...",
+                email = user?.email ?: "",
                 onEditClick = { /* 테스트 */ }
             )
 
             Spacer(modifier = Modifier.height(16.dp))
 
             ActivityStatsCard(
-                postCount = 12,
-                likeCount = 48,
-                commentCount = 23
+                postCount = user?.postCount ?: 0,
+                likeCount = user?.likeCount ?: 0,
+                commentCount = user?.commentCount ?: 0
             )
 
             Spacer(modifier = Modifier.height(24.dp))
@@ -99,7 +98,12 @@ fun MyPageScreen(
                 onNotificationClick = { },
                 onSettingsClick = { },
                 onHelpClick = { },
-                onLogoutClick = { }
+                onLogoutClick = {
+                    viewModel.logout()
+                    navController.navigate("/login") {
+                        popUpTo(0) { inclusive = true }
+                    }
+                }
             )
         }
     }

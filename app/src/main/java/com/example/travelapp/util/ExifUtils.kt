@@ -54,7 +54,7 @@ object ExifUtils {
     }
 
     // 위치 정보도 필수라면 여기서 못 가져오면 에러냄
-    fun extractLocation(context: Context, uri: Uri): Pair<Double, Double> {
+    fun extractLocation(context: Context, uri: Uri): Pair<Double, Double>? {
         var inputStream: InputStream? = null
 
         val finalUri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -62,19 +62,24 @@ object ExifUtils {
         } else { uri }
 
         inputStream = context.contentResolver.openInputStream(finalUri)
-            ?: throw IllegalStateException("위치 정보를 읽을 수 없습니다.")
+            ?: return null
 
-        val exif = ExifInterface(inputStream)
-        val latLong = FloatArray(2)
+        return try {
+            val exif = ExifInterface(inputStream)
+            val latLong = FloatArray(2)
 
-        val hasLocation = exif.getLatLong(latLong)
-        inputStream.close()
+            val hasLocation = exif.getLatLong(latLong)
+            inputStream.close()
 
-        if (hasLocation) {
-            return Pair(latLong[0].toDouble(), latLong[1].toDouble())
-        } else {
-            // 🔥 GPS 필수라면 여기서 에러 발생!
-            throw IllegalStateException("이 사진에는 위치(GPS) 정보가 없습니다.")
+            if (hasLocation) {
+                return Pair(latLong[0].toDouble(), latLong[1].toDouble())
+            } else {
+                // 🔥 GPS 필수라면 여기서 에러 발생!
+                null
+            }
+        } catch (e: Exception) {
+            inputStream.close()
+            null
         }
     }
 

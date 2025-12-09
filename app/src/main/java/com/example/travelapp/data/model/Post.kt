@@ -14,6 +14,7 @@ data class Post(
     val nickname: String,
     val created_at: String,
     val tags: List<String> = emptyList(),
+    val images: List<String> = emptyList(),
 
     @SerializedName("thumbnail_url")
     val imgUrl: String? = null, // 이미지 있을 경우 URL
@@ -46,4 +47,17 @@ data class CreatePostRequest(
     val coordinate: GeoJsonPoint? = null,
     val locationName: String? = null,
     val isDouble: Boolean = true
+)
+
+// 게시물 생성 응답용 데이터 클래스
+data class CreatePostResponse(
+    @SerializedName("post_id") val id: String,
+    val title: String,
+    val created_at: String,
+    val images: List<String>
+)
+
+data class ApiResponse<T>(
+    val success: Boolean,
+    val data: T?
 )

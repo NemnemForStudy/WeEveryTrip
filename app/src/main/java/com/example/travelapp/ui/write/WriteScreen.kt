@@ -54,6 +54,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.travelapp.data.model.RoutePoint
 import com.example.travelapp.util.ExifUtils
 import com.example.travelapp.util.ExifUtils.extractLocation
 import com.naver.maps.geometry.LatLng
@@ -84,6 +85,7 @@ fun WriteScreen(
     val endDate by viewModel.endDate.collectAsStateWithLifecycle()
     val tripDays by viewModel.tripDays.collectAsStateWithLifecycle()
     val groupedImages by viewModel.groupedImages.collectAsStateWithLifecycle()
+    val routePoints by viewModel.routePoints.collectAsStateWithLifecycle()
 
     // 게시글 등록 결과 처리
     LaunchedEffect(postCreationStatus) {
@@ -91,7 +93,7 @@ fun WriteScreen(
             is WriteViewModel.PostCreationStatus.Success -> {
                 Toast.makeText(context, "게시물이 성공적으로 등록되었습니다!", Toast.LENGTH_SHORT).show()
                 viewModel.resetStatus()
-                navController.popBackStack()
+                navController.navigate("detail/${status.postId}")
             }
             is WriteViewModel.PostCreationStatus.Error -> {
                 Toast.makeText(context, "오류: ${status.message}", Toast.LENGTH_LONG).show()
@@ -114,10 +116,13 @@ fun WriteScreen(
         onUpdateLocation = viewModel::updateLocation,
         onUpdateDateRange = viewModel::updateDateRange,
         onProcessImages = { uris -> viewModel.processSelectedImages(context, uris) },
-        onCreatePost = viewModel::createPost,
+        onCreatePost = { category, title, content, tags, images ->
+            viewModel.createPost(category, title, content, tags, images)
+       },
         onResetStatus = viewModel::resetStatus,
         onSwapImages = viewModel::swapImages,
-        onFetchRoute = viewModel::fetchRoute
+        onFetchRoute = viewModel::fetchRoute,
+        routePoints = routePoints
     )
 }
 
@@ -141,7 +146,8 @@ fun WriteScreenContent(
     onCreatePost: (String, String, String, List<String>, List<Uri>) -> Unit,
     onResetStatus: () -> Unit,
     onSwapImages: (Int, Int, Int) -> Unit, // Day, From, To
-    onFetchRoute: (List<Pair<Double, Double>>) -> Unit
+    onFetchRoute: (List<Pair<Double, Double>>) -> Unit,
+    routePoints: List<RoutePoint>
 ) {
     val context = LocalContext.current
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
@@ -246,7 +252,9 @@ fun WriteScreenContent(
                     val txt = if (s != null && e != null) "${sdf.format(Date(s))} ~ ${sdf.format(Date(e))}" else if (s != null) "${sdf.format(Date(s))} ~ 선택 중" else "시작일 ~ 종료일"
                     Text(txt, modifier = Modifier.padding(start = 24.dp, bottom = 12.dp), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
                 },
-                modifier = Modifier.fillMaxWidth().height(500.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(500.dp),
                 showModeToggle = true
             )
         }
@@ -320,7 +328,7 @@ fun WriteScreenContent(
                                                             onClick = {
                                                                 // 비동기로 위치 추출 후 팝업 열기
                                                                 scope.launch {
-                                                                    val extractedLocations = (Dispatchers.IO) {
+                                                                    val extractedLocations = withContext(Dispatchers.IO) {
                                                                         dayImages.mapNotNull { ExifUtils.extractLocation(context, it.uri) }
                                                                     }
 
@@ -336,7 +344,9 @@ fun WriteScreenContent(
                                                                 }
                                                             },
                                                             contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
-                                                            modifier = Modifier.height(32.dp).padding(end = 8.dp),
+                                                            modifier = Modifier
+                                                                .height(32.dp)
+                                                                .padding(end = 8.dp),
                                                             shape = RoundedCornerShape(4.dp)
                                                         ) {
                                                             Text("미리보기", fontSize = 12.sp)
@@ -355,13 +365,18 @@ fun WriteScreenContent(
                                                         Row(
                                                             modifier = Modifier
                                                                 .fillMaxWidth()
-                                                                .padding(horizontal = 16.dp, vertical = 8.dp),
+                                                                .padding(
+                                                                    horizontal = 16.dp,
+                                                                    vertical = 8.dp
+                                                                ),
                                                             verticalAlignment = Alignment.CenterVertically
                                                         ) {
                                                             Image(
                                                                 painter = rememberAsyncImagePainter(image.uri),
                                                                 contentDescription = null,
-                                                                modifier = Modifier.size(60.dp).clip(RoundedCornerShape(8.dp)),
+                                                                modifier = Modifier
+                                                                    .size(60.dp)
+                                                                    .clip(RoundedCornerShape(8.dp)),
                                                                 contentScale = ContentScale.Crop
                                                             )
                                                             Spacer(Modifier.width(12.dp))
@@ -424,7 +439,10 @@ fun WriteScreenContent(
                         ) {
                             // 카테고리 & 제목
                             Row(modifier = Modifier.padding(top = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Box(modifier = Modifier.border(1.dp, Color.Gray, RoundedCornerShape(4.dp)).padding(horizontal = 12.dp, vertical = 8.dp).clickable { showDialog = true }) {
+                                Box(modifier = Modifier
+                                    .border(1.dp, Color.Gray, RoundedCornerShape(4.dp))
+                                    .padding(horizontal = 12.dp, vertical = 8.dp)
+                                    .clickable { showDialog = true }) {
                                     Text(category, fontWeight = FontWeight.Bold, color = if (category == "카테고리") Color.Gray else Color.Black)
                                 }
                                 Spacer(Modifier.width(8.dp))
@@ -433,7 +451,10 @@ fun WriteScreenContent(
                             Divider(color = Color(0xFFEEEEEE), thickness = 1.dp, modifier = Modifier.padding(vertical = 8.dp))
 
                             // 날짜 선택
-                            Row(modifier = Modifier.fillMaxWidth().clickable { showDatePickerDialog = true }.padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Row(modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { showDatePickerDialog = true }
+                                .padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                                 Icon(Icons.Default.CalendarMonth, null, tint = Color.Gray)
                                 Spacer(Modifier.width(8.dp))
                                 val dateText = if (startDate != null && endDate != null) "${SimpleDateFormat("yyyy.MM.dd", Locale.KOREA).format(Date(startDate))} ~ ${SimpleDateFormat("yyyy.MM.dd", Locale.KOREA).format(Date(endDate))}" else "여행 기간을 선택해주세요"
@@ -442,7 +463,10 @@ fun WriteScreenContent(
                             Divider(color = Color(0xFFEEEEEE), thickness = 1.dp)
 
                             // 사진 첨부
-                            Row(modifier = Modifier.fillMaxWidth().clickable { galleryLauncher.launch("image/*") }.padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Row(modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { galleryLauncher.launch("image/*") }
+                                .padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                                 Icon(Icons.Default.CameraAlt, null, tint = Color.Gray)
                                 Spacer(Modifier.width(8.dp))
                                 val totalCount = groupedImages.values.flatten().size
@@ -458,7 +482,9 @@ fun WriteScreenContent(
                                 LazyRow(modifier = Modifier.padding(vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     items(imagesToShow) { image ->
                                         Box(modifier = Modifier.size(100.dp)) {
-                                            Image(painter = rememberAsyncImagePainter(image.uri), contentDescription = null, modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(8.dp)), contentScale = ContentScale.Crop)
+                                            Image(painter = rememberAsyncImagePainter(image.uri), contentDescription = null, modifier = Modifier
+                                                .fillMaxSize()
+                                                .clip(RoundedCornerShape(8.dp)), contentScale = ContentScale.Crop)
                                         }
                                     }
                                 }
@@ -480,7 +506,9 @@ fun WriteScreenContent(
                             Divider(modifier = Modifier.padding(vertical = 8.dp))
                             TextField(value = tagsInput, onValueChange = { tagsInput = it }, placeholder = { Text("#태그 입력") }, modifier = Modifier.fillMaxWidth(), colors = TextFieldDefaults.colors(focusedContainerColor = Color.Transparent, unfocusedContainerColor = Color.Transparent))
                             Divider()
-                            TextField(value = content, onValueChange = { content = it }, placeholder = { Text("내용을 입력하세요...") }, modifier = Modifier.fillMaxWidth().height(200.dp), colors = TextFieldDefaults.colors(focusedContainerColor = Color.Transparent, unfocusedContainerColor = Color.Transparent))
+                            TextField(value = content, onValueChange = { content = it }, placeholder = { Text("내용을 입력하세요...") }, modifier = Modifier
+                                .fillMaxWidth()
+                                .height(200.dp), colors = TextFieldDefaults.colors(focusedContainerColor = Color.Transparent, unfocusedContainerColor = Color.Transparent))
                             Spacer(Modifier.height(50.dp))
                         }
                     }
@@ -510,7 +538,9 @@ fun WriteScreenContent(
                 ) {
                     Column(modifier = Modifier.fillMaxSize()) {
                         Row(
-                            modifier = Modifier.fillMaxWidth().padding(12.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
@@ -538,19 +568,16 @@ fun WriteScreenContent(
                                 }
 
                                 // (예시)경로 그릴 polylineOverlay
-                                val routePoints = remember {
-                                    listOf(
-                                        LatLng(firstLocation.first, firstLocation.second),
-                                        LatLng(firstLocation.first + 0.001, firstLocation.second + 0.001)
-                                    )
+                                val polylineCoords  = remember(routePoints) {
+                                    routePoints.map { LatLng(it.latitude, it.longitude) }
                                 }
 
-                                if(routePoints.isNotEmpty()) {
+                                if(polylineCoords.size >= 2) {
                                     PolylineOverlay(
-                                        coords = routePoints, // 순차적 경로 좌표 목록
-                                        color = Color(0xFF42854),
-                                        width = 8.dp,
-                                        zIndex = 100 // 마커 위 표시되도록 조정
+                                        coords = polylineCoords, // 순차적 경로 좌표 목록
+                                        color = Color.Red,
+                                        width = 10.dp,
+                                        zIndex = 1000, // 마커 위 표시되도록 조정
                                     )
                                 }
                             }
@@ -584,7 +611,8 @@ fun WriteScreenPreview() {
             onCreatePost = { _, _, _, _, _ -> },
             onResetStatus = {},
             onSwapImages = { _, _, _ -> }, // Day, From, To
-            onFetchRoute = {}
+            onFetchRoute = {},
+            routePoints = emptyList()
         )
     }
 }

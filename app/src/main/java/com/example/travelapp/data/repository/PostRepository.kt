@@ -7,6 +7,7 @@ import android.net.Uri
 import android.util.Log
 import coil.decode.DecodeUtils.calculateInSampleSize
 import com.example.travelapp.data.api.PostApiService
+import com.example.travelapp.data.model.CreatePostResponse
 import com.example.travelapp.data.model.GeoJsonPoint
 import com.example.travelapp.data.model.Post
 import com.example.travelapp.data.model.RoutePoint
@@ -39,7 +40,7 @@ open class PostRepository @Inject constructor(
         latitude: Double? = null,
         longitude: Double? = null,
         isDomestic: Boolean = true
-    ): Result<Post> = withContext(Dispatchers.IO) {
+    ): Result<CreatePostResponse> = withContext(Dispatchers.IO) {
         // 🔥 [핵심 1] withContext(Dispatchers.IO)로 감싸서 백그라운드에서 실행 (앱 안 멈춤)
         return@withContext try {
             val categoryBody = category.toRequestBody("text/plain".toMediaTypeOrNull())
@@ -117,8 +118,12 @@ open class PostRepository @Inject constructor(
             )
 
             if (response.isSuccessful) {
-                response.body()?.let {
-                    Result.success(it)
+                response.body()?.let { apiResponse ->
+                    if (apiResponse.success && apiResponse.data != null) {
+                        Result.success(apiResponse.data)
+                    } else {
+                        Result.failure(IllegalStateException("게시물 생성 실패"))
+                    }
                 } ?: Result.failure(IllegalStateException("API 응답 본문이 비어있습니다."))
             } else {
                 Result.failure(RuntimeException("게시물 생성 실패: ${response.code()} - ${response.message()}"))

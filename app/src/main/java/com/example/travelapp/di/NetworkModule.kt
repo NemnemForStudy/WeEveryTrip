@@ -10,6 +10,7 @@ import com.example.travelapp.util.AuthInterceptor
 import com.example.travelapp.data.api.AuthApiService
 import com.example.travelapp.data.api.NaverAuthApiService
 import com.example.travelapp.data.api.PostApiService
+import com.kakao.sdk.auth.AuthApi
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -83,7 +84,7 @@ object NetworkModule {
         ) {
             BuildConfig.BASE_URL
         } else {
-            BuildConfig.PHONE_BASE_URL
+            BuildConfig.BASE_URL
         }
 
         return Retrofit.Builder()

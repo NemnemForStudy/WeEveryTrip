@@ -66,6 +66,9 @@ class WriteViewModel @Inject constructor(
     private val _routePoints = MutableStateFlow<List<RoutePoint>>(emptyList())
     val routePoints: StateFlow<List<RoutePoint>> = _routePoints.asStateFlow()
 
+    private val _lastCreatePostId = MutableStateFlow<String?>(null)
+    val lastCreatePostId: StateFlow<String?> = _lastCreatePostId.asStateFlow()
+
     private val _postCreationStatus = MutableStateFlow<PostCreationStatus>(PostCreationStatus.Idle) // 초기 상태 아무것도 하지않음.
     val postCreationStatus: StateFlow<PostCreationStatus> = _postCreationStatus.asStateFlow()
 
@@ -254,6 +257,7 @@ class WriteViewModel @Inject constructor(
                 )
 
                 result.onSuccess {
+                    _lastCreatePostId.value = it.id
                     _postCreationStatus.value = PostCreationStatus.Success(it.id)
                 }.onFailure { e ->
                     _postCreationStatus.value = PostCreationStatus.Error(e.message ?: "등록 실패")
