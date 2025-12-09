@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.os.Build
+import android.util.Log
 import com.example.travelapp.BuildConfig
 import com.example.travelapp.util.AuthInterceptor
 import com.example.travelapp.data.api.AuthApiService
@@ -72,7 +73,14 @@ object NetworkModule {
         @Named("AuthOkHttpClient") okHttpClient: OkHttpClient,
         @ApplicationContext context: Context
     ): Retrofit {
-        val baseUrl = if (isWifiConnected(context)) {
+        val baseUrl = if (Build.FINGERPRINT.startsWith("generic")
+            || Build.FINGERPRINT.startsWith("unknown")
+            || Build.MODEL.contains("google_sdk")
+            || Build.MODEL.contains("Emulator")
+            || Build.MODEL.contains("Android SDK built for x86")
+            || Build.MANUFACTURER.contains("Genymotion")
+            || (Build.BRAND.startsWith("generic") && Build.DEVICE.startsWith("generic"))
+        ) {
             BuildConfig.BASE_URL
         } else {
             BuildConfig.PHONE_BASE_URL

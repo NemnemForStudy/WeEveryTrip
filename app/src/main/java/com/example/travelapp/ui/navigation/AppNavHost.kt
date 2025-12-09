@@ -19,6 +19,7 @@ import com.example.travelapp.ui.auth.LoginScreen
 import com.example.travelapp.ui.auth.SplashScreen
 import com.example.travelapp.ui.home.FeedScreen
 import com.example.travelapp.ui.home.HomeScreen
+import com.example.travelapp.ui.myPage.MyPageScreen
 import com.example.travelapp.ui.write.WriteScreen
 import com.example.travelapp.util.TokenManager
 
@@ -34,6 +35,7 @@ sealed class Screen(val route: String) {
     object Write : Screen("write") // 글쓰기 화면 경로 추가
     object Feed : Screen("feed") // 계시판 화면 경로
     object Detail : Screen("detail/{postId}")
+    object MyPage : Screen("mypage")
 }
 
 /**
@@ -96,6 +98,10 @@ fun AppNavHost(
                     onBackClick = { navController.popBackStack() }
                 )
             }
+        }
+
+        composable(Screen.MyPage.route) {
+            MyPageScreen(navController = navController)
         }
     }
 }
