@@ -1,9 +1,11 @@
 package com.example.travelapp.ui.home
 
 import android.os.Build
-import android.util.Log
+import androidx.annotation.RequiresApi
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,7 +21,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Image
@@ -31,6 +32,8 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
@@ -51,18 +54,18 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.navigation.NavController
-import coil.compose.AsyncImage
+import androidx.navigation.NavHostController
+import coil.compose.AsyncImagePainter
+import coil.compose.rememberAsyncImagePainter
 import coil.request.ImageRequest
 import com.example.travelapp.BuildConfig
 import com.example.travelapp.data.model.Post
+import com.example.travelapp.ui.components.BottomNavigationBar
+import com.example.travelapp.ui.navigation.Screen
 import com.example.travelapp.ui.theme.Beige
-import android.text.format.DateUtils // DateUtils에 필요
-import androidx.annotation.RequiresApi
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
-import java.time.Instant
 
 /**
  * 게시판(피드) 화면 Composable
@@ -75,7 +78,7 @@ import java.time.Instant
 @RequiresApi(Build.VERSION_CODES.O)
 @Composable
 fun FeedScreen(
-    navController: NavController,
+    navController: NavHostController,
     viewModel: FeedViewModel = hiltViewModel(),
     // 만약 이 매개변수에 아무것도 넘겨주지 않으면, {} (비어있는 람다 식)이 기본으로 사용
     onPostClick: (Post) -> Unit = {}
@@ -85,92 +88,102 @@ fun FeedScreen(
     val isLoading by viewModel.isLoading.collectAsState()
     val errorMsg by viewModel.errorMsg.collectAsState()
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Beige)
-    ) {
-        // 상단 검색 바
-        CustomSearchBar(
+    Scaffold (
+        bottomBar = {
+            BottomNavigationBar(
+                navController = navController,
+                currentRoute = Screen.Feed.route
+            )
+        }
+    ){ paddingValues ->
+        Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp)
-        )
-        // 카테고리 탭
-        CategoryTabs(
-            categories = viewModel.categories,
-            selectedCategory = selectedCategory,
-            onCategorySelected = { viewModel.selectCategory(it) },
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp)
-        )
+                .fillMaxSize()
+                .background(Beige)
+                .padding(paddingValues)
+        ) {
+            // 상단 검색 바
+            CustomSearchBar(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp)
+            )
+            // 카테고리 탭
+            CategoryTabs(
+                categories = viewModel.categories,
+                selectedCategory = selectedCategory,
+                onCategorySelected = { viewModel.selectCategory(it) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+            )
 
-        Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
-        // 게시물 목록
-        when {
-            isLoading && post.isEmpty() -> {
-                // 로딩 상태
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    CircularProgressIndicator()
-                }
-            }
-            errorMsg != null -> {
-                // 에러 상태
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = errorMsg ?: "오류가 발생했습니다.",
-                        color = Color.Red,
-                        fontSize = 14.sp
-                    )
-                }
-            }
-            post.isEmpty() -> {
-                // 빈 상태
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "게시물이 없습니다.",
-                        color = Color.Gray,
-                        fontSize = 16.sp
-                    )
-                }
-            }
-            else -> {
-                // 게시물 목록
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                    contentPadding = PaddingValues(bottom = 16.dp)
-                ) {
-                    items(post.size) { index ->
-                        val currentPost = post[index]
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                            PostCard(
-                                post = currentPost,
-                                onClick = {
-                                    navController.navigate("detail/${currentPost.id}")
-                                }
-                            )
-                        }
+            // 게시물 목록
+            when {
+                isLoading && post.isEmpty() -> {
+                    // 로딩 상태
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator()
                     }
+                }
+                errorMsg != null -> {
+                    // 에러 상태
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = errorMsg ?: "오류가 발생했습니다.",
+                            color = Color.Red,
+                            fontSize = 14.sp
+                        )
+                    }
+                }
+                post.isEmpty() -> {
+                    // 빈 상태
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "게시물이 없습니다.",
+                            color = Color.Gray,
+                            fontSize = 16.sp
+                        )
+                    }
+                }
+                else -> {
+                    // 게시물 목록
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        contentPadding = PaddingValues(bottom = 16.dp)
+                    ) {
+                        items(post.size) { index ->
+                            val currentPost = post[index]
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                                PostCard(
+                                    post = currentPost,
+                                    onClick = {
+                                        navController.navigate("detail/${currentPost.id}")
+                                    }
+                                )
+                            }
+                        }
 
-                    // 무한 스크롤 트리거
-                    if (post.isNotEmpty()) {
-                        item {
-                            LaunchedEffect(Unit) {
-                                viewModel.loadMorePosts()
+                        // 무한 스크롤 트리거
+                        if (post.isNotEmpty()) {
+                            item {
+                                LaunchedEffect(Unit) {
+                                    viewModel.loadMorePosts()
+                                }
                             }
                         }
                     }
@@ -182,11 +195,9 @@ fun FeedScreen(
 
 /**
  * 검색 바 Composable
- *
  * 기능:
  * - 검색어 입력
  * - 검색 아이콘 클릭
- *
  * Material3의 SearchBar와 충돌을 피하기 위해 CustomSearchBar로 명명
  */
 @Composable
@@ -309,31 +320,60 @@ fun PostCard(
                 modifier = Modifier
                     .size(80.dp)
                     .clip(RoundedCornerShape(8.dp))
-                    .background(Color(0xFFE0E0E0)),
+                    .background(Color(0xFFF5F5F5)),
                 contentAlignment = Alignment.Center
             ) {
-
                 val base_url = BuildConfig.BASE_URL
                 val full_url = base_url + post.imgUrl
 
                 val context = LocalContext.current // 컴포저블 안에서 컨텍스트 가져오기
                 // 이미지가 있을때는 이미지 보여주기
                 if(post.imgUrl != null) {
-                    Log.d("DEBUG_IMAGE", "실제 요청 주소: ${post.imgUrl}")
-                    AsyncImage(
-                        model = ImageRequest.Builder(context)
-                            .data(full_url)
+                    val imageRequest = remember(post.imgUrl) {
+                        ImageRequest.Builder(context)
+                            .data("${BuildConfig.BASE_URL}${post.imgUrl}")
                             .crossfade(true) // 이미지가 부드럽게 뜬다고 함.
-                            .size(300, 300) // 300px 크기로 메모리에 로딩
-                            .build(),
-                        contentDescription = "썸네일",
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize()
-                    )
+                            .size(300) // 300px 크기로 메모리에 로딩
+                            .memoryCacheKey(post.imgUrl) // 메모리 캐시 키 설정
+                            .diskCacheKey(post.imgUrl) // 디스크 캐시 키 설정
+                            .allowHardware(false) // 하드웨어 가속 비활성화
+                            .build()
+                    }
+
+                    val painter  = rememberAsyncImagePainter(model = imageRequest)
+
+                    when(painter.state) {
+                        is AsyncImagePainter.State.Loading -> {
+                            // 로딩 중 UI
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(24.dp),
+                                strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                        is AsyncImagePainter.State.Success -> {
+                            // 이미지 로드 성공
+                            Image(
+                                painter = painter,
+                                contentDescription = "썸네일",
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
+                        else -> {
+                            // 에러 또는 기타 상태
+                            Icon(
+                                imageVector = Icons.Default.Image,
+                                contentDescription = "이미지 로드 실패",
+                                tint = Color.Gray
+                            )
+                        }
+                    }
                 } else {
+                    // 이미지 없는 경우
                     Icon(
                         imageVector = Icons.Default.Image,
-                        contentDescription = null,
+                        contentDescription = "이미지 없음",
                         tint = Color.Gray
                     )
                 }

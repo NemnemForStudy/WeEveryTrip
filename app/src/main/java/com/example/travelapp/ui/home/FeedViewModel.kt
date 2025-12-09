@@ -61,7 +61,11 @@ open class FeedViewModel @Inject constructor(
      * 4. 실패 시 에러 메시지 표시
      * 5. 로딩 상태를 false로 설정
      */
-    fun loadPosts() {
+    fun loadPosts(forceRefresh: Boolean = false) {
+        if(_post.value.isNotEmpty() && !forceRefresh) {
+            return
+        }
+
         viewModelScope.launch {
             _isLoading.value = true
             _errorMsg.value = null

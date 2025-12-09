@@ -34,6 +34,7 @@ import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -52,6 +53,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.rememberNavController
 import com.example.travelapp.data.model.Post
+import com.example.travelapp.ui.components.BottomNavigationBar
 import com.example.travelapp.ui.navigation.Screen
 import com.example.travelapp.ui.theme.TravelAppTheme
 
@@ -142,63 +144,10 @@ fun HomeScreen(
             )
         },
         bottomBar = {
-            Row(
-                modifier = Modifier.fillMaxWidth().height(60.dp)
-                    .background(MaterialTheme.colorScheme.background) // 베이지
-                    .padding(horizontal = 8.dp),
-                horizontalArrangement = Arrangement.SpaceAround,
-                verticalAlignment = Alignment.CenterVertically
-             ) {
-                // 메인 화면
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(
-                        imageVector = Icons.Filled.Home,
-                        contentDescription = "메인 화면",
-                        modifier = Modifier.size(30.dp),
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                    Text(text = "메인 화면", fontSize = 10.sp)
-                }
-
-                // 자유 게시판
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier
-                        .clickable {
-                            navController.navigate(Screen.Feed.route)
-                        }
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.ChatBubbleOutline,
-                        contentDescription = "자유 게시판",
-                        modifier = Modifier.size(30.dp),
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                    Text(text = "자유 게시판", fontSize = 10.sp)
-                }
-
-                // 여행 카테고리
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(
-                        imageVector = Icons.Default.AirplanemodeActive,
-                        contentDescription = "여행 카테고리",
-                        modifier = Modifier.size(30.dp),
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                    Text(text = "여행 카테고리", fontSize = 10.sp)
-                }
-
-                // My Page
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(
-                        imageVector = Icons.Filled.Person,
-                        contentDescription = "My Page",
-                        modifier = Modifier.size(30.dp),
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                    Text(text = "My Page", fontSize = 10.sp)
-                }
-            }
+            BottomNavigationBar(
+                navController = navController,
+                currentRoute = Screen.Home.route
+            )
         }
     ) { paddingValues ->
         // 텐츠 영역
