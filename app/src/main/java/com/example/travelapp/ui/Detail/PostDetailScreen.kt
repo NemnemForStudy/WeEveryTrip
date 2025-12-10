@@ -57,6 +57,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
@@ -85,10 +86,13 @@ fun PostDetailScreen(
     val post by viewModel.post.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val errorMsg by viewModel.errorMsg.collectAsState()
+    val isLiked by viewModel.isLiked.collectAsStateWithLifecycle()
+    val likeCount by viewModel.likeCount.collectAsStateWithLifecycle()
 
     // 화면 진입 시 딱 한 번 실행 (데이터 요청)
     LaunchedEffect(postId) {
         viewModel.fetchPostDetail(postId)
+        viewModel.loadLikeData(postId)
     }
 
     Box(modifier = Modifier
@@ -110,11 +114,22 @@ fun PostDetailScreen(
             post != null -> {
                 PostDetailContent(
                     post = post!!,
+                    isLiked = isLiked,
+                    likeCount = likeCount,
+                    onLikeToggle = { viewModel.toggleLike(postId) },
                     onBackClick = {
                         navController.navigate("feed") {
-                            popUpTo("feed") { inclusive = true}
+                            popUpTo("feed") { inclusive = true }
                         }
                     }
+                )
+            }
+            // post 가 null, 에러 없고, 로딩도 아닐 떄 대비한 else
+            else -> {
+                // 데이터 로드에 실패했지만 에러 메시지가 없는 경우
+                Text(
+                    text = "게시물을 찾을 수 없습니다.",
+                    modifier = Modifier.align(Alignment.Center)
                 )
             }
         }
@@ -124,10 +139,12 @@ fun PostDetailScreen(
 @Composable
 fun PostDetailContent(
     post: Post,
+    isLiked: Boolean,
+    likeCount: Int,
+    onLikeToggle: () -> Unit,
     onBackClick: () -> Unit = {}
 ) {
     val scrollState = rememberScrollState()
-    var isLiked by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -157,7 +174,8 @@ fun PostDetailContent(
         bottomBar = {
             PostDetailBottomBar(
                 isLiked = isLiked,
-                onLikeClick = { isLiked = !isLiked },
+                likeCount = likeCount,
+                onLikeClick = onLikeToggle,
                 commentCount = 5
             )
         }
@@ -365,6 +383,7 @@ fun PostDetailContent(
 @Composable
 fun PostDetailBottomBar (
     isLiked: Boolean,
+    likeCount: Int,
     onLikeClick: () -> Unit,
     commentCount: Int
 ) {
@@ -388,7 +407,7 @@ fun PostDetailBottomBar (
                     )
                 }
 
-                Text(text = if(isLiked) "129" else "128", fontSize = 14.sp)
+                Text(text = "${likeCount}", fontSize = 14.sp)
 
                 Spacer(modifier = Modifier.width(16.dp))
 
@@ -424,5 +443,5 @@ fun PostDetailScreenPreview() {
         images = emptyList(),
         imgUrl = null
     )
-    PostDetailContent(post = dummyPost)
+//    PostDetailContent(post = dummyPost)
 }

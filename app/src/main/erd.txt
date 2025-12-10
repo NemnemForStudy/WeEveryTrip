@@ -1,0 +1,202 @@
+-- ================================
+-- 사용자 테이블
+-- ================================
+CREATE TABLE "user" (
+  "user_id" BIGSERIAL PRIMARY KEY,
+  "email" VARCHAR NOT NULL UNIQUE,
+  "password" VARCHAR, -- 소셜 로그인 가능하므로 NULL 허용
+  "nickname" VARCHAR NOT NULL,
+  "profile_image" VARCHAR,
+  "social_provider" VARCHAR(50), -- kakao, google 등
+  "social_id" VARCHAR(255) UNIQUE, -- 소셜 서비스 고유 ID
+  "created_at" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  "updated_at" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- 시퀀스 재설정
+SELECT setval('user_user_id_seq', COALESCE((SELECT MAX(user_id) FROM "user"), 1));
+
+-- ================================
+-- 카테고리 테이블
+-- ================================
+CREATE TABLE "category" (
+  "category_id" BIGSERIAL PRIMARY KEY,
+  "category_name" VARCHAR NOT NULL UNIQUE
+);
+
+-- ================================
+-- 장소 테이블
+-- ================================
+CREATE TABLE "location" (
+  "location_id" BIGSERIAL PRIMARY KEY,
+  "type" VARCHAR,
+  "name" VARCHAR NOT NULL,
+  "latitude" DOUBLE PRECISION,
+  "longitude" DOUBLE PRECISION,
+  "is_domestic" BOOLEAN NOT NULL DEFAULT true
+);
+
+-- ================================
+-- 게시글 테이블
+-- ================================
+CREATE TABLE "post" (
+  "post_id" BIGSERIAL PRIMARY KEY,
+  "user_id" BIGINT NOT NULL,
+  "category_id" BIGINT NOT NULL,
+  "location_id" BIGINT,
+  "title" VARCHAR NOT NULL,
+  "content" TEXT,
+  "view_count" INT NOT NULL DEFAULT 0,
+  "latitude" DOUBLE PRECISION,
+  "longitude" DOUBLE PRECISION,
+  "is_domestic" BOOLEAN NOT NULL DEFAULT true,
+  "created_at" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  "updated_at" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- ================================
+-- 게시글 이미지 테이블
+-- ================================
+CREATE TABLE "post_image" (
+  "image_id" BIGSERIAL PRIMARY KEY,
+  "post_id" BIGINT NOT NULL,
+  "image_url" VARCHAR NOT NULL,
+  "created_at" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- ================================
+-- 댓글 테이블
+-- ================================
+CREATE TABLE "comment" (
+  "comment_id" BIGSERIAL PRIMARY KEY,
+  "post_id" BIGINT NOT NULL,
+  "user_id" BIGINT NOT NULL,
+  "content" TEXT NOT NULL,
+  "created_at" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- ================================
+-- 게시글 좋아요 테이블
+-- ================================
+CREATE TABLE "post_like" (
+  "like_id" BIGSERIAL PRIMARY KEY,
+  "post_id" BIGINT NOT NULL,
+  "user_id" BIGINT NOT NULL,
+  "created_at" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT "post_user_like_unique" UNIQUE ("post_id", "user_id") -- 중복 방지
+);
+
+-- ================================
+-- 사용자 활동 로그 테이블
+-- ================================
+CREATE TABLE "user_activity" (
+  "activity_id" BIGSERIAL PRIMARY KEY,
+  "user_id" BIGINT NOT NULL,
+  "activity_type" VARCHAR NOT NULL,
+  "target_id" BIGINT,
+  "created_at" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- ================================
+-- 태그 테이블
+-- ================================
+CREATE TABLE "tag" (
+  "tag_id" BIGSERIAL PRIMARY KEY,
+  "tag_name" VARCHAR NOT NULL UNIQUE,
+  "created_at" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- ================================
+-- 게시글-태그 연결 테이블
+-- ================================
+CREATE TABLE "post_tag" (
+  "post_id" BIGINT NOT NULL,
+  "tag_id" BIGINT NOT NULL,
+  "created_at" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY ("post_id", "tag_id") -- 중복 방지
+);
+
+-- ================================
+-- 외래 키(Foreign Key) 설정
+-- ================================
+ALTER TABLE "post" ADD FOREIGN KEY ("user_id") REFERENCES "user" ("user_id");
+ALTER TABLE "post" ADD FOREIGN KEY ("category_id") REFERENCES "category" ("category_id");
+ALTER TABLE "post" ADD FOREIGN KEY ("location_id") REFERENCES "location" ("location_id");
+
+ALTER TABLE "post_image" ADD FOREIGN KEY ("post_id") REFERENCES "post" ("post_id");
+
+ALTER TABLE "comment" ADD FOREIGN KEY ("post_id") REFERENCES "post" ("post_id");
+ALTER TABLE "comment" ADD FOREIGN KEY ("user_id") REFERENCES "user" ("user_id");
+
+ALTER TABLE "post_like" ADD FOREIGN KEY ("post_id") REFERENCES "post" ("post_id");
+ALTER TABLE "post_like" ADD FOREIGN KEY ("user_id") REFERENCES "user" ("user_id");
+
+ALTER TABLE "user_activity" ADD FOREIGN KEY ("user_id") REFERENCES "user" ("user_id");
+
+ALTER TABLE "post_tag" ADD FOREIGN KEY ("post_id") REFERENCES "post" ("post_id") ON DELETE CASCADE;
+ALTER TABLE "post_tag" ADD FOREIGN KEY ("tag_id") REFERENCES "tag" ("tag_id") ON DELETE CASCADE;
+
+-- 1. PostGIS 확장 설치 (DB에 설치되어 있지 않다면)
+CREATE EXTENSION IF NOT EXISTS postgis;
+
+-- 1.1. 사용자 테이블: Soft Delete 추가
+ALTER TABLE "user" ADD COLUMN "deleted_at" TIMESTAMPTZ;
+
+-- 1.2. 게시글 테이블: Soft Delete 및 썸네일 URL 추가
+ALTER TABLE "post"
+    ADD COLUMN "deleted_at" TIMESTAMPTZ,
+    ADD COLUMN "thumbnail_url" VARCHAR;
+
+-- 1.3. 댓글 테이블: Soft Delete 추가
+ALTER TABLE "comment" ADD COLUMN "deleted_at" TIMESTAMPTZ;
+
+-- location 테이블의 위도/경도 컬럼 삭제
+ALTER TABLE "location"
+    DROP COLUMN "latitude",
+    DROP COLUMN "longitude";
+
+-- PostGIS 타입의 coordinate 컬럼 추가 (NULL 허용)
+ALTER TABLE "location"
+    ADD COLUMN "coordinate" GEOMETRY(Point, 4326);
+
+-- 위치 기반 검색 성능을 위한 GIST 인덱스 추가 (필수)
+CREATE INDEX idx_location_coordinate ON "location" USING GIST ("coordinate");
+
+-- post 테이블의 위도/경도 컬럼 삭제
+ALTER TABLE "post"
+    DROP COLUMN "latitude",
+    DROP COLUMN "longitude";
+
+-- PostGIS 타입의 coordinate 컬럼 추가 (NULL 허용)
+ALTER TABLE "post"
+    ADD COLUMN "coordinate" GEOMETRY(Point, 4326);
+
+-- 위치 기반 검색 성능을 위한 GIST 인덱스 추가 (필수)
+CREATE INDEX idx_post_coordinate ON "post" USING GIST ("coordinate");
+
+-- 3.1. 기존 NULL 값 처리 (선택 사항: 데이터 클리닝)
+UPDATE "user" SET social_provider = 'none', social_id = user_id::VARCHAR WHERE social_provider IS NULL;
+
+-- 3.2. NOT NULL 제약 조건 추가
+ALTER TABLE "user"
+    ALTER COLUMN "social_provider" SET NOT NULL,
+    ALTER COLUMN "social_id" SET NOT NULL;
+
+  -- 4.1. post 테이블의 조인 성능 향상
+CREATE INDEX idx_post_user_id ON "post" ("user_id");
+CREATE INDEX idx_post_category_id ON "post" ("category_id");
+CREATE INDEX idx_post_location_id ON "post" ("location_id");
+
+-- 4.2. comment 테이블의 조인 성능 향상
+CREATE INDEX idx_comment_post_id ON "comment" ("post_id");
+CREATE INDEX idx_comment_user_id ON "comment" ("user_id");
+
+-- 4.3. post_like 테이블의 조인 성능 향상
+-- post_user_like_unique 제약 조건이 이미 있으므로 인덱스 추가 불필요 (PK와 UNIQUE 제약은 인덱스 자동 생성)
+
+-- 4.4. user_activity 테이블의 조인 성능 향상
+CREATE INDEX idx_user_activity_user_id ON "user_activity" ("user_id");
+
+-- 4.5. post_tag 연결 테이블의 검색 성능 향상
+-- post_id, tag_id는 이미 PRIMARY KEY이므로 인덱스가 있습니다. tag_id 단독 검색을 위해 추가 인덱스 생성
+CREATE INDEX idx_post_tag_tag_id ON "post_tag" ("tag_id");

@@ -236,4 +236,115 @@ open class PostRepository @Inject constructor(
             null
         }
     }
+
+    /**
+     * 게시물 좋아요 요청
+     * @param postId 게시물 ID
+     * @return Result<Unit> 성공하면 Unit, 실패하면 Exception 포함
+     */
+    suspend fun likePost(postId: String): Result<Unit> {
+        return try {
+            // Retrofit API 호출(IO 스레드 처리는 내부적으로 해줌)
+            val response = postApiService.likePost(postId)
+
+            // 상태 코드 확인
+            if(response.isSuccessful) {
+                // 성공 시 백엔드에서 준 body 확인
+                // body가 null 일 수도 있으니 body()?.let { ... } 처리
+                val body = response.body()
+
+                if(body != null && body.success) { //body.success는 ApiResponse의 필드라고 가정
+                    Result.success(Unit)
+                } else {
+                    // HTTP는 200인데 로직상 실패인 경우.
+                    Result.failure(Exception(body?.message ?: "알 수 없는 서버"))
+                }
+            } else {
+                Result.failure(Exception("네트워크 요청 실패: 코드 ${response.code()}"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun getLikeCount(postId: String): Result<Int> {
+        return try {
+            val response = postApiService.getLikeCount(postId)
+
+            if(response.isSuccessful) {
+                val body = response.body()
+
+                if(body != null && body.success) {
+                    // val data: T? <- 이렇게 되어있음
+                    // 그래서 Result.success(Int) 이게 아니라 body에서 int를 꺼내줘야함
+                    Result.success(body.data ?: 0)
+                } else {
+                    Result.failure(Exception(body?.message ?: "알 수 없는 서버"))
+                }
+            } else {
+                Result.failure(Exception("네트워크 요청 실패: 코드 ${response.code()}"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun unLikePost(postId: String): Result<Unit> {
+        return try {
+            val response = postApiService.unlikePost(postId)
+
+            if(response.isSuccessful) {
+                val body = response.body()
+
+                // Body가 null이거나 (Content-Length: 0), 비즈니스 로직이 실패했을 때
+                if(body == null) {
+                    // HTTP 204 No Content처럼 Body 없이 성공했으나, 명시적 처리가 필요한 경우
+                    // 여기서는 API 응답 계약상 Body가 필수라고 가정하고 실패로 처리합니다.
+                    return Result.failure(IllegalStateException("서버 응답 본문이 비어있습니다."))
+                }
+
+                if(body.success) {
+                    // 비즈니스 로직 성공
+                    return Result.success(Unit)
+                } else {
+                    // Http 200 인데 로직상 실패
+                    Result.failure(Exception(body?.message ?: "알 수 없는 서버"))
+                }
+            } else {
+                Result.failure(Exception("네트워크 실패 요청 코드 ${response.code()}"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun isPostLiked(postId: String): Result<Boolean> {
+        return try {
+            val response = postApiService.isPostLiked(postId)
+
+            if(response.isSuccessful) {
+                val body = response.body()
+
+                if(body != null && body.success) {
+                    Result.success(body.data ?: false)
+                } else {
+                    Result.failure(Exception(body?.message ?: "알 수 없는 소보"))
+                }
+            } else {
+                Result.failure(Exception("네트워크 실패 요청 코드 ${response.code()}"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun toggleLike(postId: String, isCurrentlyLiked: Boolean): Result<Unit> {
+        return if(isCurrentlyLiked) {
+            // 현재 좋아요 상태(true) -> false
+            unLikePost(postId)
+        } else {
+            // 현재 좋아요 상태가 아님(false) -> 좋아요 API 호출
+            likePost(postId)
+        }
+    }
 }

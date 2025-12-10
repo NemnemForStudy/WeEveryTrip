@@ -2,6 +2,8 @@ package com.example.travelapp.data.repository
 
 import android.content.Context
 import com.example.travelapp.data.api.PostApiService
+import com.example.travelapp.data.model.ApiResponse
+import com.example.travelapp.data.model.CreatePostResponse
 import com.example.travelapp.data.model.Post
 import kotlinx.coroutines.test.runTest
 import okhttp3.MultipartBody
@@ -14,6 +16,7 @@ import org.mockito.Mock
 import org.mockito.MockitoAnnotations
 import org.mockito.kotlin.any
 import org.mockito.kotlin.anyOrNull
+import org.mockito.kotlin.mock
 import org.mockito.kotlin.whenever
 import retrofit2.Response
 
@@ -138,18 +141,30 @@ class PostRepositoryTest {
 
     @Test
     fun testCreatePostSuccess() = runTest {
-        val mockResponse = Response.success(samplePost)
+        // 1. 테스트용 Post 객체
+        // (samplePost 정의는 클래스 필드에 있다고 가정)
 
+        // 🔥 2. [수정] CreatePostResponse 타입의 Mocking 객체를 생성합니다.
+        // Post 객체 자체가 CreatePostResponse라고 가정하고 Mocking합니다.
+        // 만약 Post가 CreatePostResponse와 필드가 완전히 같다면, as 캐스팅을 사용합니다.
+        val expectedResponse: CreatePostResponse = samplePost as CreatePostResponse
+
+        // 3. Mocking을 위해 ApiResponse 껍데기에 CreatePostResponse를 담음
+        val mockApiBody = ApiResponse<CreatePostResponse>(
+            success = true,
+            message = "게시물 생성 완료",
+            data = expectedResponse // 👈 타입 일치!
+        )
+
+        // 4. Retrofit Response에 담습니다.
+        val mockResponse = Response.success(mockApiBody)
+
+        // whenever 구문은 그대로 유지
         whenever(mockPostApiService.createPost(
-            any(), // category
-            any(), // title
-            any(), // content
-            any(), // tags
-            anyOrNull(), // ⭐️ coordinates (새로 추가된 파라미터 대응)
-            any(),
-            any<List<MultipartBody.Part>>()// ⭐️ images (Array<MultipartBody.Part> -> 그냥 any()로 해결)
-        )).thenReturn(mockResponse)
+            any(), any(), any(), any(), anyOrNull(), any(), any()
+        )).thenReturn(mockResponse) // 이제 Argument type mismatch 에러가 사라집니다.
 
+        // 5. Repository 호출
         val result = postRepository.createPost(
             category = "여행",
             title = "제주도 여행 후기!",
@@ -158,6 +173,7 @@ class PostRepositoryTest {
             imageUris = emptyList()
         )
 
+        // 6. 검증: Repository는 Result<Post>를 반환해야 하므로, samplePost와 비교
         assertTrue("게시물 생성은 성공", result.isSuccess)
         assertEquals("생성된 게시물 반환", samplePost, result.getOrNull())
     }
@@ -187,5 +203,241 @@ class PostRepositoryTest {
         )
 
         assertTrue("게시물 생성 실패", result.isFailure)
+    }
+
+    @Test
+    fun testLikePostSuccess() = runTest {
+        val postId = "test-post-123"
+
+        val mockApiResponse = ApiResponse<Unit>(
+            success = true,
+            message = "좋아요 성공",
+            data = null
+        )
+
+        val mockResponse = Response.success(mockApiResponse)
+
+        whenever(mockPostApiService.likePost(postId))
+            .thenReturn(mockResponse)
+
+        val result = postRepository.likePost(postId)
+
+        assertTrue("좋아요 성공", result.isSuccess)
+    }
+
+    @Test
+    fun testLikePostFailure_BusinessLogic() = runTest {
+        val postId = "test-post-123"
+        val failMessage = "이미 좋아요를 누른 게시물입니다."
+
+        val mockApiResponse = ApiResponse<Unit>(
+            success = false,
+            message = failMessage,
+            data = null
+        )
+
+        val mockResponse = Response.success(mockApiResponse)
+
+        whenever(mockPostApiService.likePost(postId))
+            .thenReturn(mockResponse)
+
+        val result = postRepository.likePost(postId)
+
+        assertTrue("비즈니스 로직 실패 시 결과는 Failure", result.isFailure)
+        assertEquals("서버 에러 메시지가 전달되어야 함.", failMessage, result.exceptionOrNull()?.message)
+    }
+
+    @Test
+    fun testLikePostFailure_NetworkError() = runTest {
+        val postId = "test-post-123"
+        val expectedException = RuntimeException("네트워크 연결 끊김")
+
+        whenever(mockPostApiService.likePost(postId))
+            .thenThrow(expectedException)
+
+        val result = postRepository.likePost(postId)
+
+        assertTrue("네트워크 오류 시 실패", result.isFailure)
+        assertEquals("발생한 예외 전달", expectedException, result.exceptionOrNull())
+    }
+
+    @Test
+    fun unLikePostSuccess() = runTest {
+        val postId = "test-post-123"
+
+        val mockApiResponse = ApiResponse<Unit>(
+            success = true,
+            message = "좋아요 취소 성공",
+            data = null
+        )
+
+        val mockResponse = Response.success(mockApiResponse)
+        whenever(mockPostApiService.unlikePost(postId))
+            .thenReturn(mockResponse)
+        val result = postRepository.unLikePost(postId)
+
+        assertTrue("좋아요 취소 성공", result.isSuccess)
+        assertEquals("좋아요 취소 되어야함.", Unit, result.getOrNull())
+    }
+
+    @Test
+    fun unLikePostFailure_BusinessLogic() = runTest {
+        val postId = "test-post-123"
+        val failMessage = "이미 취소된 게시물입니다."
+
+        val mockApiResponse = ApiResponse<Unit>(
+            success = false,
+            message = failMessage,
+            data = null
+        )
+
+        val mockResponse = Response.success(mockApiResponse)
+
+        whenever(mockPostApiService.unlikePost(postId))
+            .thenReturn(mockResponse)
+        val result = postRepository.unLikePost(postId)
+        assertTrue("비즈니스 로직 실패", result.isFailure)
+        assertEquals("서버 에러 메시지 전달", failMessage, result.exceptionOrNull()?.message)
+    }
+
+    @Test
+    // null 처리 검증
+    fun unLikeFailure_Null() = runTest {
+        val postId = "test-post-123"
+
+        val mockResponse: Response<ApiResponse<Unit>> = Response.success(null)
+
+        whenever(mockPostApiService.unlikePost(postId))
+            .thenReturn(mockResponse)
+
+        val result = postRepository.unLikePost(postId)
+
+        assertTrue("바디가 널일 때, Repository에서 실패로 처리해야 합니다.", result.isFailure)
+    }
+
+    @Test
+    fun unLikePostFailure_NetworkError() = runTest {
+        val postId = "test-post-123"
+        val expectedException = RuntimeException("네트워크 연결 끊김")
+
+        whenever(mockPostApiService.unlikePost(postId))
+            .thenThrow(expectedException)
+
+        val result = postRepository.unLikePost(postId)
+        assertTrue("네트워크 오류", result.isFailure)
+        assertEquals("발생 예외 전달", expectedException, result.exceptionOrNull())
+    }
+
+    @Test
+    fun testGetLikeCountSuccess() = runTest {
+        val postId = "test-post-123"
+        val expectCount = 42
+
+        // 백엔드 응답 구조 흉내내기
+        val mockApiResponse = ApiResponse(
+            success = true,
+            message = "조회 성공",
+            data = expectCount
+        )
+        val mockResponse = Response.success(mockApiResponse)
+
+        // API 호출되면 위에서 만든 가짜 응답 리턴하도록 설정
+        whenever(mockPostApiService.getLikeCount(postId))
+            .thenReturn(mockResponse)
+
+        // when (실행)
+        val result = postRepository.getLikeCount(postId)
+
+        // Then 검증
+        assertTrue("좋아요 개수 조회는 성공해야 합니다.", result.isSuccess)
+        assertEquals("반환된 개수가 예상값(42)과 일치해야 합니다,", expectCount, result.getOrNull())
+    }
+
+    @Test
+    fun testGetLikeCountFailure_NetworkError() = runTest {
+        val postId = "test-post-123"
+        val expectedException = RuntimeException("네트워크 연결 끊김")
+
+        whenever(mockPostApiService.getLikeCount(postId))
+            .thenThrow(expectedException)
+
+        val result = postRepository.getLikeCount(postId)
+
+        assertTrue("네트워크 오류 시 실패로 처리되어야 함.", result.isFailure)
+        assertEquals("발생한 예외가 그래도 전달되어야 한다.", expectedException, result.exceptionOrNull())
+    }
+
+    @Test
+    fun testIsPostLikedSuccess() = runTest {
+        val postId = "test-post-123"
+
+        val mockApiResponse = ApiResponse<Boolean>(
+            success = true,
+            message = "상태 조회 성공",
+            data = true
+        )
+
+        val mockResponse = Response.success(mockApiResponse)
+        whenever(mockPostApiService.isPostLiked(postId))
+            .thenReturn(mockResponse)
+
+        val result = postRepository.isPostLiked(postId)
+
+        assertTrue("상태 조회 성공", result.isSuccess)
+        assertEquals("성공 전달", true, result.getOrNull())
+    }
+
+    @Test
+    fun testIsPostLikedSuccess_NotLiked() = runTest {
+        val postId = "test-post-123"
+
+        val mockApiResponse = ApiResponse<Boolean>(
+            success = true,
+            message = "조회 성공",
+            data = false
+        )
+
+        val mockResponse = Response.success(mockApiResponse)
+
+        whenever(mockPostApiService.isPostLiked(postId))
+            .thenReturn(mockResponse)
+
+        val result = postRepository.isPostLiked(postId)
+        assertTrue("조회 실패", result.isSuccess)
+        assertEquals("서버 에러 메시지 전달", false, result.getOrNull())
+    }
+
+    @Test
+    fun testIsPostLikedFailure() = runTest {
+        val postId = "test-post-123"
+        val failMessage = "권한이 없습니다."
+
+        val mockApiResponse = ApiResponse<Boolean>(
+            success = false,
+            message = failMessage,
+            data = null
+        )
+
+        val mockResponse = Response.success(mockApiResponse)
+
+        whenever(mockPostApiService.isPostLiked(postId)).thenReturn(mockResponse)
+
+        val result = postRepository.isPostLiked(postId)
+
+        assertTrue("조회 실패", result.isFailure)
+        assertEquals("서버 에러 메시지 전달", failMessage, result.exceptionOrNull()?.message)
+    }
+
+    @Test
+    fun testIdPostIdLike_NetworkError() = runTest {
+        val postId = "test-post-123"
+        val expectedException = RuntimeException("네트워크 연결 끊김")
+
+        whenever(mockPostApiService.unlikePost(postId))
+            .thenThrow(expectedException)
+
+        val result = postRepository.unLikePost(postId)
+        assertTrue("네트워크 오류", result.isFailure)
+        assertEquals("발생 예외 전달", expectedException, result.exceptionOrNull())
     }
 }

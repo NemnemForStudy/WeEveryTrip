@@ -10,6 +10,7 @@ import okhttp3.MultipartBody
 import okhttp3.RequestBody
 import retrofit2.Response
 import retrofit2.http.Body
+import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.Multipart
 import retrofit2.http.POST
@@ -49,4 +50,20 @@ interface PostApiService {
     suspend fun getPostById(
         @Path("id") postId: String
     ): Post // 배열이 아니라 단일 객체 반환
+
+    // 게시물 좋아요 추가 엔드포인트, 사용자가 버튼 누름.
+    @POST("api/posts/{postId}/like")
+    suspend fun likePost(@Path("postId") postId: String): Response<ApiResponse<Unit>>
+
+    // 좋아요 취소
+    @DELETE("api/posts/{postId}/like")
+    suspend fun unlikePost(@Path("postId") postId: String): Response<ApiResponse<Unit>>
+
+    // 특정 게시물 총 좋아요 수
+    @POST("api/posts/{postId}/count")
+    suspend fun getLikeCount(@Path("postId") postId: String): Response<ApiResponse<Int>>
+
+    // 사용자 좋아요 여부 확인
+    @GET("api/posts/{postId}/is-liked")
+    suspend fun isPostLiked(@Path("postId") postId: String): Response<ApiResponse<Boolean>>
 }
