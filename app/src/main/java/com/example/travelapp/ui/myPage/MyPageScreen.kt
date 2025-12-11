@@ -36,8 +36,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -59,8 +57,6 @@ fun MyPageScreen(
     navController: NavController,
     viewModel: MyPageViewModel = hiltViewModel()
 ) {
-    val user by viewModel.user.collectAsState()
-    val isLoading by viewModel.isLoading.collectAsState()
     Scaffold(
         bottomBar = {
             BottomNavigationBar(
@@ -77,17 +73,12 @@ fun MyPageScreen(
                 .verticalScroll(rememberScrollState())
         ) {
             ProfileSection(
-                nickname = user?.nickname ?: "로딩 중...",
-                email = user?.email ?: "",
                 onEditClick = { /* 테스트 */ }
             )
 
             Spacer(modifier = Modifier.height(16.dp))
 
             ActivityStatsCard(
-                postCount = user?.postCount ?: 0,
-                likeCount = user?.likeCount ?: 0,
-                commentCount = user?.commentCount ?: 0
             )
 
             Spacer(modifier = Modifier.height(24.dp))
@@ -98,12 +89,6 @@ fun MyPageScreen(
                 onNotificationClick = { },
                 onSettingsClick = { },
                 onHelpClick = { },
-                onLogoutClick = {
-                    viewModel.logout()
-                    navController.navigate("/login") {
-                        popUpTo(0) { inclusive = true }
-                    }
-                }
             )
         }
     }
