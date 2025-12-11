@@ -6,8 +6,8 @@
   "scripts": {
     "build": "tsc",
     "build:watch": "tsc --watch",
-    "start": "ts-node -r dotenv/config src/index.ts",
-    "dev": "nodemon --watch src --exec npm start",
+    "start": "ts-node dist/index.js",
+    "dev": "nodemon --exec ts-node src/index.ts",
     "debug": "node --inspect=0.0.0.0:9229 -r dotenv/config -r ts-node/register src/index.ts"
   },
   "dependencies": {

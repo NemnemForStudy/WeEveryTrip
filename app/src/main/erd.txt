@@ -200,3 +200,6 @@ CREATE INDEX idx_user_activity_user_id ON "user_activity" ("user_id");
 -- 4.5. post_tag 연결 테이블의 검색 성능 향상
 -- post_id, tag_id는 이미 PRIMARY KEY이므로 인덱스가 있습니다. tag_id 단독 검색을 위해 추가 인덱스 생성
 CREATE INDEX idx_post_tag_tag_id ON "post_tag" ("tag_id");
+
+-- 12-11 좋아요 카운터 컬럼 추가
+ALTER TABLE "post" ADD COLUMN "like_count" INT NOT NULL DEFAULT 0;
