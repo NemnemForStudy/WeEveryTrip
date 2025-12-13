@@ -13,22 +13,13 @@
         </DropdownSelection>
         <DialogSelection />
       </SelectionState>
-      <SelectionState runConfigName="testIsPostIdLike_Null()">
+      <SelectionState runConfigName="testCreateCommentSuccess()">
         <option name="selectionMode" value="DROPDOWN" />
       </SelectionState>
-      <SelectionState runConfigName="testIdPostIdLike_NetworkError()">
+      <SelectionState runConfigName="testCreateCommentFailure()">
         <option name="selectionMode" value="DROPDOWN" />
       </SelectionState>
-      <SelectionState runConfigName="testIsPostLikedFailure()">
-        <option name="selectionMode" value="DROPDOWN" />
-      </SelectionState>
-      <SelectionState runConfigName="PostRepositoryTest">
-        <option name="selectionMode" value="DROPDOWN" />
-      </SelectionState>
-      <SelectionState runConfigName="testCreatePostSuccess()">
-        <option name="selectionMode" value="DROPDOWN" />
-      </SelectionState>
-      <SelectionState runConfigName="MyPageScreenPreview">
+      <SelectionState runConfigName="testCreateCommentNetworkError()">
         <option name="selectionMode" value="DROPDOWN" />
       </SelectionState>
     </selectionStates>

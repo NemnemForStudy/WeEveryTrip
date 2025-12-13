@@ -1,9 +1,12 @@
 package com.example.travelapp.ui.Detail
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.travelapp.data.api.PostApiService
 import com.example.travelapp.data.model.Post
+import com.example.travelapp.data.model.comment.Comment
+import com.example.travelapp.data.repository.CommentRepository
 import com.example.travelapp.data.repository.PostRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.async
@@ -15,7 +18,8 @@ import javax.inject.Inject
 @HiltViewModel
 class PostDetailViewModel @Inject constructor(
     private val postApiService: PostApiService,
-    private val postRepository: PostRepository
+    private val postRepository: PostRepository,
+    private val commentRepository: CommentRepository
 ): ViewModel() {
     // UI가 바라볼 상태 변수들
     // 게시물 데이터
@@ -33,6 +37,12 @@ class PostDetailViewModel @Inject constructor(
 
     private val _likeCount = MutableStateFlow(0)
     val likeCount = _likeCount.asStateFlow()
+
+    private val _commentContent = MutableStateFlow("")
+    val commentContent = _commentContent.asStateFlow()
+
+    private val _comments = MutableStateFlow<List<Comment>>(emptyList())
+    val comments = _comments.asStateFlow()
 
     // 데이터 가져오는 함수
     fun fetchPostDetail(postId: String) {
@@ -86,5 +96,56 @@ class PostDetailViewModel @Inject constructor(
                 _errorMsg.value = errorMessage
             }
         }
+    }
+    fun loadComments(postId: String) {
+        viewModelScope.launch {
+            val result = commentRepository.getComments(postId)
+            if(result.isSuccess) {
+                val newList = result.getOrNull() ?: emptyList()
+                if (newList.isEmpty() && _comments.value.isNotEmpty()) {
+                    return@launch
+                }
+                _comments.value = newList
+            } else {
+                Log.e("PostDetailViewModel", "댓글 로드 실패")
+            }
+        }
+    }
+
+    fun createComment(postId: String) {
+        val content = _commentContent.value
+        if(content.isBlank()) return
+
+        viewModelScope.launch {
+            val result = commentRepository.createComment(postId, content)
+
+            if(result.isSuccess) {
+                _commentContent.value = ""
+
+                val newComment = result.getOrNull()
+
+                if(newComment != null) {
+                    val currentList = _comments.value.toMutableList()
+
+                    val displayComment = if(newComment.nickname.isNullOrBlank() || newComment.nickname == "알 수 없음") {
+                        newComment.copy(nickname = "내 닉네임")
+                    } else {
+                        newComment
+                    }
+
+                    currentList.add(0, displayComment)
+                    _comments.value = currentList
+                }
+
+                loadComments(postId)
+            } else {
+                Log.e("PostDetailViewModel", "댓글 작성 실패: ${result.exceptionOrNull()?.message}")
+                _errorMsg.value = "댓글 작성 실패"
+            }
+        }
+    }
+
+    fun updateComment(content: String) {
+        _commentContent.value = content
     }
 }

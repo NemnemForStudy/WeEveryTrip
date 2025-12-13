@@ -11,20 +11,24 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material3.Button
@@ -32,8 +36,11 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Divider
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -43,9 +50,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -63,6 +67,7 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.example.travelapp.BuildConfig
 import com.example.travelapp.data.model.Post
+import com.example.travelapp.data.model.comment.Comment
 import com.example.travelapp.util.UtilTime
 import com.naver.maps.geometry.LatLng
 import com.naver.maps.map.CameraPosition
@@ -88,11 +93,14 @@ fun PostDetailScreen(
     val errorMsg by viewModel.errorMsg.collectAsState()
     val isLiked by viewModel.isLiked.collectAsStateWithLifecycle()
     val likeCount by viewModel.likeCount.collectAsStateWithLifecycle()
+    val comments by viewModel.comments.collectAsStateWithLifecycle()
+    val commentContent by viewModel.commentContent.collectAsStateWithLifecycle()
 
     // 화면 진입 시 딱 한 번 실행 (데이터 요청)
     LaunchedEffect(postId) {
         viewModel.fetchPostDetail(postId)
         viewModel.loadLikeData(postId)
+        viewModel.loadComments(postId)
     }
 
     Box(modifier = Modifier
@@ -116,7 +124,11 @@ fun PostDetailScreen(
                     post = post!!,
                     isLiked = isLiked,
                     likeCount = likeCount,
+                    comments = comments,
+                    commentInput = commentContent,
                     onLikeToggle = { viewModel.toggleLike(postId) },
+                    onCommentChange = { viewModel.updateComment(it) },
+                    onCommentSend = { viewModel.createComment(postId) },
                     onBackClick = {
                         navController.navigate("feed") {
                             popUpTo("feed") { inclusive = true }
@@ -135,17 +147,20 @@ fun PostDetailScreen(
         }
     }
 }
+
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class, ExperimentalNaverMapApi::class)
 @Composable
 fun PostDetailContent(
     post: Post,
     isLiked: Boolean,
     likeCount: Int,
+    comments: List<Comment>,
+    commentInput: String,
     onLikeToggle: () -> Unit,
+    onCommentChange: (String) -> Unit,
+    onCommentSend: () -> Unit,
     onBackClick: () -> Unit = {}
 ) {
-    val scrollState = rememberScrollState()
-
     Scaffold(
         topBar = {
             // Material3 최신 버전에서는 SmallTopAppBar 대신 TopAppBar 사용 권장
@@ -172,206 +187,58 @@ fun PostDetailContent(
             )
         },
         bottomBar = {
-            PostDetailBottomBar(
+            CommentInputBar(
+                value = commentInput,
+                onValueChange = onCommentChange,
+                onSendClick = onCommentSend,
                 isLiked = isLiked,
                 likeCount = likeCount,
-                onLikeClick = onLikeToggle,
-                commentCount = 5
+                onLikeClick = onLikeToggle
             )
         }
     ) { paddingValues ->
-        Column(
+        LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .verticalScroll(scrollState)
-                .padding(bottom = paddingValues.calculateBottomPadding())
+                .padding(bottom = paddingValues.calculateBottomPadding()),
+            verticalArrangement = Arrangement.spacedBy(0.dp)
         ) {
-            // 대형 이미지 헤더
-            val imageList = (post.images ?: emptyList()).ifEmpty { listOfNotNull(post.imgUrl) }
-            val pagerState = rememberPagerState(
-                initialPage = 1000, // 중간에서 시작
-                pageCount = { 2000 } // 큰 수
-            )
+            item { PostImageHeader(post) }
 
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(300.dp)
-                    .background(Color.LightGray)
-            ) {
-                if (imageList.isNotEmpty()) {
-                    HorizontalPager(
-                        state = pagerState,
-                        modifier = Modifier.fillMaxSize()
-                    ) { page ->
-                        val actualIndex = page % imageList.size
-                        val fullUrl = BuildConfig.BASE_URL + imageList[actualIndex]
-                        AsyncImage(
-                            model = ImageRequest.Builder(LocalContext.current)
-                                .data(fullUrl)
-                                .crossfade(true)
-                                .build(),
-                            contentDescription = "게시물 이미지",
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = ContentScale.Crop
-                        )
-                    }
-                }
+            item { PostBodySection(post) }
 
-                // 페이지 인디케이터
-                if (imageList.size > 1) {
-                    val currentIndex = pagerState.currentPage % imageList.size
-                    Row(
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .padding(16.dp),
-                        horizontalArrangement = Arrangement.Center
-                    ) {
-                        repeat(imageList.size) { index ->
-                            Box(
-                                modifier = Modifier
-                                    .padding(horizontal = 4.dp)
-                                    .size(8.dp)
-                                    .clip(CircleShape)
-                                    .background(
-                                        if (currentIndex == index) Color.White
-                                        else Color.White.copy(alpha = 0.5f)
-                                    )
-                            )
-                        }
-                    }
-                } else {
-                    Column(
-                        modifier = Modifier.align(Alignment.Center),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Icon(Icons.Default.LocationOn, contentDescription = null, tint = Color.White, modifier = Modifier.size(48.dp))
-                        Text("이미지가 없는 게시물입니다.", color = Color.White)
-                    }
-                }
+            item {
+                HorizontalDivider(thickness = 8.dp, color = LightGrayBg)
             }
 
-            // 내용 영역
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    // 겹치는 효과를 주고 싶다면 offset 사용 가능 (.offset(y = (-20).dp))
-                    .clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
-                    .background(Color.White)
-                    .padding(20.dp)
-            ) {
-                // 카테고리 태그
-                Surface(
-                    color = PrimaryBlue.copy(alpha = 0.1f),
-                    shape = RoundedCornerShape(8.dp)
-                ) {
-                    Text(
-                        text = post.category ?: "카테고리 없음",
-                        color = PrimaryBlue,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                // 제목
+            item {
                 Text(
-                    text = post.title,
-                    fontSize = 24.sp,
+                    text = "댓글 ${comments.size}",
+                    fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
-                    color = TextDark, // 🔥 이제 에러 안 남
-                    lineHeight = 32.sp
+                    modifier = Modifier.padding(start = 16.dp, top = 20.dp, bottom = 10.dp)
                 )
+            }
 
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // 작성자 프로필 & 날짜
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Surface(
-                        modifier = Modifier.size(40.dp),
-                        shape = CircleShape,
-                        color = Color(0xFFE0E0E0)
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Text(post.nickname.take(1), fontWeight = FontWeight.Bold)
-                        }
-                    }
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Column {
-                        Text(text = post.nickname, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                        // 날짜 포맷 함수가 있다면 여기서 적용 (예: formatRelativeTime(post.created_at))
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                            Text(
-                                text = UtilTime.formatRelativeTime(post.created_at),
-                                color = TextGray,
-                                fontSize = 12.sp
-                            )
-                        }
-                    }
-                }
-
-                Divider(modifier = Modifier.padding(vertical = 24.dp), color = Color(0xFFE0E0E0))
-
-                // 본문
-                Text(
-                    text = post.content,
-                    fontSize = 16.sp,
-                    color = Color(0xFF444444),
-                    lineHeight = 24.sp
-                )
-
-                Spacer(modifier = Modifier.height(30.dp))
-
-                // 지도 영역
-                Text("위치 정보", fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                Spacer(modifier = Modifier.height(12.dp))
-
-                if (post.latitude != null && post.longitude != null) {
-                    val cameraPositionState = rememberCameraPositionState {
-                        position = CameraPosition(LatLng(post.latitude!!, post.longitude!!), 14.0)
-                    }
-                    NaverMap(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(200.dp)
-                            .clip(RoundedCornerShape(12.dp)),
-                        cameraPositionState = cameraPositionState
-                    )
-                } else {
+            if (comments.isEmpty()) {
+                item {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(150.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(Color(0xFFE3F2FD)),
+                            .padding(40.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.LocationOn, contentDescription = null, tint = PrimaryBlue)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("위치 정보 없음", color = PrimaryBlue, fontWeight = FontWeight.Bold)
-                        }
+                        Text("첫 번째 댓글을 남겨보세요!", color = Color.Gray)
                     }
                 }
+            } else {
+                items(comments) { comment ->
+                    CommentItem(comment)
+                }
+            }
 
+            item {
                 Spacer(modifier = Modifier.height(20.dp))
-
-                // 태그 목록
-                if(post.tags != null && post.tags.isNotEmpty()) {
-                    Row {
-                        post.tags.forEach { tag ->
-                            Text(
-                                text = "#$tag ", // 간격 띄우기 추가
-                                color = PrimaryBlue,
-                                fontWeight = FontWeight.Medium
-                            )
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(50.dp))
             }
         }
     }
@@ -423,6 +290,308 @@ fun PostDetailBottomBar (
                 modifier = Modifier.height(40.dp)
             ) {
                 Text("여행 일정 담기", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun PostImageHeader(post: Post) {
+    // 대형 이미지 헤더
+    val imageList = (post.images ?: emptyList()).ifEmpty { listOfNotNull(post.imgUrl) }
+    val pagerState = rememberPagerState(
+        initialPage = 0,
+        pageCount = { if(imageList.isNotEmpty()) imageList.size else 1 } // 큰 수
+    )
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(350.dp)
+            .background(Color.LightGray)
+    ) {
+        if (imageList.isNotEmpty()) {
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier.fillMaxSize()
+            ) { page ->
+                val fullUrl = BuildConfig.BASE_URL + imageList[page]
+                AsyncImage(
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data(fullUrl)
+                        .crossfade(true)
+                        .build(),
+                    contentDescription = "게시물 이미지",
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+            }
+            // 페이지 인디케이터
+            if (imageList.size > 1) {
+                Row(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    repeat(imageList.size) { index ->
+                        val isSelected = pagerState.currentPage === index
+                        Box(
+                            modifier = Modifier
+                                .padding(horizontal = 4.dp)
+                                .size(8.dp)
+                                .clip(CircleShape)
+                                .background(
+                                    if (isSelected) Color.White
+                                    else Color.White.copy(alpha = 0.5f)
+                            )
+                        )
+                    }
+                }
+            }
+        } else {
+            Column(
+                modifier = Modifier.align(Alignment.Center),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Icon(Icons.Default.LocationOn, contentDescription = null, tint = Color.White, modifier = Modifier.size(48.dp))
+                Text("이미지가 없는 게시물입니다.", color = Color.White)
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalNaverMapApi::class)
+@Composable
+fun PostBodySection(post: Post) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .offset(y = (-20).dp)
+            .clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
+            .background(Color.White)
+            .padding(20.dp)
+    ) {
+        // 카테고리 태그
+        Surface(
+            color = PrimaryBlue.copy(alpha = 0.1f),
+            shape = RoundedCornerShape(8.dp)
+        ) {
+            Text(
+                text = post.category ?: "카테고리 없음",
+                color = PrimaryBlue,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+            )
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Surface(
+                modifier = Modifier.size(40.dp),
+                shape = CircleShape,
+                color = Color(0xFFE0E0E0)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Text(post.nickname.take(1), fontWeight = FontWeight.Bold)
+                }
+            }
+            Spacer(modifier = Modifier.width(10.dp))
+            Column {
+                Text(text = post.nickname, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    Text(
+                        text = UtilTime.formatRelativeTime(post.created_at),
+                        color = TextGray,
+                        fontSize = 12.sp
+                    )
+                }
+            }
+        }
+
+        Divider(modifier = Modifier.padding(vertical = 24.dp), color = Color(0xFFE0E0E0))
+
+        Text(
+            text = post.title,
+            fontSize = 24.sp,
+            fontWeight = FontWeight.Bold,
+            color = TextDark,
+            lineHeight = 32.sp
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text(
+            text = post.content,
+            fontSize = 16.sp,
+            color = Color(0xFF444444),
+            lineHeight = 24.sp
+        )
+
+        Spacer(modifier = Modifier.height(30.dp))
+
+        Text("위치 정보", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+        Spacer(modifier = Modifier.height(12.dp))
+
+        if (post.latitude != null && post.longitude != null) {
+            val cameraPositionState = rememberCameraPositionState {
+                position = CameraPosition(LatLng(post.latitude!!, post.longitude!!), 14.0)
+            }
+            NaverMap(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(200.dp)
+                    .clip(RoundedCornerShape(12.dp)),
+                cameraPositionState = cameraPositionState
+            )
+        } else {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(100.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(Color(0xFFF5F5F5)),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("위치 정보가 없습니다.", color = Color.Gray, fontSize = 14.sp)
+            }
+        }
+
+        Spacer(modifier = Modifier.height(20.dp))
+
+        if(post.tags != null && post.tags.isNotEmpty()) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                post.tags.forEach { tag ->
+                    Text(
+                        text = "#$tag",
+                        color = PrimaryBlue,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun CommentItem(comment: Comment) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 12.dp)
+    ) {
+        Row(verticalAlignment = Alignment.Top) {
+            Icon (
+                imageVector = Icons.Default.AccountCircle,
+                contentDescription = null,
+                modifier = Modifier.size(36.dp),
+                tint = Color.LightGray
+            )
+
+            Spacer(modifier = Modifier.width(12.dp))
+
+            Column {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text (
+                        text = comment.nickname ?: "알 수 없음",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    // 날짜
+                    Text(
+                        text = comment.createdAt.take(10),
+                        color = Color.Gray,
+                        fontSize = 12.sp
+                    )
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = comment.content,
+                    fontSize = 15.sp,
+                    color = TextDark
+                )
+            }
+        }
+        Divider(color = Color(0xFFF0F0F0), modifier = Modifier.padding(top = 12.dp))
+    }
+}
+
+/**
+ * 댓글 입력창 + 좋아요 버튼(하단 고정)
+ */
+@Composable
+fun CommentInputBar(
+    value: String,
+    onValueChange: (String) -> Unit,
+    onSendClick: () -> Unit,
+    isLiked: Boolean,
+    likeCount: Int,
+    onLikeClick: () -> Unit
+) {
+    Surface(
+        shadowElevation = 16.dp,
+        color = Color.White,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier
+                .padding(12.dp)
+                .navigationBarsPadding(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // 좋아요 버튼 (왼쪽)
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.padding(end = 12.dp)
+            ) {
+                IconButton(onClick = onLikeClick, modifier = Modifier.size(28.dp)) {
+                    Icon(
+                        imageVector = if (isLiked) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                        contentDescription = "좋아요",
+                        tint = if (isLiked) Color.Red else Color.Gray
+                    )
+                }
+                Text(text = "$likeCount", fontSize = 12.sp, color = Color.Gray)
+            }
+
+            // 입력창 (중간)
+            OutlinedTextField(
+                value = value,
+                onValueChange = onValueChange,
+                placeholder = { Text("댓글을 입력하세요...", fontSize = 14.sp) },
+                modifier = Modifier.weight(1f),
+                shape = RoundedCornerShape(24.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    unfocusedBorderColor = Color(0xFFE0E0E0),
+                    focusedBorderColor = PrimaryBlue
+                ),
+                maxLines = 3
+            )
+
+            Spacer(modifier = Modifier.width(8.dp))
+
+            // 전송 버튼 (오른쪽)
+            IconButton(
+                onClick = onSendClick,
+                enabled = value.isNotBlank(),
+                modifier = Modifier
+                    .size(40.dp)
+                    .background(
+                        color = if (value.isNotBlank()) PrimaryBlue else Color.LightGray,
+                        shape = CircleShape
+                    )
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Send,
+                    contentDescription = "전송",
+                    tint = Color.White,
+                    modifier = Modifier.size(20.dp)
+                )
             }
         }
     }

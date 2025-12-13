@@ -203,3 +203,6 @@ CREATE INDEX idx_post_tag_tag_id ON "post_tag" ("tag_id");
 
 -- 12-11 좋아요 카운터 컬럼 추가
 ALTER TABLE "post" ADD COLUMN "like_count" INT NOT NULL DEFAULT 0;
+
+-- 댓글 수정 컬럼 추가
+ALTER TABLE "comment" ADD COLUMN "updated_at" TIMESTAMPTZ DEFAULT NOW();

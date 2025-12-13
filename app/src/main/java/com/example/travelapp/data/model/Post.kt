@@ -56,9 +56,3 @@ data class CreatePostResponse(
     val created_at: String,
     val images: List<String>
 )
-
-data class ApiResponse<T>(
-    val success: Boolean,
-    val data: T?,
-    val message: String? = null
-)

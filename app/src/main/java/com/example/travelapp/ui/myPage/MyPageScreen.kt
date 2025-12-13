@@ -3,17 +3,7 @@ package com.example.travelapp.ui.myPage
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -28,13 +18,7 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.outlined.Article
 import androidx.compose.material.icons.outlined.Help
 import androidx.compose.material.icons.outlined.Logout
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
+import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -52,17 +36,57 @@ import androidx.navigation.compose.rememberNavController
 import com.example.travelapp.ui.components.BottomNavigationBar
 import com.example.travelapp.ui.theme.Beige
 
+// 1. [로직 담당] ViewModel 연결하고 데이터 준비하는 곳
 @Composable
 fun MyPageScreen(
     navController: NavController,
     viewModel: MyPageViewModel = hiltViewModel()
 ) {
+    // 임시 데이터 (나중에 ViewModel 데이터로 교체)
+    val nickname = "여행자 (DB연동)"
+    val email = "traveler@example.com"
+    val postCount = 0
+    val likeCount = 0
+    val commentCount = 0
+
+    // 이벤트 함수 준비
+    val onEditProfileClick = { /* viewModel.onEditProfile() */ }
+    val onLogoutClick = { /* viewModel.logout() */ }
+
+    // 2. [UI 담당] MyPageContent를 호출합니다. (자기 자신이 아닙니다!)
+    MyPageContent(
+        navController = navController,
+        nickname = nickname,
+        email = email,
+        postCount = postCount,
+        likeCount = likeCount,
+        commentCount = commentCount,
+        onEditProfileClick = onEditProfileClick,
+        onLogoutClick = onLogoutClick
+    )
+}
+
+// 3. [그림 담당] 실제 화면을 그리는 곳 (이름이 Content 입니다!)
+@Composable
+fun MyPageContent(
+    navController: NavController,
+    nickname: String,
+    email: String,
+    postCount: Int,
+    likeCount: Int,
+    commentCount: Int,
+    onEditProfileClick: () -> Unit,
+    onLogoutClick: () -> Unit
+) {
     Scaffold(
         bottomBar = {
-            BottomNavigationBar(
-                navController = navController as NavHostController,
-                currentRoute = "mypage"
-            )
+            // NavHostController인 경우에만 바텀 네비게이션 표시
+            if (navController is NavHostController) {
+                BottomNavigationBar(
+                    navController = navController,
+                    currentRoute = "mypage"
+                )
+            }
         }
     ) { paddingValues ->
         Column(
@@ -73,12 +97,17 @@ fun MyPageScreen(
                 .verticalScroll(rememberScrollState())
         ) {
             ProfileSection(
-                onEditClick = { /* 테스트 */ }
+                nickname = nickname,
+                email = email,
+                onEditClick = onEditProfileClick
             )
 
             Spacer(modifier = Modifier.height(16.dp))
 
             ActivityStatsCard(
+                postCount = postCount,
+                likeCount = likeCount,
+                commentCount = commentCount
             )
 
             Spacer(modifier = Modifier.height(24.dp))
@@ -89,10 +118,13 @@ fun MyPageScreen(
                 onNotificationClick = { },
                 onSettingsClick = { },
                 onHelpClick = { },
+                onLogoutClick = onLogoutClick
             )
         }
     }
 }
+
+// --- 아래 하위 컴포넌트들은 그대로 사용 ---
 
 @Composable
 private fun ProfileSection(
@@ -322,8 +354,18 @@ private fun MenuItem(
     }
 }
 
+// 4. [프리뷰] MyPageContent(껍데기)를 보여줌 -> Hilt 에러 없음!
 @Preview(showBackground = true, heightDp = 800)
 @Composable
 fun MyPageScreenPreview() {
-    MyPageScreen(navController = rememberNavController())
+    MyPageContent(
+        navController = rememberNavController(),
+        nickname = "프리뷰 유저",
+        email = "preview@test.com",
+        postCount = 10,
+        likeCount = 20,
+        commentCount = 5,
+        onEditProfileClick = {},
+        onLogoutClick = {}
+    )
 }

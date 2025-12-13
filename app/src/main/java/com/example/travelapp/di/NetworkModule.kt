@@ -8,6 +8,7 @@ import android.util.Log
 import com.example.travelapp.BuildConfig
 import com.example.travelapp.util.AuthInterceptor
 import com.example.travelapp.data.api.AuthApiService
+import com.example.travelapp.data.api.CommentApiService
 import com.example.travelapp.data.api.NaverAuthApiService
 import com.example.travelapp.data.api.PostApiService
 import com.kakao.sdk.auth.AuthApi
@@ -142,5 +143,11 @@ object NetworkModule {
             val networkInfo = connectivityManager.activeNetworkInfo ?: return false
             return networkInfo.type == ConnectivityManager.TYPE_WIFI && networkInfo.isConnected
         }
+    }
+
+    @Provides
+    @Singleton
+    fun provideCommentApiService(@Named("AppRetrofit") retrofit: Retrofit): CommentApiService {
+        return retrofit.create(CommentApiService::class.java)
     }
 }
