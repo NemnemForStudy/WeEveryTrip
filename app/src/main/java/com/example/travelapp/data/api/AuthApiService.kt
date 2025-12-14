@@ -1,6 +1,8 @@
 package com.example.travelapp.data.api
 
+import com.example.travelapp.data.model.ApiResponse
 import com.example.travelapp.data.model.LoginRequest
+import com.example.travelapp.data.model.Setting.NotificationRequest
 import com.example.travelapp.data.model.SocialLoginRequest
 import com.example.travelapp.data.model.SocialLoginResponse
 import com.example.travelapp.data.model.User
@@ -9,6 +11,7 @@ import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.POST
+import retrofit2.http.PUT
 
 interface AuthApiService {
     // 소셜 로그인(토큰 교환 방식)
@@ -22,4 +25,12 @@ interface AuthApiService {
 
     @GET("api/auth/mypage")
     suspend fun getMyProfile(): Response<User>
+
+    @POST("api/auth/logout")
+    suspend fun logout(): Response<Unit>
+
+    @PUT("api/auth/notification")
+    suspend fun updateNotificationSetting(
+        @Body response: NotificationRequest
+    ): Response<Unit>
 }

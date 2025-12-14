@@ -19,6 +19,8 @@ class TokenManager @Inject constructor(@ApplicationContext context: Context) {
     // 토큰 저장할때 사용할 키 정의
     companion object {
         private const val KEY_AUTH_TOKEN = "auth_token"
+        private const val KEY_PUSH_ACTIVITY = "push_activity"
+        private const val KEY_PUSH_MARKETING = "push_marketing"
     }
 
     /**
@@ -43,6 +45,24 @@ class TokenManager @Inject constructor(@ApplicationContext context: Context) {
 
     fun clearToken() {
         prefs.edit().remove(KEY_AUTH_TOKEN).apply()
+    }
+
+    fun savePushActivity(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_PUSH_ACTIVITY, enabled).apply()
+    }
+
+    fun getPushActivityOrNull(): Boolean? {
+        if (!prefs.contains(KEY_PUSH_ACTIVITY)) return null
+        return prefs.getBoolean(KEY_PUSH_ACTIVITY, true)
+    }
+
+    fun savePushMarketing(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_PUSH_MARKETING, enabled).apply()
+    }
+
+    fun getPushMarketingOrNull(): Boolean? {
+        if (!prefs.contains(KEY_PUSH_MARKETING)) return null
+        return prefs.getBoolean(KEY_PUSH_MARKETING, false)
     }
 
     fun isTokenValid(): Boolean {

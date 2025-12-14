@@ -206,3 +206,9 @@ ALTER TABLE "post" ADD COLUMN "like_count" INT NOT NULL DEFAULT 0;
 
 -- 댓글 수정 컬럼 추가
 ALTER TABLE "comment" ADD COLUMN "updated_at" TIMESTAMPTZ DEFAULT NOW();
+
+-- refresh_token 추가
+ALTER TABLE "user" ADD COLUMN refresh_token TEXT;
+
+ALTER TABLE "user" ADD COLUMN push_activity BOOLEAN DEFAULT TRUE;
+ALTER TABLE "user" ADD COLUMN push_marketing BOOLEAN DEFAULT FALSE;

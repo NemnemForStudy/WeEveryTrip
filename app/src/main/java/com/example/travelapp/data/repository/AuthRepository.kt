@@ -1,8 +1,11 @@
 package com.example.travelapp.data.repository
 
+import androidx.compose.ui.geometry.Rect
 import com.example.travelapp.data.api.AuthApiService
+import com.example.travelapp.data.model.Setting.NotificationRequest
 import com.example.travelapp.data.model.SocialLoginRequest
 import com.example.travelapp.data.model.SocialLoginResponse
+import com.example.travelapp.data.model.User
 import com.example.travelapp.util.TokenManager
 import retrofit2.Response
 import java.lang.RuntimeException
@@ -54,6 +57,49 @@ class AuthRepository @Inject constructor(
                 Result.success(true)
             } else {
                 Result.failure(RuntimeException("일반 로그인 실패"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun getMyProfile(): Result<User> {
+        return try {
+            val response = authApiService.getMyProfile()
+
+            if(response.isSuccessful && response.body() != null) {
+                Result.success(response.body()!!)
+            } else {
+                Result.failure(RuntimeException("프로필 정보 가져오기 실패: ${response.code()}"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun logout(): Result<Unit> {
+        return try {
+            val response = authApiService.logout()
+
+            if(response.isSuccessful) {
+                Result.success(Unit)
+            } else {
+                Result.failure(RuntimeException("서버 로그아웃 실패"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun updateNotificationSetting(type: String, enabled: Boolean): Result<Unit> {
+        return try {
+            val request = NotificationRequest(type, enabled)
+            val response = authApiService.updateNotificationSetting(request)
+
+            if(response.isSuccessful) {
+                Result.success(Unit)
+            } else {
+                Result.failure(RuntimeException("변경 실패"))
             }
         } catch (e: Exception) {
             Result.failure(e)

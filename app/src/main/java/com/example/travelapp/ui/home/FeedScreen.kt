@@ -59,6 +59,9 @@ import com.example.travelapp.data.model.Post
 import com.example.travelapp.ui.theme.Beige
 import android.text.format.DateUtils // DateUtils에 필요
 import androidx.annotation.RequiresApi
+import androidx.compose.material3.Scaffold
+import androidx.navigation.NavHostController
+import com.example.travelapp.ui.components.BottomNavigationBar
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -77,7 +80,6 @@ import java.time.Instant
 fun FeedScreen(
     navController: NavController,
     viewModel: FeedViewModel = hiltViewModel(),
-    // 만약 이 매개변수에 아무것도 넘겨주지 않으면, {} (비어있는 람다 식)이 기본으로 사용
     onPostClick: (Post) -> Unit = {}
 ) {
     val post by viewModel.post.collectAsState()
@@ -85,92 +87,108 @@ fun FeedScreen(
     val isLoading by viewModel.isLoading.collectAsState()
     val errorMsg by viewModel.errorMsg.collectAsState()
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Beige)
-    ) {
-        // 상단 검색 바
-        CustomSearchBar(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp)
-        )
-        // 카테고리 탭
-        CategoryTabs(
-            categories = viewModel.categories,
-            selectedCategory = selectedCategory,
-            onCategorySelected = { viewModel.selectCategory(it) },
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp)
-        )
+    // 🔥 1. Scaffold로 감싸기
+    Scaffold(
+        bottomBar = {
+            // 🔥 2. 하단 바 추가
+            // navController가 NavHostController 타입일 때만 표시 (프리뷰 등에서의 에러 방지)
+            if (navController is NavHostController) {
+                BottomNavigationBar(
+                    navController = navController,
+                    currentRoute = "feed" // Screen.Feed.route와 동일한 문자열이어야 함
+                )
+            }
+        }
+    ) { paddingValues -> // 🔥 3. Scaffold가 주는 여백값 받기
 
-        Spacer(modifier = Modifier.height(12.dp))
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Beige)
+                .padding(paddingValues) // 🔥 4. 여기서 패딩을 적용해야 하단 바에 내용이 안 가려짐!
+        ) {
+            // 상단 검색 바
+            CustomSearchBar(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp)
+            )
+            // 카테고리 탭
+            CategoryTabs(
+                categories = viewModel.categories,
+                selectedCategory = selectedCategory,
+                onCategorySelected = { viewModel.selectCategory(it) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+            )
 
-        // 게시물 목록
-        when {
-            isLoading && post.isEmpty() -> {
-                // 로딩 상태
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    CircularProgressIndicator()
-                }
-            }
-            errorMsg != null -> {
-                // 에러 상태
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = errorMsg ?: "오류가 발생했습니다.",
-                        color = Color.Red,
-                        fontSize = 14.sp
-                    )
-                }
-            }
-            post.isEmpty() -> {
-                // 빈 상태
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "게시물이 없습니다.",
-                        color = Color.Gray,
-                        fontSize = 16.sp
-                    )
-                }
-            }
-            else -> {
-                // 게시물 목록
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                    contentPadding = PaddingValues(bottom = 16.dp)
-                ) {
-                    items(post.size) { index ->
-                        val currentPost = post[index]
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                            PostCard(
-                                post = currentPost,
-                                onClick = {
-                                    navController.navigate("detail/${currentPost.id}")
-                                }
-                            )
-                        }
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // 게시물 목록
+            when {
+                isLoading && post.isEmpty() -> {
+                    // 로딩 상태
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator()
                     }
+                }
+                errorMsg != null -> {
+                    // 에러 상태
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = errorMsg ?: "오류가 발생했습니다.",
+                            color = Color.Red,
+                            fontSize = 14.sp
+                        )
+                    }
+                }
+                post.isEmpty() -> {
+                    // 빈 상태
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "게시물이 없습니다.",
+                            color = Color.Gray,
+                            fontSize = 16.sp
+                        )
+                    }
+                }
+                else -> {
+                    // 게시물 목록
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        contentPadding = PaddingValues(bottom = 16.dp)
+                    ) {
+                        items(post.size) { index ->
+                            val currentPost = post[index]
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                                PostCard(
+                                    post = currentPost,
+                                    onClick = {
+                                        navController.navigate("detail/${currentPost.id}")
+                                    }
+                                )
+                            }
+                        }
 
-                    // 무한 스크롤 트리거
-                    if (post.isNotEmpty()) {
-                        item {
-                            LaunchedEffect(Unit) {
-                                viewModel.loadMorePosts()
+                        // 무한 스크롤 트리거
+                        if (post.isNotEmpty()) {
+                            item {
+                                LaunchedEffect(Unit) {
+                                    viewModel.loadMorePosts()
+                                }
                             }
                         }
                     }

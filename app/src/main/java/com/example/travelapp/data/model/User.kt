@@ -16,5 +16,10 @@ data class User(
     @SerializedName("like_count")
     val likeCount: Int = 0,
     @SerializedName("comment_count")
-    val commentCount: Int = 0
+    val commentCount: Int = 0,
+    @SerializedName("push_activity")
+    val pushActivity: Boolean = true,
+
+    @SerializedName("push_marketing")
+    val pushMarketing: Boolean = false
 )

@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -12,7 +13,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.outlined.Article
@@ -20,6 +20,10 @@ import androidx.compose.material.icons.outlined.Help
 import androidx.compose.material.icons.outlined.Logout
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -35,6 +39,7 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.rememberNavController
 import com.example.travelapp.ui.components.BottomNavigationBar
 import com.example.travelapp.ui.theme.Beige
+import com.example.travelapp.data.model.User
 
 // 1. [로직 담당] ViewModel 연결하고 데이터 준비하는 곳
 @Composable
@@ -42,16 +47,25 @@ fun MyPageScreen(
     navController: NavController,
     viewModel: MyPageViewModel = hiltViewModel()
 ) {
+    val userState by viewModel.userState.collectAsState()
+
+    LaunchedEffect(Unit) {
+        viewModel.fetchUserInfo()
+    }
     // 임시 데이터 (나중에 ViewModel 데이터로 교체)
-    val nickname = "여행자 (DB연동)"
-    val email = "traveler@example.com"
-    val postCount = 0
-    val likeCount = 0
-    val commentCount = 0
+    val currentUser = userState
+    val nickname = currentUser?.nickname ?: "로딩 중"
+    val email = currentUser?.email ?: ""
+    val postCount = currentUser?.postCount ?: 0
+    val likeCount = currentUser?.likeCount ?: 0
+    val commentCount = currentUser?.commentCount ?: 0
+
+    val pushActivity = currentUser?.pushActivity ?: true
+    val pushMarketing = currentUser?.pushMarketing ?: false
 
     // 이벤트 함수 준비
     val onEditProfileClick = { /* viewModel.onEditProfile() */ }
-    val onLogoutClick = { /* viewModel.logout() */ }
+    val onLogoutClick = { viewModel.logout(navController) }
 
     // 2. [UI 담당] MyPageContent를 호출합니다. (자기 자신이 아닙니다!)
     MyPageContent(
@@ -61,8 +75,19 @@ fun MyPageScreen(
         postCount = postCount,
         likeCount = likeCount,
         commentCount = commentCount,
+
+        pushActivity = pushActivity,
+        pushMarketing = pushMarketing,
+
+        onActivityChange = { isChecked ->
+            viewModel.updateNotificationSetting("activity", isChecked)
+        },
+        onMarketingChange = { isChecked ->
+            viewModel.updateNotificationSetting("marketing", isChecked)
+        },
+
         onEditProfileClick = onEditProfileClick,
-        onLogoutClick = onLogoutClick
+        onLogoutClick = { viewModel.logout(navController) },
     )
 }
 
@@ -76,7 +101,11 @@ fun MyPageContent(
     likeCount: Int,
     commentCount: Int,
     onEditProfileClick: () -> Unit,
-    onLogoutClick: () -> Unit
+    onLogoutClick: () -> Unit,
+    pushActivity: Boolean = true, // 기본값 임시 설정
+    pushMarketing: Boolean = false,
+    onActivityChange: (Boolean) -> Unit = {},
+    onMarketingChange: (Boolean) -> Unit = {},
 ) {
     Scaffold(
         bottomBar = {
@@ -113,9 +142,12 @@ fun MyPageContent(
             Spacer(modifier = Modifier.height(24.dp))
 
             MenuSection(
+                pushActivity = pushActivity,
+                pushMarketing = pushMarketing,
+                onActivityChange = onActivityChange,
+                onMarketingChange = onMarketingChange,
                 onMyPostsClick = {},
                 onLikedPostsClick = { },
-                onNotificationClick = { },
                 onSettingsClick = { },
                 onHelpClick = { },
                 onLogoutClick = onLogoutClick
@@ -255,9 +287,13 @@ private fun StatDivider() {
 
 @Composable
 private fun MenuSection(
+
+    pushActivity: Boolean,
+    pushMarketing: Boolean,
+    onActivityChange: (Boolean) -> Unit,
+    onMarketingChange: (Boolean) -> Unit,
     onMyPostsClick: () -> Unit,
     onLikedPostsClick: () -> Unit,
-    onNotificationClick: () -> Unit,
     onSettingsClick: () -> Unit,
     onHelpClick: () -> Unit,
     onLogoutClick: () -> Unit
@@ -288,14 +324,40 @@ private fun MenuSection(
             )
 
             Text(
-                text = "설정",
+                text = "알림 설정",
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Medium,
                 color = Color.Gray,
                 modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 8.dp)
             )
 
-            MenuItem(Icons.Default.Notifications, "알림 설정", onClick = onNotificationClick)
+            NotificationSwitch(
+                title = "활동 알림",
+                subtitle = "댓글, 좋아요 반응 알림",
+                checked = pushActivity,
+                onCheckedChange = onActivityChange
+            )
+
+            NotificationSwitch(
+                title = "혜택 알림",
+                subtitle = "이벤트 및 마케팅 정보",
+                checked = pushMarketing,
+                onCheckedChange = onMarketingChange
+            )
+
+            HorizontalDivider(
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                color = Color(0xFFF0F0F0)
+            )
+
+            Text(
+                text = "기타",
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium,
+                color = Color.Gray,
+                modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 8.dp)
+            )
+
             MenuItem(Icons.Default.Settings, "앱 설정", onClick = onSettingsClick)
             MenuItem(Icons.Outlined.Help, "도움말", onClick = onHelpClick)
 
@@ -350,6 +412,40 @@ private fun MenuItem(
             contentDescription = null,
             tint = Color(0xFFBDBDBD),
             modifier = Modifier.size(20.dp)
+        )
+    }
+}
+
+@Composable
+fun NotificationSwitch(
+    title: String,
+    subtitle: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onCheckedChange(!checked) }
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Column (modifier = Modifier.weight(1f)) {
+            Text(text = title, fontSize = 16.sp, fontWeight = FontWeight.Medium)
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(text = subtitle, fontSize = 12.sp, color = Color.Gray)
+        }
+
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = Color.White,
+                checkedTrackColor = Color(0xFF1976D2),
+                uncheckedThumbColor = Color.White,
+                uncheckedTrackColor = Color(0xFFE0E0E0)
+            )
         )
     }
 }
