@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.travelapp.data.api.PostApiService
 import com.example.travelapp.data.model.Post
 import com.example.travelapp.data.model.comment.Comment
+import com.example.travelapp.data.repository.AuthRepository
 import com.example.travelapp.data.repository.CommentRepository
 import com.example.travelapp.data.repository.PostRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -19,7 +20,8 @@ import javax.inject.Inject
 class PostDetailViewModel @Inject constructor(
     private val postApiService: PostApiService,
     private val postRepository: PostRepository,
-    private val commentRepository: CommentRepository
+    private val commentRepository: CommentRepository,
+    private val authRepository: AuthRepository
 ): ViewModel() {
     // UI가 바라볼 상태 변수들
     // 게시물 데이터
@@ -41,15 +43,34 @@ class PostDetailViewModel @Inject constructor(
     private val _commentContent = MutableStateFlow("")
     val commentContent = _commentContent.asStateFlow()
 
+    private val _currentPostId = MutableStateFlow("")
+    val currentPostId = _currentPostId.asStateFlow()
+
+    private val _currentUserId = MutableStateFlow("")
+    val currentUserId = _currentUserId.asStateFlow()
+
     private val _comments = MutableStateFlow<List<Comment>>(emptyList())
     val comments = _comments.asStateFlow()
 
+    init {
+        loadCurrentUserId()
+    }
+
+    private fun loadCurrentUserId() {
+        viewModelScope.launch {
+            val result = authRepository.getUserId()
+            if (result.isSuccess) {
+                _currentUserId.value = result.getOrNull().orEmpty()
+            }
+        }
+    }
     // 데이터 가져오는 함수
     fun fetchPostDetail(postId: String) {
         viewModelScope.launch {
             _isLoading.value = true
             _errorMsg.value = null
 
+            _currentPostId.value = postId
             try {
                 val fetchPost = postApiService.getPostById(postId)
                 _post.value = fetchPost
@@ -98,6 +119,7 @@ class PostDetailViewModel @Inject constructor(
         }
     }
     fun loadComments(postId: String) {
+        _currentPostId.value = postId
         viewModelScope.launch {
             val result = commentRepository.getComments(postId)
             if(result.isSuccess) {
@@ -122,20 +144,20 @@ class PostDetailViewModel @Inject constructor(
             if(result.isSuccess) {
                 _commentContent.value = ""
 
-                val newComment = result.getOrNull()
-
-                if(newComment != null) {
-                    val currentList = _comments.value.toMutableList()
-
-                    val displayComment = if(newComment.nickname.isNullOrBlank() || newComment.nickname == "알 수 없음") {
-                        newComment.copy(nickname = "내 닉네임")
-                    } else {
-                        newComment
-                    }
-
-                    currentList.add(0, displayComment)
-                    _comments.value = currentList
-                }
+//                val newComment = result.getOrNull()
+//
+//                if(newComment != null) {
+//                    val currentList = _comments.value.toMutableList()
+//
+//                    val displayComment = if(newComment.nickname.isNullOrBlank() || newComment.nickname == "알 수 없음") {
+//                        newComment.copy(nickname = "내 닉네임")
+//                    } else {
+//                        newComment
+//                    }
+//
+//                    currentList.add(0, displayComment)
+//                    _comments.value = currentList
+//                }
 
                 loadComments(postId)
             } else {
@@ -145,7 +167,39 @@ class PostDetailViewModel @Inject constructor(
         }
     }
 
-    fun updateComment(content: String) {
+    fun updateComment(commentId: String, newContent: String) {
+        val postId = _currentPostId.value
+        if(postId.isBlank() || newContent.isBlank()) return
+
+        viewModelScope.launch {
+            val result = commentRepository.updateComment(commentId, newContent)
+
+            if(result.isSuccess) {
+                loadComments(postId)
+            } else {
+                Log.e("PostDetailViewModel", "댓글 수정 실패: ${result.exceptionOrNull()?.message}")
+                _errorMsg.value = "댓글 수정 실패"
+            }
+        }
+    }
+
+    fun deleteComment(commentId: String) {
+        val postId = _currentPostId.value
+        if(postId.isBlank()) return
+
+        viewModelScope.launch {
+            val result = commentRepository.deleteComment(commentId)
+
+            if(result.isSuccess) {
+                loadComments(postId)
+            } else {
+                Log.e("PostDetailViewModel", "댓글 삭제 실패: ${result.exceptionOrNull()?.message}")
+                _errorMsg.value = "댓글 삭제 실패"
+            }
+        }
+    }
+
+    fun updateCommentInput(content: String) {
         _commentContent.value = content
     }
 }

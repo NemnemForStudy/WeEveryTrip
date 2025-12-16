@@ -59,8 +59,8 @@ interface PostApiService {
     @DELETE("api/posts/{postId}/like")
     suspend fun unlikePost(@Path("postId") postId: String): Response<ApiResponse<Unit>>
 
-    // 특정 게시물 총 좋아요 수
-    @POST("api/posts/{postId}/count")
+    // 특정 게시물 총 좋아요 수 (서버는 GET 엔드포인트)
+    @GET("api/posts/{postId}/count")
     suspend fun getLikeCount(@Path("postId") postId: String): Response<ApiResponse<Int>>
 
     // 사용자 좋아요 여부 확인

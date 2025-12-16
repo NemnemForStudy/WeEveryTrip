@@ -4,6 +4,7 @@ import android.content.Context
 import com.example.travelapp.data.api.CommentApiService
 import com.example.travelapp.data.model.comment.Comment
 import com.example.travelapp.data.model.comment.CreateCommentRequest
+import com.example.travelapp.data.model.comment.UpdateCommentRequest
 import javax.inject.Inject
 
 open class CommentRepository @Inject constructor(
@@ -55,5 +56,38 @@ open class CommentRepository @Inject constructor(
         } catch (e: Exception) {
             Result.failure(e)
         }
+    }
+
+    suspend fun updateComment(commentId: String, content: String): Result<String> {
+        return try {
+            val response = commentApiService.updateComment(
+                commentId, UpdateCommentRequest(content))
+            if(response.isSuccessful) {
+                val body = response.body()
+                if (body != null && body.success) {
+                    Result.success("수정 성공")
+                } else {
+                    Result.failure(Exception("수정 실패"))
+                }
+            } else {
+                Result.failure(Exception("서버 오류: ${response.code()}"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun deleteComment(commentId: String): Result<String> {
+        return try {
+            val response = commentApiService.deleteComment(commentId)
+            if(response.isSuccessful) {
+                Result.success("삭제 성공")
+            } else {
+                Result.failure(Exception("삭제 실패"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+
     }
 }

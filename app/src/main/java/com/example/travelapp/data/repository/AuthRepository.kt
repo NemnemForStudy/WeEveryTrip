@@ -41,6 +41,10 @@ class AuthRepository @Inject constructor(
         }
     }
 
+    suspend fun getUserId(): Result<String> {
+        return getMyProfile().map { user -> user.id.toString() }
+    }
+
     // 일반 로그인
     suspend fun login(email: String, pass: String): Result<Boolean> {
         return try {

@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
@@ -44,9 +45,10 @@ fun BottomNavigationBar(
     Row (
       modifier = Modifier
           .fillMaxWidth()
-          .height(60.dp)
           .background(MaterialTheme.colorScheme.background)
-          .padding(horizontal = 8.dp),
+          .navigationBarsPadding() // 시스템 네비게이션 바 영역만큼 패딩 추가
+          .padding(horizontal = 8.dp)
+          .height(60.dp),
         horizontalArrangement = Arrangement.SpaceAround,
         verticalAlignment = Alignment.CenterVertically
     ) {

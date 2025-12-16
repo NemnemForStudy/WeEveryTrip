@@ -6,12 +6,14 @@ import android.graphics.BitmapFactory
 import android.net.Uri
 import android.util.Log
 import coil.decode.DecodeUtils.calculateInSampleSize
+import com.example.travelapp.data.api.CommentApiService
 import com.example.travelapp.data.api.PostApiService
 import com.example.travelapp.data.model.CreatePostResponse
 import com.example.travelapp.data.model.GeoJsonPoint
 import com.example.travelapp.data.model.Post
 import com.example.travelapp.data.model.RoutePoint
 import com.example.travelapp.data.model.RouteRequest
+import com.example.travelapp.data.model.comment.UpdateCommentRequest
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -29,6 +31,7 @@ import java.util.UUID
 
 open class PostRepository @Inject constructor(
     private val postApiService: PostApiService,
+    private val commentApiService: CommentApiService,
     @ApplicationContext private val context: Context
 ) {
     suspend fun createPost(

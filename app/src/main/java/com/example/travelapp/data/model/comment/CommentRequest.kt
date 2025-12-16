@@ -16,8 +16,6 @@ data class CreateCommentRequest(
  * (작성용과 구조가 같더라도, 명확한 구분을 위해 따로 만드는 것이 좋습니다)
  */
 data class UpdateCommentRequest(
-    @SerializedName("comment")
+    @SerializedName("content")
     val content: String,
-    @SerializedName("updated_at")
-    val updatedAt: String
 )

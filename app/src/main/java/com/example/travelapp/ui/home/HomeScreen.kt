@@ -1,10 +1,12 @@
 package com.example.travelapp.ui.home
 
+import android.os.Build
 import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -179,11 +181,20 @@ fun HomeScreen(
                 } else {
                     // 검색 결과가 있을때 리스트로 표시
                     LazyColumn(
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        contentPadding = PaddingValues(bottom = 16.dp)
                     ) {
                         items(searchResults.size) { index ->
                             val post = searchResults[index]
-                            PostItem(post = post)
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                                PostCard(
+                                    post = post,
+                                    onClick = {
+                                        navController.navigate("detail/${post.id}")
+                                    }
+                                )
+                            }
                         }
                     }
                 }

@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
@@ -35,6 +36,8 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Divider
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -50,6 +53,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -62,6 +68,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
@@ -71,9 +78,11 @@ import com.example.travelapp.data.model.comment.Comment
 import com.example.travelapp.util.UtilTime
 import com.naver.maps.geometry.LatLng
 import com.naver.maps.map.CameraPosition
+import com.naver.maps.map.compose.Align
 import com.naver.maps.map.compose.ExperimentalNaverMapApi
 import com.naver.maps.map.compose.NaverMap
 import com.naver.maps.map.compose.rememberCameraPositionState
+import kotlin.math.exp
 
 // 색상 상수
 val PrimaryBlue = Color(0xFF4A90E2)
@@ -95,6 +104,7 @@ fun PostDetailScreen(
     val likeCount by viewModel.likeCount.collectAsStateWithLifecycle()
     val comments by viewModel.comments.collectAsStateWithLifecycle()
     val commentContent by viewModel.commentContent.collectAsStateWithLifecycle()
+    val currentUserId by viewModel.currentUserId.collectAsStateWithLifecycle()
 
     // 화면 진입 시 딱 한 번 실행 (데이터 요청)
     LaunchedEffect(postId) {
@@ -126,9 +136,16 @@ fun PostDetailScreen(
                     likeCount = likeCount,
                     comments = comments,
                     commentInput = commentContent,
+                    currentUserId = currentUserId,
                     onLikeToggle = { viewModel.toggleLike(postId) },
-                    onCommentChange = { viewModel.updateComment(it) },
+                    onCommentChange = { viewModel.updateCommentInput(it) },
                     onCommentSend = { viewModel.createComment(postId) },
+                    onCommentEdit = { comment, newContent ->
+                        viewModel.updateComment(comment.commentId, newContent)
+                    },
+                    onCommentDelete = { commentId ->
+                        viewModel.deleteComment(commentId)
+                    },
                     onBackClick = {
                         navController.navigate("feed") {
                             popUpTo("feed") { inclusive = true }
@@ -156,11 +173,17 @@ fun PostDetailContent(
     likeCount: Int,
     comments: List<Comment>,
     commentInput: String,
+    currentUserId: String,
     onLikeToggle: () -> Unit,
     onCommentChange: (String) -> Unit,
     onCommentSend: () -> Unit,
+    onCommentEdit: (Comment, String) -> Unit,
+    onCommentDelete: (String) -> Unit,
     onBackClick: () -> Unit = {}
 ) {
+    var showEditDialog by remember { mutableStateOf(false) }
+    var commentToEdit by remember { mutableStateOf<Comment?>(null) }
+
     Scaffold(
         topBar = {
             // Material3 최신 버전에서는 SmallTopAppBar 대신 TopAppBar 사용 권장
@@ -233,7 +256,17 @@ fun PostDetailContent(
                 }
             } else {
                 items(comments) { comment ->
-                    CommentItem(comment)
+                    CommentItem(
+                        comment = comment,
+                        currentUserId = currentUserId,
+                        onEditClick = { selectedComment ->
+                            commentToEdit = selectedComment
+                            showEditDialog = true
+                        },
+                        onDeleteClick = { commentToDelete ->
+                            onCommentDelete(commentToDelete.commentId)
+                        }
+                    )
                 }
             }
 
@@ -241,6 +274,21 @@ fun PostDetailContent(
                 Spacer(modifier = Modifier.height(20.dp))
             }
         }
+    }
+
+    if (showEditDialog && commentToEdit != null) {
+        EditCommentDialog(
+            comment = commentToEdit!!,
+            onDismiss = {
+                showEditDialog = false
+                commentToEdit = null
+            },
+            onConfirm = { newContent ->
+                onCommentEdit(commentToEdit!!, newContent)
+                showEditDialog = false
+                commentToEdit = null
+            }
+        )
     }
 }
 
@@ -477,13 +525,26 @@ fun PostBodySection(post: Post) {
 }
 
 @Composable
-fun CommentItem(comment: Comment) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 12.dp)
-    ) {
-        Row(verticalAlignment = Alignment.Top) {
+fun CommentItem(
+    comment: Comment,
+    currentUserId: String,
+    onEditClick: (Comment) -> Unit,
+    onDeleteClick: (Comment) -> Unit
+) {
+    // 메뉴가 펼쳐졌는지 여부 저장
+    var isMenuExpanded by remember { mutableStateOf(false) }
+
+    // 내 댓글인지 확인 (내 댓글일때만 점 3개가 보임)
+    // 서버에서 오는 ID 타입
+    val isMyContent = comment.userId.toString() == currentUserId
+
+    Column{
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.Top
+        ) {
             Icon (
                 imageVector = Icons.Default.AccountCircle,
                 contentDescription = null,
@@ -493,7 +554,9 @@ fun CommentItem(comment: Comment) {
 
             Spacer(modifier = Modifier.width(12.dp))
 
-            Column {
+            Column (
+                modifier = Modifier.weight(1f)
+            ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text (
                         text = comment.nickname ?: "알 수 없음",
@@ -513,8 +576,48 @@ fun CommentItem(comment: Comment) {
                 Text(
                     text = comment.content,
                     fontSize = 15.sp,
-                    color = TextDark
+                    color = TextDark,
+                    lineHeight = 20.sp
                 )
+            }
+
+            if(isMyContent) {
+                Box {
+                    IconButton (
+                        onClick = { isMenuExpanded = true },
+                        modifier = Modifier
+                            .size(24.dp)
+                            .offset(y = (-4).dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.MoreVert,
+                            contentDescription = "더보기",
+                            tint = Color.Gray
+                        )
+                    }
+
+                    DropdownMenu(
+                        expanded = isMenuExpanded,
+                        onDismissRequest = { isMenuExpanded = false },
+                        modifier = Modifier.background(Color.White)
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("수정") },
+                            onClick = {
+                                isMenuExpanded = false
+                                onEditClick(comment)
+                            }
+                        )
+
+                        DropdownMenuItem(
+                            text = { Text("삭제", color = Color.Red) },
+                            onClick = {
+                                isMenuExpanded = false
+                                onDeleteClick(comment)
+                            }
+                        )
+                    }
+                }
             }
         }
         Divider(color = Color(0xFFF0F0F0), modifier = Modifier.padding(top = 12.dp))
