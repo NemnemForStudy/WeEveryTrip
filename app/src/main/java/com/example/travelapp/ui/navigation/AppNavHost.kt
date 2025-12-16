@@ -17,6 +17,7 @@ import androidx.navigation.navArgument
 import com.example.travelapp.ui.Detail.PostDetailScreen
 import com.example.travelapp.ui.auth.LoginScreen
 import com.example.travelapp.ui.auth.SplashScreen
+import com.example.travelapp.ui.edit.EditPostScreen
 import com.example.travelapp.ui.home.FeedScreen
 import com.example.travelapp.ui.home.HomeScreen
 import com.example.travelapp.ui.myPage.MyPageScreen
@@ -36,6 +37,7 @@ sealed class Screen(val route: String) {
     object Feed : Screen("feed") // 계시판 화면 경로
     object Detail : Screen("detail/{postId}")
     object MyPage : Screen("mypage")
+    object EditPost : Screen("edit/{postId}")
 }
 
 /**
@@ -102,6 +104,20 @@ fun AppNavHost(
 
         composable(Screen.MyPage.route) {
             MyPageScreen(navController = navController)
+        }
+
+        composable(
+            Screen.EditPost.route,
+            arguments = listOf(navArgument("postId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val postId = backStackEntry.arguments?.getString("postId")
+            if(postId != null) {
+                EditPostScreen(
+                    postId = postId,
+                    navController = navController
+                )
+            }
+
         }
     }
 }

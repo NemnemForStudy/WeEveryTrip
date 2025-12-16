@@ -3,10 +3,15 @@ package com.example.travelapp.data.api
 import com.example.travelapp.data.model.ApiResponse
 import com.example.travelapp.data.model.CreatePostRequest
 import com.example.travelapp.data.model.CreatePostResponse
+import com.example.travelapp.data.model.GeoJsonPoint
 import com.example.travelapp.data.model.Post
 import com.example.travelapp.data.model.RouteRequest
 import com.example.travelapp.data.model.RouteResponse
+import com.example.travelapp.data.model.UpdatePostRequest
+import com.example.travelapp.data.model.UpdatePostResponse
+import com.google.gson.annotations.SerializedName
 import okhttp3.MultipartBody
+import okhttp3.Request
 import okhttp3.RequestBody
 import retrofit2.Response
 import retrofit2.http.Body
@@ -14,6 +19,7 @@ import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.Multipart
 import retrofit2.http.POST
+import retrofit2.http.PUT
 import retrofit2.http.Part
 import retrofit2.http.Path
 import retrofit2.http.Query
@@ -66,4 +72,10 @@ interface PostApiService {
     // 사용자 좋아요 여부 확인
     @GET("api/posts/{postId}/is-liked")
     suspend fun isPostLiked(@Path("postId") postId: String): Response<ApiResponse<Boolean>>
+
+    @PUT("api/posts/{postId}/update")
+    suspend fun updatePost(
+        @Path("postId") postId: String,
+        @Body request: UpdatePostRequest
+    ): Response<ApiResponse<Post>>
 }

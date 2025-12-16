@@ -59,6 +59,8 @@ import com.example.travelapp.data.model.Post
 import com.example.travelapp.ui.theme.Beige
 import android.text.format.DateUtils // DateUtils에 필요
 import androidx.annotation.RequiresApi
+import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material3.Scaffold
 import androidx.navigation.NavHostController
 import com.example.travelapp.ui.components.BottomNavigationBar
@@ -319,13 +321,14 @@ fun PostCard(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .height(100.dp)
                 .padding(12.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             // 썸네일 이미지 또는 기본 배경
             Box(
                 modifier = Modifier
-                    .size(80.dp)
+                    .size(76.dp)
                     .clip(RoundedCornerShape(8.dp))
                     .background(Color(0xFFE0E0E0)),
                 contentAlignment = Alignment.Center
@@ -415,6 +418,34 @@ fun PostCard(
                             color = Color.Gray
                         )
                     }
+                }
+
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.FavoriteBorder,
+                        contentDescription = "좋아요",
+                        modifier = Modifier.size(14.dp),
+                        tint = Color.Gray
+                    )
+                    Text(
+                        text = "${post.likeCount}",
+                        fontSize = 11.sp,
+                        color = Color.Gray
+                    )
+                    Icon(
+                        imageVector = Icons.Outlined.ChatBubbleOutline,
+                        contentDescription = "댓글",
+                        modifier = Modifier.size(14.dp),
+                        tint = Color.Gray
+                    )
+                    Text(
+                        text = "${post.commentCount}",
+                        fontSize = 11.sp,
+                        color = Color.Gray
+                    )
                 }
             }
         }

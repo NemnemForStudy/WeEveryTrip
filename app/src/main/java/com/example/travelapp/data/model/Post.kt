@@ -2,12 +2,16 @@ package com.example.travelapp.data.model
 
 import androidx.compose.ui.layout.LayoutCoordinates
 import com.google.gson.annotations.SerializedName
+import java.io.Serial
 import java.io.Serializable
 
 // 좌표 정보 담을 데이터 클래스
 data class Post(
     // 어노테이션을 추가하여 서버의 'post_id'와 매핑합니다.
     @SerializedName("post_id") val id: String, // 서벙서 할당되는 ID
+    @SerializedName("user_id") val userId: String? = null,
+    @SerializedName("like_count") val likeCount: Int = 0,
+    @SerializedName("comment_count") val commentCount: Int = 0,
     val category: String,
     val title: String,
     val content: String,
@@ -27,7 +31,13 @@ data class Post(
     val locationName: String? = null, // 위치 이름
 
     @SerializedName("is_domestic")
-    val isDomestic: Boolean = true // 국내(true) / 국외(false) 여행 구분
+    val isDomestic: Boolean = true, // 국내(true) / 국외(false) 여행 구분
+
+    @SerializedName("travel_start_date")
+    val travelStartDate: String? = null,
+
+    @SerializedName("travel_end_date")
+    val travelEndDate: String? = null
 ) {
     // Getter 추가
     val latitude: Double?
@@ -55,4 +65,32 @@ data class CreatePostResponse(
     val title: String,
     val created_at: String,
     val images: List<String>
+)
+
+data class UpdatePostRequest(
+    val category: String? = null,
+    val title: String? = null,
+    val content: String? = null,
+    val tags: List<String>? = null,
+    val coordinate: GeoJsonPoint? = null,
+    val locationName: String? = null,
+    val isDomestic: Boolean? = null
+)
+
+data class UpdatePostResponse(
+    @SerializedName("post_id") val id: String,
+    val category: String,
+    val title: String,
+    val content: String,
+    val tags: List<String>,
+    @SerializedName("thumbnail_url")
+    val imgUrl: String? = null,
+    @SerializedName("coordinates")
+    val coordinate: GeoJsonPoint? = null,
+    @SerializedName("location_name")
+    val locationName: String? = null,
+    @SerializedName("is_domestic")
+    val isDomestic: Boolean,
+    @SerializedName("updated_at")
+    val updateAt: String
 )

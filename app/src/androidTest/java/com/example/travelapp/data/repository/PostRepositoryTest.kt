@@ -1,10 +1,13 @@
 package com.example.travelapp.data.repository
 
 import android.content.Context
+import com.example.travelapp.data.api.CommentApiService
 import com.example.travelapp.data.api.PostApiService
 import com.example.travelapp.data.model.ApiResponse
 import com.example.travelapp.data.model.CreatePostResponse
 import com.example.travelapp.data.model.Post
+import com.example.travelapp.data.model.UpdatePostRequest
+import com.example.travelapp.data.model.UpdatePostResponse
 import kotlinx.coroutines.test.runTest
 import okhttp3.MultipartBody
 // ⭐️ [변경] JUnit 4용 Import 사용 (jupiter 아님)
@@ -16,6 +19,7 @@ import org.mockito.Mock
 import org.mockito.MockitoAnnotations
 import org.mockito.kotlin.any
 import org.mockito.kotlin.anyOrNull
+import org.mockito.kotlin.eq
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.whenever
 import retrofit2.Response
@@ -30,6 +34,8 @@ class PostRepositoryTest {
     private lateinit var mockPostApiService: PostApiService
     @Mock
     private lateinit var mockContext: Context
+    @Mock
+    private lateinit var mockCommentApiService: CommentApiService
 
     private lateinit var postRepository: PostRepository
 
@@ -48,7 +54,7 @@ class PostRepositoryTest {
     @Before
     fun setUp() {
         MockitoAnnotations.openMocks(this)
-        postRepository = PostRepository(mockPostApiService, mockContext)
+        postRepository = PostRepository(mockPostApiService, mockCommentApiService, mockContext)
     }
 
     @Test
@@ -439,5 +445,32 @@ class PostRepositoryTest {
         val result = postRepository.unLikePost(postId)
         assertTrue("네트워크 오류", result.isFailure)
         assertEquals("발생 예외 전달", expectedException, result.exceptionOrNull())
+    }
+
+    @Test
+    fun testUpdatePost_Success() = runTest {
+        val postId = "test"
+
+        val mockApiBody = ApiResponse<Post>(
+            success = true,
+            message = "게시물 수정 완료",
+            data = samplePost
+        )
+
+        val mockResponse = Response.success(mockApiBody)
+
+        whenever(mockPostApiService.updatePost(eq(postId), any()))
+            .thenReturn(mockResponse)
+
+        val result = postRepository.updatePost(
+            postId = postId,
+            category = "1",
+            title = "수정된 제목",
+            content = "수정된 내용"
+        )
+
+        // 5. 검증
+        assertTrue("게시물 수정 성공", result.isSuccess)
+        assertEquals(samplePost, result.getOrNull())
     }
 }

@@ -13,6 +13,7 @@ import com.example.travelapp.data.model.GeoJsonPoint
 import com.example.travelapp.data.model.Post
 import com.example.travelapp.data.model.RoutePoint
 import com.example.travelapp.data.model.RouteRequest
+import com.example.travelapp.data.model.UpdatePostRequest
 import com.example.travelapp.data.model.comment.UpdateCommentRequest
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -28,6 +29,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.encodeToString
 import java.io.IOException
 import java.util.UUID
+import kotlin.String
 
 open class PostRepository @Inject constructor(
     private val postApiService: PostApiService,
@@ -133,6 +135,56 @@ open class PostRepository @Inject constructor(
             }
         } catch (e: Exception) {
             e.printStackTrace()
+            Result.failure(e)
+        }
+    }
+
+    suspend fun updatePost(
+        postId: String, // 어떤 게시물 수정할지 Id 필요
+        category: String? = null,
+        title: String? = null,
+        content: String? = null,
+        tags: List<String>? = null,
+        latitude: Double? = null,
+        longitude: Double? = null,
+        locationName: String? = null,
+        isDomestic: Boolean? = null
+    ): Result<Post> = withContext(Dispatchers.IO) {
+        try {
+            // 좌표 정보 생성
+            val coordinate = if(longitude != null && latitude != null) {
+                GeoJsonPoint(
+                    type = "Point",
+                    coordinates = listOf(longitude, latitude)
+                )
+            } else {
+                null
+            }
+
+            // 서버에 보낼 Request
+            val request = UpdatePostRequest(
+                category = category,
+                title = title,
+                content = content,
+                tags = tags,
+                coordinate = coordinate,
+                locationName = locationName,
+                isDomestic = isDomestic
+            )
+
+            val response = postApiService.updatePost(postId, request)
+
+            if(response.isSuccessful) {
+                val body = response.body()
+                if(body != null && body.success) {
+                    Result.success(body.data!!)
+                } else {
+                    Result.failure(Exception(body?.message ?: "게시물 수정 실패"))
+                }
+            } else {
+                Result.failure(Exception("서버 오류: ${response.code()}"))
+            }
+        } catch (e: Exception) {
             Result.failure(e)
         }
     }

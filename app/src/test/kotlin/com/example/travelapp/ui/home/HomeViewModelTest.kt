@@ -2,6 +2,7 @@ package com.example.travelapp.ui.home
 
 import com.example.travelapp.data.model.Post
 import com.example.travelapp.data.repository.PostRepository
+import io.mockk.coEvery
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.runBlocking
@@ -10,7 +11,7 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
-import org.junit.Assert.assertEquals
+import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
 // 🔥 [수정 1] Mockito 관련 Import 필수 추가
@@ -61,7 +62,7 @@ class HomeViewModelTest {
     }
 
     @Test
-    fun `performSearch_should_update_searchResults_on_success`() = runTest {
+    fun performSearch_should_update_searchResults_on_success() = runTest {
         // Given (준비)
         val searchQuery = "테스트"
         // Mocking은 이미 setUp에서 완료됨
@@ -78,5 +79,21 @@ class HomeViewModelTest {
         // Assertion 검증
         assertEquals(2, searchResult.size)
         assertEquals("테스트 제목 1", searchResult[0].title)
+    }
+    
+    @Test
+    fun Search_Failure() = runTest {
+        val search = "테스트"
+        val errorMessage = "검색 실패"
+
+        runBlocking {
+            doAnswer {
+                Result.failure<List<Post>>(Exception(errorMessage))
+            }.`when`(mockPostRepository).searchPostsByTitle(search)
+        }
+
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertTrue(viewModel.searchResults.value.isEmpty())
     }
 }

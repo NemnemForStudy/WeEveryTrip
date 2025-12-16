@@ -130,6 +130,8 @@ fun PostDetailScreen(
             }
 
             post != null -> {
+                val isMyPost = post!!.userId == currentUserId
+
                 PostDetailContent(
                     post = post!!,
                     isLiked = isLiked,
@@ -150,7 +152,14 @@ fun PostDetailScreen(
                         navController.navigate("feed") {
                             popUpTo("feed") { inclusive = true }
                         }
-                    }
+                    },
+                    onPostEdit = {
+                        navController.navigate("edit/${postId}")
+                    },
+                    onPostDelete = {
+                        // TODO: 삭제 확인 다이얼로그
+                    },
+                    isMyPost = isMyPost
                 )
             }
             // post 가 null, 에러 없고, 로딩도 아닐 떄 대비한 else
@@ -179,7 +188,10 @@ fun PostDetailContent(
     onCommentSend: () -> Unit,
     onCommentEdit: (Comment, String) -> Unit,
     onCommentDelete: (String) -> Unit,
-    onBackClick: () -> Unit = {}
+    onBackClick: () -> Unit = {},
+    onPostEdit: () -> Unit = {},
+    onPostDelete: () -> Unit = {},
+    isMyPost: Boolean = false
 ) {
     var showEditDialog by remember { mutableStateOf(false) }
     var commentToEdit by remember { mutableStateOf<Comment?>(null) }
@@ -228,7 +240,16 @@ fun PostDetailContent(
         ) {
             item { PostImageHeader(post) }
 
-            item { PostBodySection(post) }
+            item {
+                PostBodySection(
+                    post = post,
+                    likeCount = likeCount,
+                    commentCount = comments.size,
+                    isMyPost = isMyPost,
+                    onEditClick = onPostEdit,
+                    onDeleteClick = onPostDelete
+                )
+            }
 
             item {
                 HorizontalDivider(thickness = 8.dp, color = LightGrayBg)
@@ -412,7 +433,16 @@ fun PostImageHeader(post: Post) {
 
 @OptIn(ExperimentalNaverMapApi::class)
 @Composable
-fun PostBodySection(post: Post) {
+fun PostBodySection(
+    post: Post,
+    likeCount: Int = 0,
+    commentCount: Int = 0,
+    isMyPost: Boolean = false,
+    onEditClick: () -> Unit = {},
+    onDeleteClick: () -> Unit = {}
+) {
+    var isMenuExpanded by remember { mutableStateOf(false) }
+    
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -437,7 +467,10 @@ fun PostBodySection(post: Post) {
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth()
+        ) {
             Surface(
                 modifier = Modifier.size(40.dp),
                 shape = CircleShape,
@@ -448,7 +481,7 @@ fun PostBodySection(post: Post) {
                 }
             }
             Spacer(modifier = Modifier.width(10.dp))
-            Column {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(text = post.nickname, fontWeight = FontWeight.Bold, fontSize = 14.sp)
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                     Text(
@@ -456,6 +489,39 @@ fun PostBodySection(post: Post) {
                         color = TextGray,
                         fontSize = 12.sp
                     )
+                }
+            }
+            
+            // 본인 게시물일 때만 점 세개 표시
+            if (isMyPost) {
+                Box {
+                    IconButton(onClick = { isMenuExpanded = true }) {
+                        Icon(
+                            imageVector = Icons.Default.MoreVert,
+                            contentDescription = "더보기",
+                            tint = Color.Gray
+                        )
+                    }
+                    DropdownMenu(
+                        expanded = isMenuExpanded,
+                        onDismissRequest = { isMenuExpanded = false },
+                        modifier = Modifier.background(Color.White)
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("수정") },
+                            onClick = {
+                                isMenuExpanded = false
+                                onEditClick()
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("삭제", color = Color.Red) },
+                            onClick = {
+                                isMenuExpanded = false
+                                onDeleteClick()
+                            }
+                        )
+                    }
                 }
             }
         }

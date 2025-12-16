@@ -144,21 +144,6 @@ class PostDetailViewModel @Inject constructor(
             if(result.isSuccess) {
                 _commentContent.value = ""
 
-//                val newComment = result.getOrNull()
-//
-//                if(newComment != null) {
-//                    val currentList = _comments.value.toMutableList()
-//
-//                    val displayComment = if(newComment.nickname.isNullOrBlank() || newComment.nickname == "알 수 없음") {
-//                        newComment.copy(nickname = "내 닉네임")
-//                    } else {
-//                        newComment
-//                    }
-//
-//                    currentList.add(0, displayComment)
-//                    _comments.value = currentList
-//                }
-
                 loadComments(postId)
             } else {
                 Log.e("PostDetailViewModel", "댓글 작성 실패: ${result.exceptionOrNull()?.message}")
@@ -201,5 +186,42 @@ class PostDetailViewModel @Inject constructor(
 
     fun updateCommentInput(content: String) {
         _commentContent.value = content
+    }
+
+    fun updatePost(
+        category: String? = null,
+        title: String? = null,
+        content: String? = null,
+        latitude: Double? = null,
+        longitude: Double? = null,
+        locationName: String? = null,
+        isDomestic: Boolean? = null
+    ) {
+        val postId = _currentPostId.value
+        if(postId.isBlank()) return
+
+        viewModelScope.launch {
+            _isLoading.value = true
+
+            val result = postRepository.updatePost(
+                postId = postId,
+                category = category,
+                title = title,
+                content = content,
+                latitude = latitude,
+                longitude = longitude,
+                locationName = locationName,
+                isDomestic = isDomestic
+            )
+
+            if(result.isSuccess) {
+                _post.value = result.getOrNull()
+            } else {
+                Log.e("PostDetailViewModel", "게시물 수정 실패: ${result.exceptionOrNull()?.message}")
+                _errorMsg.value = "게시물 수정 실패"
+            }
+
+            _isLoading.value = false
+        }
     }
 }

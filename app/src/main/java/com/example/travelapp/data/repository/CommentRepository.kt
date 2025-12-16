@@ -65,9 +65,9 @@ open class CommentRepository @Inject constructor(
             if(response.isSuccessful) {
                 val body = response.body()
                 if (body != null && body.success) {
-                    Result.success("수정 성공")
+                    Result.success(content)
                 } else {
-                    Result.failure(Exception("수정 실패"))
+                    Result.failure(Exception(content))
                 }
             } else {
                 Result.failure(Exception("서버 오류: ${response.code()}"))

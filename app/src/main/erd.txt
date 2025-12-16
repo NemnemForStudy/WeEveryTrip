@@ -212,3 +212,7 @@ ALTER TABLE "user" ADD COLUMN refresh_token TEXT;
 
 ALTER TABLE "user" ADD COLUMN push_activity BOOLEAN DEFAULT TRUE;
 ALTER TABLE "user" ADD COLUMN push_marketing BOOLEAN DEFAULT FALSE;
+
+ALTER TABLE "post"
+ADD COLUMN "travel_start_date" DATE,
+ADD COLUMN "travel_end_date" DATE;
