@@ -64,6 +64,7 @@ import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material3.Scaffold
 import androidx.navigation.NavHostController
 import com.example.travelapp.ui.components.BottomNavigationBar
+import com.example.travelapp.ui.navigation.Screen
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -97,7 +98,7 @@ fun FeedScreen(
             if (navController is NavHostController) {
                 BottomNavigationBar(
                     navController = navController,
-                    currentRoute = "feed" // Screen.Feed.route와 동일한 문자열이어야 함
+                    currentRoute = Screen.Feed.route
                 )
             }
         }

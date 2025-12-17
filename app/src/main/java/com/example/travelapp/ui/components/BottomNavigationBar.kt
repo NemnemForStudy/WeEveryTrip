@@ -12,11 +12,11 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AirplanemodeActive
-import androidx.compose.material.icons.filled.ChatBubbleOutline
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material3.*
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -61,19 +61,9 @@ fun BottomNavigationBar(
                 route = Screen.Home.route
             ),
             BottomNavItem(
-                icon = Icons.Default.ChatBubbleOutline,
-                label = "자유 게시판",
-                route = Screen.Feed.route
-            ),
-            BottomNavItem(
-                icon = Icons.Default.AirplanemodeActive,
-                label = "여행 카테고리",
-                route = "category" // TODO: Screen.Category.route로 변경 필요
-            ),
-            BottomNavItem(
                 icon = Icons.Filled.Person,
-                label = "My Page",
-                route = "mypage" // TODO: Screen.MyPage.route로 변경 필요
+                label = "마이 페이지",
+                route = Screen.MyPage.route
             )
         )
 
@@ -83,7 +73,9 @@ fun BottomNavigationBar(
                 isSelected = currentRoute == item.route,
                 onClick = {
                     if(currentRoute != item.route) {
-                        navController.navigate(item.route)
+                        navController.navigate(item.route) {
+                            launchSingleTop = true // 중복 스택 방지
+                        }
                     }
                 }
             )

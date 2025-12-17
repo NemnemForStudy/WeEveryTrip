@@ -48,8 +48,12 @@ import androidx.compose.runtime.getValue
 import androidx.core.content.ContextCompat
 import android.Manifest
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.zIndex
@@ -64,6 +68,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import com.naver.maps.map.compose.*
 import kotlinx.coroutines.invoke
+import kotlin.math.roundToInt
 
 private const val MAX_PHOTOS = 15
 /**
@@ -360,19 +365,33 @@ fun WriteScreenContent(
 
                                             // 확장된 이미지 리스트
                                             AnimatedVisibility(visible = isExpanded) {
+                                                val density = LocalDensity.current
+                                                val itemHeightDp = 76.dp
+                                                val itemHeightPx = with(density) { itemHeightDp.toPx() }
+
+                                                var draggingIndex by remember(dayNumber) { mutableIntStateOf(-1) }
+                                                var dragOffsetY by remember(dayNumber) { mutableFloatStateOf(0f)}
                                                 Column {
                                                     dayImages.forEachIndexed { imgIndex, image ->
+                                                        val isDragging = imgIndex == draggingIndex
+
                                                         Row(
                                                             modifier = Modifier
                                                                 .fillMaxWidth()
                                                                 .padding(
                                                                     horizontal = 16.dp,
                                                                     vertical = 8.dp
-                                                                ),
+                                                                )
+                                                                .zIndex(if(isDragging) 1f else 0f)
+                                                                .offset {
+                                                                    if(isDragging) IntOffset(0, dragOffsetY.roundToInt()) else IntOffset.Zero
+                                                                },
                                                             verticalAlignment = Alignment.CenterVertically
                                                         ) {
                                                             Image(
-                                                                painter = rememberAsyncImagePainter(image.uri),
+                                                                painter = rememberAsyncImagePainter(
+                                                                    image.uri
+                                                                ),
                                                                 contentDescription = null,
                                                                 modifier = Modifier
                                                                     .size(60.dp)
@@ -380,18 +399,76 @@ fun WriteScreenContent(
                                                                 contentScale = ContentScale.Crop
                                                             )
                                                             Spacer(Modifier.width(12.dp))
-                                                            val timeSdf = SimpleDateFormat("a hh:mm", Locale.KOREA)
+                                                            val timeSdf = SimpleDateFormat(
+                                                                "a hh:mm",
+                                                                Locale.KOREA
+                                                            )
                                                             Column(modifier = Modifier.weight(1f)) {
-                                                                Text(timeSdf.format(Date(image.timestamp)), style = MaterialTheme.typography.bodyMedium)
+                                                                Text(
+                                                                    timeSdf.format(Date(image.timestamp)),
+                                                                    style = MaterialTheme.typography.bodyMedium
+                                                                )
                                                             }
-                                                            Column {
-                                                                if (imgIndex > 0) Icon(Icons.Default.KeyboardArrowUp, "Up", modifier = Modifier.clickable { onSwapImages(dayNumber, imgIndex, imgIndex - 1) })
-                                                                if (imgIndex < dayImages.size - 1) Icon(Icons.Default.KeyboardArrowDown, "Down", modifier = Modifier.clickable { onSwapImages(dayNumber, imgIndex, imgIndex + 1) })
-                                                            }
+
                                                             Spacer(Modifier.width(8.dp))
-                                                            Icon(Icons.Default.DragHandle, "Drag", tint = Color.Gray)
+
+                                                            Icon(
+                                                                imageVector = Icons.Default.DragHandle,
+                                                                contentDescription = "Drag",
+                                                                tint = Color.Gray,
+                                                                modifier = Modifier.pointerInput(
+                                                                    dayNumber,
+                                                                    dayImages.size,
+                                                                    imgIndex
+                                                                ) {
+                                                                    detectDragGesturesAfterLongPress(
+                                                                        onDragStart = {
+                                                                            draggingIndex = imgIndex
+                                                                            dragOffsetY = 0f
+                                                                        },
+                                                                        onDrag = { change, dragAmount ->
+                                                                            change.consume()
+                                                                            if (draggingIndex == -1) return@detectDragGesturesAfterLongPress
+
+                                                                            dragOffsetY += dragAmount.y
+
+                                                                            val deltaIndex =
+                                                                                (dragOffsetY / itemHeightPx).toInt()
+                                                                            val targetIndex =
+                                                                                (draggingIndex + deltaIndex)
+                                                                                    .coerceIn(
+                                                                                        0,
+                                                                                        dayImages.lastIndex
+                                                                                    )
+
+                                                                            if (targetIndex != draggingIndex) {
+                                                                                val from =
+                                                                                    draggingIndex
+                                                                                onSwapImages(
+                                                                                    dayNumber,
+                                                                                    from,
+                                                                                    targetIndex
+                                                                                )
+                                                                                draggingIndex =
+                                                                                    targetIndex
+                                                                                dragOffsetY -= (targetIndex - from) * itemHeightPx
+                                                                            }
+                                                                        },
+                                                                        onDragEnd = {
+                                                                            draggingIndex = -1
+                                                                            dragOffsetY = 0f
+                                                                        },
+                                                                        onDragCancel = {
+                                                                            draggingIndex = -1
+                                                                            dragOffsetY = 0f
+                                                                        }
+                                                                    )
+                                                                }
+                                                            )
                                                         }
-                                                        if (imgIndex < dayImages.size - 1) Divider(modifier = Modifier.padding(start = 88.dp))
+                                                        if (imgIndex < dayImages.size - 1) {
+                                                            Divider(modifier = Modifier.padding(start = 88.dp))
+                                                        }
                                                     }
                                                 }
                                             }
@@ -490,20 +567,6 @@ fun WriteScreenContent(
                                 }
                             }
 
-                            // 지도 미리보기 (본문용)
-                            if (latitude != null && longitude != null) {
-                                Spacer(Modifier.height(16.dp))
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(Icons.Default.LocationOn, null, tint = MaterialTheme.colorScheme.primary)
-                                    Spacer(Modifier.width(8.dp))
-                                    Text("위치 정보 감지됨", color = MaterialTheme.colorScheme.primary, modifier = Modifier.weight(1f))
-                                    IconButton(onClick = { onUpdateLocation(null, null) }) { Icon(Icons.Default.Close, "삭제", tint = Color.Gray) }
-                                }
-                                Spacer(Modifier.height(8.dp))
-                                OutlinedButton(onClick = { navController.navigate("map?lat=$latitude&lon=$longitude") }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(8.dp)) { Text("📍 지도에서 위치 미리보기") }
-                            }
-
-                            Divider(modifier = Modifier.padding(vertical = 8.dp))
                             TextField(value = tagsInput, onValueChange = { tagsInput = it }, placeholder = { Text("#태그 입력") }, modifier = Modifier.fillMaxWidth(), colors = TextFieldDefaults.colors(focusedContainerColor = Color.Transparent, unfocusedContainerColor = Color.Transparent))
                             Divider()
                             TextField(value = content, onValueChange = { content = it }, placeholder = { Text("내용을 입력하세요...") }, modifier = Modifier

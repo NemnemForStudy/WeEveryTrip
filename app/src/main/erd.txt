@@ -182,7 +182,7 @@ ALTER TABLE "user"
     ALTER COLUMN "social_provider" SET NOT NULL,
     ALTER COLUMN "social_id" SET NOT NULL;
 
-  -- 4.1. post 테이블의 조인 성능 향상
+-- 4.1. post 테이블의 조인 성능 향상
 CREATE INDEX idx_post_user_id ON "post" ("user_id");
 CREATE INDEX idx_post_category_id ON "post" ("category_id");
 CREATE INDEX idx_post_location_id ON "post" ("location_id");

@@ -253,7 +253,9 @@ class WriteViewModel @Inject constructor(
                     imageUris = imgUris,
                     latitude = currentLat,
                     longitude = currentLon,
-                    isDomestic = true
+                    isDomestic = true,
+                    startDateMillis = _startDate.value,
+                    endDateMillis = _endDate.value
                 )
 
                 result.onSuccess {

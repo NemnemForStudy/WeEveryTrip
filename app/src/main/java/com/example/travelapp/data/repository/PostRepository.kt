@@ -3,9 +3,10 @@ package com.example.travelapp.data.repository
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Matrix
 import android.net.Uri
 import android.util.Log
-import coil.decode.DecodeUtils.calculateInSampleSize
+import androidx.exifinterface.media.ExifInterface
 import com.example.travelapp.data.api.CommentApiService
 import com.example.travelapp.data.api.PostApiService
 import com.example.travelapp.data.model.CreatePostResponse
@@ -14,22 +15,20 @@ import com.example.travelapp.data.model.Post
 import com.example.travelapp.data.model.RoutePoint
 import com.example.travelapp.data.model.RouteRequest
 import com.example.travelapp.data.model.UpdatePostRequest
-import com.example.travelapp.data.model.comment.UpdateCommentRequest
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.asRequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.File
 import java.io.FileOutputStream
-import javax.inject.Inject
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.encodeToString
 import java.io.IOException
 import java.util.UUID
-import kotlin.String
+import javax.inject.Inject
 
 open class PostRepository @Inject constructor(
     private val postApiService: PostApiService,
@@ -44,7 +43,9 @@ open class PostRepository @Inject constructor(
         imageUris: List<Uri>,
         latitude: Double? = null,
         longitude: Double? = null,
-        isDomestic: Boolean = true
+        isDomestic: Boolean = true,
+        startDateMillis: Long? = null,
+        endDateMillis: Long? = null
     ): Result<CreatePostResponse> = withContext(Dispatchers.IO) {
         // 🔥 [핵심 1] withContext(Dispatchers.IO)로 감싸서 백그라운드에서 실행 (앱 안 멈춤)
         return@withContext try {
@@ -92,13 +93,57 @@ open class PostRepository @Inject constructor(
                     realInputStream?.close()
 
                     if (bitmap != null) {
-                        // 2. 압축해서 임시 파일로 저장 (Quality 70%)
+                        // 2. EXIF orientation 읽어서 회전 적용
+                        val rotatedBitmap = try {
+                            val exifStream = context.contentResolver.openInputStream(uri)
+                            val exif = exifStream?.let { ExifInterface(it) }
+                            exifStream?.close()
+                            
+                            val orientation = exif?.getAttributeInt(
+                                ExifInterface.TAG_ORIENTATION,
+                                ExifInterface.ORIENTATION_NORMAL
+                            ) ?: ExifInterface.ORIENTATION_NORMAL
+                            
+                            val matrix = Matrix()
+                            when (orientation) {
+                                ExifInterface.ORIENTATION_ROTATE_90 -> matrix.postRotate(90f)
+                                ExifInterface.ORIENTATION_ROTATE_180 -> matrix.postRotate(180f)
+                                ExifInterface.ORIENTATION_ROTATE_270 -> matrix.postRotate(270f)
+                                ExifInterface.ORIENTATION_FLIP_HORIZONTAL -> matrix.preScale(-1f, 1f)
+                                ExifInterface.ORIENTATION_FLIP_VERTICAL -> matrix.preScale(1f, -1f)
+                                ExifInterface.ORIENTATION_TRANSPOSE -> {
+                                    matrix.postRotate(90f)
+                                    matrix.preScale(-1f, 1f)
+                                }
+                                ExifInterface.ORIENTATION_TRANSVERSE -> {
+                                    matrix.postRotate(270f)
+                                    matrix.preScale(-1f, 1f)
+                                }
+                            }
+                            
+                            if (orientation != ExifInterface.ORIENTATION_NORMAL && 
+                                orientation != ExifInterface.ORIENTATION_UNDEFINED) {
+                                Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+                            } else {
+                                bitmap
+                            }
+                        } catch (e: Exception) {
+                            Log.w("PostRepository", "EXIF 읽기 실패, 원본 사용: ${e.message}")
+                            bitmap
+                        }
+                        
+                        // 3. 압축해서 임시 파일로 저장 (Quality 70%)
                         val file = File(context.cacheDir, "resized_${UUID.randomUUID()}.jpg")
                         val outputStream = FileOutputStream(file)
                         // 압축 및 임시 파일 저장 - compress, 품질 70%
-                        bitmap.compress(Bitmap.CompressFormat.JPEG, 70, outputStream)
+                        rotatedBitmap.compress(Bitmap.CompressFormat.JPEG, 70, outputStream)
                         outputStream.flush()
                         outputStream.close()
+                        
+                        // 메모리 해제 (원본과 회전본이 다른 경우만)
+                        if (rotatedBitmap !== bitmap) {
+                            bitmap.recycle()
+                        }
 
                         // 3. Multipart 변환
                         val requestFile = file.asRequestBody("image/jpeg".toMediaTypeOrNull())
@@ -112,6 +157,11 @@ open class PostRepository @Inject constructor(
                 }
             }
 
+            val startDateBody = startDateMillis?.toString()
+                ?.toRequestBody("text/plain".toMediaTypeOrNull())
+            val endDateBody = endDateMillis?.toString()
+                ?.toRequestBody("text/plain".toMediaTypeOrNull())
+
             val response = postApiService.createPost(
                 category = categoryBody,
                 title = titleBody,
@@ -119,7 +169,9 @@ open class PostRepository @Inject constructor(
                 tags = tagsBody,
                 images = imageParts,
                 coordinates = coordinatesBody,
-                isDomestic = isDomesticBody
+                isDomestic = isDomesticBody,
+                startDate = startDateBody,
+                endDate = endDateBody
             )
 
             if (response.isSuccessful) {

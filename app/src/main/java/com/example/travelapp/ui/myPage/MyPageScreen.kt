@@ -40,6 +40,7 @@ import androidx.navigation.compose.rememberNavController
 import com.example.travelapp.ui.components.BottomNavigationBar
 import com.example.travelapp.ui.theme.Beige
 import com.example.travelapp.data.model.User
+import com.example.travelapp.ui.navigation.Screen
 
 // 1. [로직 담당] ViewModel 연결하고 데이터 준비하는 곳
 @Composable
@@ -113,7 +114,7 @@ fun MyPageContent(
             if (navController is NavHostController) {
                 BottomNavigationBar(
                     navController = navController,
-                    currentRoute = "mypage"
+                    currentRoute = Screen.MyPage.route
                 )
             }
         }

@@ -46,7 +46,9 @@ interface PostApiService {
         @Part("coordinates") coordinates: RequestBody?,
         @Part("isDomestic") isDomestic: RequestBody,
         @Part("tags") tags: RequestBody?,
-        @Part images: List<MultipartBody.Part>
+        @Part images: List<MultipartBody.Part>,
+        @Part("startDate") startDate: RequestBody?,
+        @Part("endDate") endDate: RequestBody?
     ): Response<ApiResponse<CreatePostResponse>>
 
     @POST("api/routes/route-for-day")
