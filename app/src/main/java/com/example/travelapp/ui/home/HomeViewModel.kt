@@ -3,6 +3,7 @@ package com.example.travelapp.ui.home
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.travelapp.data.model.Post
+import com.example.travelapp.data.repository.AuthRepository
 import com.example.travelapp.data.repository.PostRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -13,7 +14,8 @@ import javax.inject.Inject
 // 게시물 데이터 클래스
 @HiltViewModel // 이 클래스를 ViewModel로 인식하고 의존성 주입 관리 할 수 있게 함.
 class HomeViewModel @Inject constructor(
-    private val postRepository: PostRepository
+    private val postRepository: PostRepository,
+    private val authRepository: AuthRepository
 ) : ViewModel() {
     // UI에 노출될 검색어 상태(읽기 전용 StateFlow)
     // StateFlow는 현재 상태, 새 상태 업데이트 수신하는 관찰 가능한 상태 홀더 흐름.
@@ -32,6 +34,19 @@ class HomeViewModel @Inject constructor(
     // 로딩 상태
     private val _isLoading = MutableStateFlow(false)
     val isLoading = _isLoading.asStateFlow()
+
+    private val _myPosts = MutableStateFlow<List<Post>>(emptyList())
+    val myPosts = _myPosts.asStateFlow()
+
+    private val _myPostsLoading = MutableStateFlow(false)
+    val myPostsLoading = _myPostsLoading.asStateFlow()
+
+    private val _myPostsError = MutableStateFlow<String?>(null)
+    val myPostsError = _myPostsError.asStateFlow()
+
+    init {
+        loadMyPosts()
+    }
 
     /**
      * 사용자가 검색창에 텍스트 입력할 때마다 호출되는 함수
@@ -88,6 +103,42 @@ class HomeViewModel @Inject constructor(
                 } finally {
                     _isLoading.value = false
                 }
+            }
+        }
+    }
+
+    fun loadMyPosts() {
+        viewModelScope.launch {
+            _myPostsLoading.value = true
+            _myPostsError.value = null
+
+            try {
+                val myIdResult = authRepository.getUserId()
+                val myId = myIdResult.getOrNull()
+
+                if(myId == null) {
+                    _myPosts.value = emptyList()
+                    _myPostsError.value = "내 정보(userId)를 가져오지 못했습니다."
+                    // 코드를 실행하기 위한 '최소 조건'이 충족되지 않았을 때, 미리 예외 처리를 하고 함수를 종료시키는 것
+                    // 코루틴 return에서는 단독으로 return할 수는 없다.
+                    // 그래서 현재 진행 중인 이 코루틴 블록만 빠져나가겠다. 라고 선언.
+                    return@launch
+                }
+
+                val postsResult = postRepository.getAllPosts()
+                // 내 아이디와 일치하는 게시물만 화면에 보여주려고 하는거임.
+                // posts.filter -> 필터링이고, it.userId == myId는 내 id랑 일치하는지 확인함.
+                postsResult.onSuccess { posts ->
+                    _myPosts.value = posts.filter { it.userId == myId }
+                }.onFailure { e ->
+                    _myPosts.value = emptyList()
+                    _myPostsError.value = e.message ?: "내 글 불러오기 실패"
+                }
+            } catch (e: Exception) {
+                _myPosts.value = emptyList()
+                _myPostsError.value = e.message ?: "내 글 불러오기 실패"
+            } finally {
+                _myPostsLoading.value = false
             }
         }
     }

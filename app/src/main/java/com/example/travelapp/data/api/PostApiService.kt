@@ -1,17 +1,12 @@
 package com.example.travelapp.data.api
 
 import com.example.travelapp.data.model.ApiResponse
-import com.example.travelapp.data.model.CreatePostRequest
 import com.example.travelapp.data.model.CreatePostResponse
-import com.example.travelapp.data.model.GeoJsonPoint
 import com.example.travelapp.data.model.Post
 import com.example.travelapp.data.model.RouteRequest
 import com.example.travelapp.data.model.RouteResponse
 import com.example.travelapp.data.model.UpdatePostRequest
-import com.example.travelapp.data.model.UpdatePostResponse
-import com.google.gson.annotations.SerializedName
 import okhttp3.MultipartBody
-import okhttp3.Request
 import okhttp3.RequestBody
 import retrofit2.Response
 import retrofit2.http.Body
@@ -45,6 +40,7 @@ interface PostApiService {
         @Part("category") category: RequestBody,
         @Part("coordinates") coordinates: RequestBody?,
         @Part("isDomestic") isDomestic: RequestBody,
+        @Part("imageLocations") imageLocations: RequestBody?,
         @Part("tags") tags: RequestBody?,
         @Part images: List<MultipartBody.Part>,
         @Part("startDate") startDate: RequestBody?,

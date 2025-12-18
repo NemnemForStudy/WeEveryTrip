@@ -75,17 +75,22 @@ object NetworkModule {
         @Named("AuthOkHttpClient") okHttpClient: OkHttpClient,
         @ApplicationContext context: Context
     ): Retrofit {
-        val baseUrl = if (Build.FINGERPRINT.startsWith("generic")
-            || Build.FINGERPRINT.startsWith("unknown")
-            || Build.MODEL.contains("google_sdk")
-            || Build.MODEL.contains("Emulator")
-            || Build.MODEL.contains("Android SDK built for x86")
-            || Build.MANUFACTURER.contains("Genymotion")
-            || (Build.BRAND.startsWith("generic") && Build.DEVICE.startsWith("generic"))
-        ) {
+        val isEmulator = (Build.FINGERPRINT.startsWith("generic")
+                || Build.FINGERPRINT.startsWith("unknown")
+                || Build.MODEL.contains("google_sdk")
+                || Build.MODEL.contains("Emulator")
+                || Build.MODEL.contains("Android SDK built for x86")
+                || Build.MANUFACTURER.contains("Genymotion")
+                || (Build.BRAND.startsWith("generic") && Build.DEVICE.startsWith("generic")))
+
+        val phoneBaseUrl = runCatching {
+            BuildConfig::class.java.getField("PHONE_BASE_URL").get(null) as String
+        }.getOrNull()
+
+        val baseUrl = if (isEmulator) {
             BuildConfig.BASE_URL
         } else {
-            BuildConfig.BASE_URL
+            phoneBaseUrl?.takeIf { it.isNotBlank() } ?: BuildConfig.BASE_URL
         }
 
         return Retrofit.Builder()

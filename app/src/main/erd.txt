@@ -216,3 +216,11 @@ ALTER TABLE "user" ADD COLUMN push_marketing BOOLEAN DEFAULT FALSE;
 ALTER TABLE "post"
 ADD COLUMN "travel_start_date" DATE,
 ADD COLUMN "travel_end_date" DATE;
+
+-- Detail에서 마커 여러개 찍으려면 서버가 사진별 좌표를 기억해야한다.
+-- Day별 polyline도 결국 이 데이터로 그리게 된다.
+ALTER TABLE post_image
+ADD COLUMN latitude DOUBLE PRECISION NULL,
+ADD COLUMN longitude DOUBLE PRECISION NULL,
+ADD COLUMN day_number INT NULL,
+ADD COLUMN sort_index INT NULL;

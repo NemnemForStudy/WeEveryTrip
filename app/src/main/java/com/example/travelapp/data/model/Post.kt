@@ -24,7 +24,7 @@ data class Post(
     val imgUrl: String? = null, // 이미지 있을 경우 URL
 
     // 위도/경도 개별 필드 삭제 -> GeoJsonPoint로 통합
-    @SerializedName("coordinates")
+    @SerializedName(value = "coordinates", alternate = ["coordinate"])
     val coordinate: GeoJsonPoint? = null,
 
     @SerializedName("location_name")
@@ -37,7 +37,10 @@ data class Post(
     val travelStartDate: String? = null,
 
     @SerializedName("travel_end_date")
-    val travelEndDate: String? = null
+    val travelEndDate: String? = null,
+
+    @SerializedName("image_locations")
+    val imageLocations: List<PostImageLocation> = emptyList()
 ) {
     // Getter 추가
     val latitude: Double?
@@ -93,4 +96,25 @@ data class UpdatePostResponse(
     val isDomestic: Boolean,
     @SerializedName("updated_at")
     val updateAt: String
+)
+
+// ✅ 서버에서 post_image 테이블에서 뽑아 내려줄 “사진별 위치 데이터”
+// - image_url: 어떤 이미지의 좌표인지 식별용
+// - latitude/longitude: 마커 찍을 때 쓰는 좌표
+// - day_number/sort_index: 나중에 Day별 polyline 그릴 때 정렬 기준
+data class PostImageLocation(
+    @SerializedName("image_url")
+    val imageUrl: String,
+
+    @SerializedName("latitude")
+    val latitude: Double? = null,
+
+    @SerializedName("longitude")
+    val longitude: Double? = null,
+
+    @SerializedName("day_number")
+    val dayNumber: Int? = null,
+
+    @SerializedName("sort_index")
+    val sortIndex: Int? = null
 )

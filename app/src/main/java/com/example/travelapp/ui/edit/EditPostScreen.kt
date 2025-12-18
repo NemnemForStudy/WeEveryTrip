@@ -381,7 +381,7 @@ fun EditPostScreen(
                                         items(images) { imageUrl ->
                                             Box(modifier = Modifier.size(100.dp)) {
                                                 AsyncImage(
-                                                    model = BuildConfig.BASE_URL + imageUrl,
+                                                    model = toFullUrl(imageUrl),
                                                     contentDescription = null,
                                                     modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(8.dp)),
                                                     contentScale = ContentScale.Crop
@@ -500,4 +500,32 @@ fun EditPostScreen(
             }
         }
     }
+}
+
+private fun resolveBaseUrlForDevice(): String {
+    val isEmulator = (Build.FINGERPRINT.startsWith("generic")
+            || Build.FINGERPRINT.startsWith("unknown")
+            || Build.MODEL.contains("google_sdk")
+            || Build.MODEL.contains("Emulator")
+            || Build.MODEL.contains("Android SDK built for x86")
+            || Build.MANUFACTURER.contains("Genymotion")
+            || (Build.BRAND.startsWith("generic") && Build.DEVICE.startsWith("generic")))
+
+    val phoneBaseUrl = runCatching {
+        BuildConfig::class.java.getField("PHONE_BASE_URL").get(null) as String
+    }.getOrNull()
+
+    val raw = if(isEmulator) {
+        BuildConfig.BASE_URL
+    } else {
+        phoneBaseUrl?.takeIf { it.isNotBlank() } ?: BuildConfig.BASE_URL
+    }
+
+    return raw.trimEnd('/') + "/"
+}
+
+private fun toFullUrl(urlOrPath: String?): String? {
+    if(urlOrPath.isNullOrBlank()) return null
+    if(urlOrPath.startsWith("http")) return urlOrPath
+    return resolveBaseUrlForDevice() + urlOrPath.trimStart('/')
 }

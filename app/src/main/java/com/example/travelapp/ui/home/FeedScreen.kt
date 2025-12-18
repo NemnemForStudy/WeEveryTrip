@@ -336,7 +336,7 @@ fun PostCard(
             ) {
 
                 val base_url = BuildConfig.BASE_URL
-                val full_url = base_url + post.imgUrl
+                val full_url = toFullUrl(post.imgUrl)
 
                 val context = LocalContext.current // 컴포저블 안에서 컨텍스트 가져오기
                 // 이미지가 있을때는 이미지 보여주기
@@ -590,4 +590,32 @@ fun FeedScreenPreview() {
             }
         }
     }
+}
+
+private fun resolveBaseUrlForDevice(): String {
+    val isEmulator = (Build.FINGERPRINT.startsWith("generic")
+            || Build.FINGERPRINT.startsWith("unknown")
+            || Build.MODEL.contains("google_sdk")
+            || Build.MODEL.contains("Emulator")
+            || Build.MODEL.contains("Android SDK built for x86")
+            || Build.MANUFACTURER.contains("Genymotion")
+            || (Build.BRAND.startsWith("generic") && Build.DEVICE.startsWith("generic")))
+
+    val phoneBaseUrl = runCatching {
+        BuildConfig::class.java.getField("PHONE_BASE_URL").get(null) as String
+    }.getOrNull()
+
+    val raw = if(isEmulator) {
+        BuildConfig.BASE_URL
+    } else {
+        phoneBaseUrl?.takeIf { it.isNotBlank() } ?: BuildConfig.BASE_URL
+    }
+
+    return raw.trimEnd('/') + "/"
+}
+
+private fun toFullUrl(urlOrPath: String?): String? {
+    if(urlOrPath.isNullOrBlank()) return null
+    if(urlOrPath.startsWith("http")) return urlOrPath
+    return resolveBaseUrlForDevice() + urlOrPath.trimStart('/')
 }

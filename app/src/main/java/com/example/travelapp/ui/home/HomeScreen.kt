@@ -6,7 +6,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -42,13 +41,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.rememberNavController
-import com.example.travelapp.data.model.Post
 import com.example.travelapp.ui.components.BottomNavigationBar
 import com.example.travelapp.ui.navigation.Screen
 import com.example.travelapp.ui.theme.TravelAppTheme
@@ -69,13 +66,18 @@ fun HomeScreen(
     val showSearchBar by viewModel.showSearchBar.collectAsState()
     // 소프트웨어 키보드 컨트롤러
     val keyboardController = LocalSoftwareKeyboardController.current
+    val myPosts by viewModel.myPosts.collectAsState()
+    val myPostsLoading by viewModel.myPostsLoading.collectAsState()
+    val myPostsError by viewModel.myPostsError.collectAsState()
+
+    val searchResults by viewModel.searchResults.collectAsState()
+    val isLoading by viewModel.isLoading.collectAsState()
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = {
-                    if(showSearchBar) {
-                        // 검색 입력 필드
+                    if (showSearchBar) {
                         TextField(
                             value = searchQuery,
                             onValueChange = { newValue ->
@@ -85,19 +87,15 @@ fun HomeScreen(
                             placeholder = { Text("검색어를 입력하세요") },
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth(),
-                            // 엔터 키를 검색 버튼으로 변경
                             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                            // 검색 버튼 클릭 시 동작
                             keyboardActions = KeyboardActions(
                                 onSearch = {
                                     Log.d("HomeScreen", "onSearch triggered! 검색어: $searchQuery")
                                     keyboardController?.hide()
-                                    // 검색 실행도 ViewModel에 위임합니다.
                                     viewModel.performSearch(searchQuery)
                                 }
                             ),
                             leadingIcon = {
-                                // 뒤로 가기 버튼
                                 IconButton(onClick = {
                                     viewModel.closeSearchBar()
                                     searchQuery = ""
@@ -113,7 +111,6 @@ fun HomeScreen(
                             )
                         )
                     } else {
-                        // 기본 타이틀
                         Text(
                             text = "모여로그",
                             style = MaterialTheme.typography.headlineMedium,
@@ -122,12 +119,6 @@ fun HomeScreen(
                     }
                 },
                 actions = {
-                    if(!showSearchBar) {
-                        // Write button
-                        IconButton(onClick = { navController.navigate(Screen.Write.route) }) {
-                            Icon(Icons.Filled.Edit, contentDescription = "글쓰기")
-                        }
-                    }
 
                     // Search button
                     IconButton(onClick = { viewModel.openSearchBar() }) {
@@ -161,92 +152,91 @@ fun HomeScreen(
                 .padding(paddingValues)
                 .background(MaterialTheme.colorScheme.background)
                 .padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
+            horizontalAlignment = Alignment.Start,
+            verticalArrangement = Arrangement.Top
         ) {
-            if(showSearchBar) {
-                val searchResults by viewModel.searchResults.collectAsState()
-                val isLoading by viewModel.isLoading.collectAsState()
+            if (showSearchBar) {
+                when {
+                    isLoading -> {
+                        Text(
+                            text = "검색 중...",
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.padding(16.dp)
+                        )
+                    }
 
-                if(isLoading) {
-                    // 로딩 중
-                    Text(
-                        text = "검색 중...",
-                        style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.padding(16.dp)
-                    )
-                } else if (searchResults.isEmpty()) {
-                    Text(
-                        text = "검색 결과가 없습니다.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.padding(16.dp)
-                    )
-                } else {
-                    // 검색 결과가 있을때 리스트로 표시
-                    LazyColumn(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                        contentPadding = PaddingValues(bottom = 16.dp)
-                    ) {
-                        items(searchResults.size) { index ->
-                            val post = searchResults[index]
-                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                                PostCard(
-                                    post = post,
-                                    onClick = {
-                                        navController.navigate("detail/${post.id}")
-                                    }
-                                )
+                    searchResults.isEmpty() -> {
+                        Text(
+                            text = "검색 결과가 없습니다.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.padding(16.dp)
+                        )
+                    }
+
+                    else -> {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                            contentPadding = PaddingValues(bottom = 16.dp)
+                        ) {
+                            items(searchResults.size) { index ->
+                                val post = searchResults[index]
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                                    PostCard(
+                                        post = post,
+                                        onClick = { navController.navigate("detail/${post.id}") }
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            } else {
+                when {
+                    myPostsLoading -> {
+                        Text(
+                            text = "내 글 불러오는 중...",
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.padding(16.dp)
+                        )
+                    }
+
+                    myPostsError != null -> {
+                        Text(
+                            text = myPostsError ?: "오류가 발생했습니다.",
+                            color = Color.Red,
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.padding(16.dp)
+                        )
+                    }
+
+                    myPosts.isEmpty() -> {
+                        Text(
+                            text = "작성한 글이 없습니다.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.padding(16.dp)
+                        )
+                    }
+
+                    else -> {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                            contentPadding = PaddingValues(bottom = 16.dp)
+                        ) {
+                            items(myPosts.size) { index ->
+                                val post = myPosts[index]
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                                    PostCard(
+                                        post = post,
+                                        onClick = { navController.navigate("detail/${post.id}") }
+                                    )
+                                }
                             }
                         }
                     }
                 }
             }
-        }
-    }
-}
-
-@Composable
-fun PostItem(post: Post) {
-    Column(
-        modifier = Modifier.fillMaxWidth()
-            .padding(vertical = 8.dp)
-            .background(
-                color = MaterialTheme.colorScheme.surface,
-                shape = RoundedCornerShape(8.dp)
-            )
-            .padding(12.dp)
-    ) {
-        Text(
-            text = post.title,
-            style = MaterialTheme.typography.titleMedium,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-
-        Text(
-            text = post.content,
-            style = MaterialTheme.typography.bodySmall,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(top = 4.dp)
-        )
-
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 8.dp),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text(
-                text = post.nickname,
-                style = MaterialTheme.typography.labelSmall
-            )
-
-            Text(
-                text = post.created_at,
-                style = MaterialTheme.typography.labelSmall
-            )
         }
     }
 }

@@ -20,15 +20,30 @@ import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import java.util.UUID
 import javax.inject.Inject
 
 
+@Serializable
+data class ImageLocationMeta(
+    // 서버 DB 컬럼명이 day_number/sort_index 이고, 서버는 req.body.imageLocations[i]로 매칭하므로
+    // 업로드되는 이미지 순서와 동일한 순서로 만들어서 보내야 함.
+    val dayNumber: Int? = null,
+    val indexInDay: Int? = null,
+    // GPS 없는 사진이면 null (서버에 null로 저장)
+    val latitude: Double? = null,
+    val longitude: Double? = null
+)
 data class PostImage(
     val id: String = UUID.randomUUID().toString(), // 고유 ID
     val uri: Uri,
     val timestamp: Long,
-    val dayNumber: Int
+    val dayNumber: Int,
+    val latitude: Double? = null,
+    val longitude: Double? = null
 )
 // HiltViewModel - Hilt가 이 ViewModel 생성하고 필요한 의존성 주입할 수 있도록 함.
 @HiltViewModel
@@ -118,11 +133,13 @@ class WriteViewModel @Inject constructor(
                     // 사진 찍은 날짜가 여행 기간 중 몇 번째 날인지 찾기(없으면 -1)
                     val index = currentTripDays.indexOf(dayStartMillis)
                     val dayNumber = if(index != -1) index + 1 else 0 // 0은 "날짜 미정" 혹은 "범위 밖"
-
+                    val location = ExifUtils.extractLocation(context, uri)
                     PostImage(
                         uri = uri,
                         timestamp = time,
-                        dayNumber = dayNumber
+                        dayNumber = dayNumber,
+                        latitude = location?.first,
+                        longitude = location?.second
                     )
                 }
                 .filter { it.dayNumber > 0 } // 여행 기간에 포함된 사진만 필터링
@@ -242,15 +259,26 @@ class WriteViewModel @Inject constructor(
             val currentLat = _latitude.value
             val currentLon = _longitude.value
 
-            // 서버로 전송할때는 정렬된 _groupedImages.value 활용할 수 있다.
-            // 지금은 UI에서 넘겨준 imgUris 그대로 사용.
             try {
+                // [중요] 업로드 순서는 반드시 "UI에서 보이는 순서(드래그&드랍 반영)"와 동일해야 함.
+                // 그래서 imgUris 대신 ViewModel이 관리하는 _groupedImages를 source of truth로 사용.
+                val (orderedUris, imageLocationsJson) = if (_groupedImages.value.isNotEmpty()) {
+                    buildUploadPayloadFromGroupedImages()
+                } else {
+                    // 예외 상황: groupedImages가 비어있으면 최소한 인덱스 매칭이 깨지지 않도록 빈 meta로 채움
+                    val metaList = imgUris.map { ImageLocationMeta() }
+                    Pair(imgUris, Json.encodeToString(metaList))
+                }
+
                 val result = postRepository.createPost(
                     category = category,
                     title = title,
                     content = content,
                     tags = tags,
-                    imageUris = imgUris,
+                    // 이미지 업로드 순서(서버의 finalImageUrls 생성 순서)와 metaList 순서가 같아야 함
+                    imageUris = orderedUris,
+                    // 서버 post.ts가 req.body.imageLocations(JSON string)을 파싱해 post_image에 저장함
+                    imageLocationsJson = imageLocationsJson,
                     latitude = currentLat,
                     longitude = currentLon,
                     isDomestic = true,
@@ -307,5 +335,34 @@ class WriteViewModel @Inject constructor(
         object Loading: PostCreationStatus()
         data class Success(val postId: String): PostCreationStatus()
         data class Error(val message: String): PostCreationStatus()
+    }
+
+    private fun buildUploadPayloadFromGroupedImages(): Pair<List<Uri>, String> {
+        // 1) Day 순서(1,2,3...)로 정렬
+        val sortedByDay: Map<Int, List<PostImage>> = _groupedImages.value.toSortedMap()
+
+        // 서버로 업로드할 최종 uri리스트
+        val orderedUris = mutableListOf<Uri>()
+
+        // JSON으로 보낼 메타 리스트 (kotlinx serialization 사용)
+        val metaList = mutableListOf<ImageLocationMeta>()
+
+        sortedByDay.forEach { (dayNumber, imagesOfDay) ->
+            imagesOfDay.forEachIndexed { indexInDay, img ->
+                orderedUris += img.uri
+
+                // [중요] 사진별 GPS를 보내야 하므로 img.latitude/img.longitude 를 사용해야 함
+                metaList += ImageLocationMeta(
+                    dayNumber = dayNumber,
+                    indexInDay = indexInDay,
+                    latitude = img.latitude,
+                    longitude = img.longitude
+                )
+            }
+        }
+
+        // JSON 문자열로 반환해서 multipart Part 로 보낼 예정
+        val imageLocationsJson = Json.encodeToString(metaList)
+        return Pair(orderedUris, imageLocationsJson)
     }
 }

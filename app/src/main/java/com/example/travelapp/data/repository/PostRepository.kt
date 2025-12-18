@@ -41,6 +41,9 @@ open class PostRepository @Inject constructor(
         content: String,
         tags: List<String>,
         imageUris: List<Uri>,
+        // 사진별 GPS/Day/정렬 정보를 서버(post_image)에 저장하기 위한 JSON payload
+        // - WriteViewModel에서 "업로드 이미지 순서"와 동일한 순서로 만들어서 넘겨줘야 함
+        imageLocationsJson: String? = null,
         latitude: Double? = null,
         longitude: Double? = null,
         isDomestic: Boolean = true,
@@ -54,6 +57,10 @@ open class PostRepository @Inject constructor(
             val contentBody = content.toRequestBody("text/plain".toMediaTypeOrNull())
             val tagsBody = tags.joinToString(",").toRequestBody("text/plain".toMediaTypeOrNull())
             val isDomesticBody = isDomestic.toString().toRequestBody("text/plain".toMediaTypeOrNull())
+
+            // 서버에서 req.body.imageLocations 로 받으므로 Part 이름은 반드시 "imageLocations"
+            val imageLocationsBody = imageLocationsJson
+                ?.toRequestBody("application/json".toMediaTypeOrNull())
 
             val coordinatesBody = if(latitude != null && longitude != null) {
                 val geoPoint = GeoJsonPoint(
@@ -170,6 +177,8 @@ open class PostRepository @Inject constructor(
                 images = imageParts,
                 coordinates = coordinatesBody,
                 isDomestic = isDomesticBody,
+                // 사진별 좌표 메타(없으면 null로 보내서 서버에서 그냥 빈 배열로 처리)
+                imageLocations = imageLocationsBody,
                 startDate = startDateBody,
                 endDate = endDateBody
             )

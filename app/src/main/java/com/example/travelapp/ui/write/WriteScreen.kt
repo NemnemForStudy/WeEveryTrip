@@ -161,6 +161,25 @@ fun WriteScreenContent(
     // 로컬 UI 상태
     var showDialog by remember { mutableStateOf(false) }
     var showDatePickerDialog by remember { mutableStateOf(false) }
+
+    // GPS 없는 사진 경고 다이얼로그 열지 여부
+    var showNoGpsDialog by remember { mutableStateOf(false) }
+
+    // 게시 버튼 눌렀을 때 실제 업로드를 실행할 지 저장해두는 플래그
+    var pendingSubmit by remember { mutableStateOf(false) }
+
+    // GPS 없는 사진 개수
+    val noGpsCount = remember(groupedImages) {
+        groupedImages.values
+            .flatten()
+            .count { it.latitude == null || it.longitude == null }
+    }
+
+    // 전체 사진 수
+    val totalPhotoCount = remember(groupedImages) {
+        groupedImages.values.flatten().size
+    }
+
     var category by remember { mutableStateOf("카테고리") }
     var title by remember { mutableStateOf("") }
     var content by remember { mutableStateOf("") }
@@ -288,7 +307,17 @@ fun WriteScreenContent(
                                 Text("여행 일정", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                                 TextButton(onClick = {
                                     if (title.isNotEmpty() && content.isNotEmpty() && category != "카테고리") {
-                                        val tagsList = tagsInput.split(" ", ",", "#").map { it.trim() }.filter { it.isNotEmpty() }
+                                        // GPS 없는 사진 있으면 -> 경고, 다이얼로그 띄우고 종료
+                                        if(noGpsCount > 0) {
+                                            showNoGpsDialog = true
+                                            pendingSubmit = true
+                                            return@TextButton
+                                        }
+
+                                        // GPS 문제 없으면 바로 업로드
+                                        val tagsList = tagsInput.split(" ", ",", "#")
+                                            .map { it.trim() }
+                                            .filter { it.isNotEmpty() }
                                         val allImages = groupedImages.values.flatten().map { it.uri }
                                         onCreatePost(category, title, content, tagsList, allImages)
                                     } else {
@@ -492,7 +521,15 @@ fun WriteScreenContent(
                                     IconButton(onClick = { scope.launch { drawerState.open() } }) { Icon(Icons.Default.Menu, "메뉴") }
                                     TextButton(onClick = {
                                         if (title.isNotEmpty() && content.isNotEmpty() && category != "카테고리") {
-                                            val tagsList = tagsInput.split(" ", ",", "#").map { it.trim() }.filter { it.isNotEmpty() }
+                                            if (noGpsCount > 0) {
+                                                showNoGpsDialog = true
+                                                pendingSubmit = true
+                                                return@TextButton
+                                            }
+
+                                            val tagsList = tagsInput.split(" ", ",", "#")
+                                                .map { it.trim() }
+                                                .filter { it.isNotEmpty() }
                                             val allImages = groupedImages.values.flatten().map { it.uri }
                                             onCreatePost(category, title, content, tagsList, allImages)
                                         } else {
@@ -648,6 +685,45 @@ fun WriteScreenContent(
                     }
                 }
             }
+        }
+
+        if(showNoGpsDialog) {
+            AlertDialog(
+                onDismissRequest = {
+                    showNoGpsDialog = false
+                    pendingSubmit = false
+                },
+                title = { Text("위치 정보(GPS)가 없는 사진이 있어요") },
+                text = {
+                    Text(
+                        "총 ${totalPhotoCount}장 중 ${noGpsCount}장에 위치 정보가 없습니다.\n" +
+                                "이 사진들은 상세 지도에서 마커/경로에 포함되지 않을 수 있어요.\n" +
+                                "그래도 게시할까요?"
+                    )
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        showNoGpsDialog = false
+
+                        if(pendingSubmit) {
+                            pendingSubmit = false
+
+                            val tagsList = tagsInput.split(" ", ",", "#")
+                                .map { it.trim() }
+                                .filter { it.isNotEmpty() }
+
+                            val allImages = groupedImages.values.flatten().map { it.uri }
+                            onCreatePost(category, title, content, tagsList, allImages)
+                        }
+                    }) { Text("계속 게시") }
+                },
+                dismissButton = {
+                    TextButton(onClick = {
+                        showNoGpsDialog = false
+                        pendingSubmit = false
+                    }) { Text("취소") }
+                }
+            )
         }
     } // 최상위 Box 닫기
 }
