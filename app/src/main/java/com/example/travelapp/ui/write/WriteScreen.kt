@@ -59,6 +59,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.travelapp.data.model.RoutePoint
+import com.example.travelapp.util.AnimatedPolyline
 import com.example.travelapp.util.ExifUtils
 import com.example.travelapp.util.ExifUtils.extractLocation
 import com.naver.maps.geometry.LatLng
@@ -667,19 +668,11 @@ fun WriteScreenContent(
                                     )
                                 }
 
-                                // (예시)경로 그릴 polylineOverlay
                                 val polylineCoords  = remember(routePoints) {
                                     routePoints.map { LatLng(it.latitude, it.longitude) }
                                 }
 
-                                if(polylineCoords.size >= 2) {
-                                    PolylineOverlay(
-                                        coords = polylineCoords, // 순차적 경로 좌표 목록
-                                        color = Color.Red,
-                                        width = 10.dp,
-                                        zIndex = 1000, // 마커 위 표시되도록 조정
-                                    )
-                                }
+                                AnimatedPolyline(coords = polylineCoords)
                             }
                         }
                     }

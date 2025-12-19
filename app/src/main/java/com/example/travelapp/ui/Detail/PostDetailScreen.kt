@@ -9,6 +9,7 @@ import android.graphics.Paint
 import android.graphics.Shader
 import android.net.Uri
 import android.os.Build
+import android.util.Log
 import android.view.MotionEvent
 import android.widget.Toast
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -61,6 +62,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -89,7 +91,9 @@ import coil.request.ImageRequest
 import coil.request.SuccessResult
 import com.example.travelapp.BuildConfig
 import com.example.travelapp.data.model.Post
+import com.example.travelapp.data.model.RoutePoint
 import com.example.travelapp.data.model.comment.Comment
+import com.example.travelapp.util.AnimatedPolyline
 import com.example.travelapp.util.UtilTime
 import com.naver.maps.geometry.LatLng
 import com.naver.maps.geometry.LatLngBounds
@@ -100,10 +104,13 @@ import com.naver.maps.map.compose.MapUiSettings
 import com.naver.maps.map.compose.Marker
 import com.naver.maps.map.compose.MarkerState
 import com.naver.maps.map.compose.NaverMap
+import com.naver.maps.map.compose.PolylineOverlay
 import com.naver.maps.map.compose.rememberCameraPositionState
 import com.naver.maps.map.overlay.OverlayImage
 import com.naver.maps.map.util.MarkerIcons
+import kotlinx.coroutines.delay
 import java.net.URLEncoder
+import kotlin.compareTo
 
 // 색상 상수
 val PrimaryBlue = Color(0xFF4A90E2)
@@ -126,6 +133,7 @@ fun PostDetailScreen(
     val comments by viewModel.comments.collectAsStateWithLifecycle()
     val commentContent by viewModel.commentContent.collectAsStateWithLifecycle()
     val currentUserId by viewModel.currentUserId.collectAsStateWithLifecycle()
+    val routePoints by viewModel.routePoints.collectAsStateWithLifecycle()
 
     // 화면 진입 시 딱 한 번 실행 (데이터 요청)
     LaunchedEffect(postId) {
@@ -151,10 +159,32 @@ fun PostDetailScreen(
             }
 
             post != null -> {
+                val orderedLocations = remember(post!!.id) {
+                    post!!.imageLocations.mapNotNull { loc ->
+                        val lat = loc.latitude
+                        val lng = loc.longitude
+                        if(lat != null && lng != null) RoutePoint(latitude = lat, longitude = lng) else null
+                    }.let { list ->
+                        if(list.isNotEmpty()) list
+                        else {
+                            val lat = post!!.latitude
+                            val lng = post!!.longitude
+                            if(lat != null && lng != null) listOf(RoutePoint(latitude = lat, longitude = lng))
+                            else emptyList()
+                        }
+                    }
+                }
+
+                LaunchedEffect(post!!.id, orderedLocations) {
+                    if(orderedLocations.size >= 2) viewModel.fetchRoute(orderedLocations)
+                    else viewModel.clearRoute()
+                }
+
                 val isMyPost = post!!.userId == currentUserId
 
                 PostDetailContent(
                     post = post!!,
+                    routePoints = routePoints,
                     isLiked = isLiked,
                     likeCount = likeCount,
                     comments = comments,
@@ -199,6 +229,7 @@ fun PostDetailScreen(
 @Composable
 fun PostDetailContent(
     post: Post,
+    routePoints: List<RoutePoint>,
     isLiked: Boolean,
     likeCount: Int,
     comments: List<Comment>,
@@ -263,7 +294,7 @@ fun PostDetailContent(
                 .padding(bottom = paddingValues.calculateBottomPadding()),
             verticalArrangement = Arrangement.spacedBy(0.dp)
         ) {
-            item { PostMapHeader(post) }
+            item { PostMapHeader(post, routePoints) }
 
             item {
                 PostBodySection(
@@ -347,8 +378,10 @@ data class MarkerItem(
 
 @OptIn(ExperimentalNaverMapApi::class)
 @Composable
-fun PostMapHeader(post: Post) {
-    // [우선순위]
+fun PostMapHeader(
+    post: Post,
+    routePoints: List<RoutePoint>
+) {
     // 1) 서버가 내려준 "사진별 좌표(image_locations)"로 마커 여러개 표시
     // 2) 없으면(또는 전부 GPS가 없으면) post.coordinate(대표 좌표) 1개로 fallback
     val markerItems: List<MarkerItem> = post.imageLocations.mapNotNull { loc ->
@@ -371,7 +404,23 @@ fun PostMapHeader(post: Post) {
         }
     }
 
-    val pointsToShow: List<LatLng> = markerItems.map { it.position }
+    val routeLatLngs = remember(routePoints) {
+        routePoints.map { LatLng(it.latitude, it.longitude) }
+    }
+
+    val simplifiedRoute = remember(routeLatLngs) {
+        simplifyRoute(routeLatLngs, maxPoints = 200)
+    }
+
+    val pauseIndices = remember(simplifiedRoute, markerItems) {
+        if(simplifiedRoute.size < 2 || markerItems.size < 2) emptySet()
+        else {
+            // 출발 도착 제외한 중간 사진 마커들의 위치에서 멈춤
+            markerItems.drop(1).dropLast(1).map { nearestIndex(simplifiedRoute, it.position) }.toSet()
+        }
+    }
+
+    val pointsToShow = if(simplifiedRoute.size >= 2) simplifiedRoute else markerItems.map { it.position }
 
     Box(
         modifier = Modifier
@@ -386,17 +435,22 @@ fun PostMapHeader(post: Post) {
             }
 
             val density = LocalDensity.current
+            val view = LocalView.current
+
+            var polylinePlayKey by remember(post.id) { mutableStateOf(0) }
+
             LaunchedEffect(pointsToShow) {
                 if(pointsToShow.size >= 2) {
                     val bounds = LatLngBounds.Builder().apply {
                         pointsToShow.forEach { include(it) }
                     }.build()
                     val paddingPx = with(density) { 64.dp.roundToPx() }
-                    cameraPositionState.move(CameraUpdate.fitBounds(bounds, paddingPx))
+                    cameraPositionState.animate(CameraUpdate.fitBounds(bounds, paddingPx))
+                    delay(500)
+                    polylinePlayKey++
                 }
             }
 
-            val view = LocalView.current
             NaverMap(
                 modifier = Modifier.fillMaxSize()
                     .pointerInteropFilter { event ->
@@ -408,16 +462,23 @@ fun PostMapHeader(post: Post) {
                         false
                     },
                 cameraPositionState = cameraPositionState,
-                uiSettings = MapUiSettings(
-                    isZoomControlEnabled = true,
-                    isScrollGesturesEnabled = true,
-                    isZoomGesturesEnabled = true,
-                    isRotateGesturesEnabled = true,
-                    isTiltGesturesEnabled = true,
-                    isCompassEnabled = false,
-                    isLogoClickEnabled = false
-                )
+                uiSettings = MapUiSettings(isCompassEnabled = false, isLogoClickEnabled = false)
             ) {
+
+                if (simplifiedRoute.size >= 2 && polylinePlayKey > 0) {
+                    key(polylinePlayKey) {
+                        AnimatedPolyline(
+                            coords = simplifiedRoute,
+                            color = Color(0xFF1E88E5),
+                            width = 6.dp,
+                            zIndex = 1,
+                            stepDelayMs = (2000L / simplifiedRoute.size.coerceAtLeast(1)).coerceIn(5L, 20L),
+                            pauseIndices = pauseIndices,
+                            pauseDelayMs = 400L
+                        )
+                    }
+                }
+
                 // 마커 여러개 표시
                 markerItems.forEachIndexed { index, item ->
                     val icon = rememberPhotoMarkerIcon(item.imageUrl, sizePx = 192)
@@ -720,33 +781,6 @@ fun PostBodySection(
             color = Color(0xFF444444),
             lineHeight = 24.sp
         )
-
-        Spacer(modifier = Modifier.height(30.dp))
-
-//        if (post.latitude != null && post.longitude != null) {
-//            val cameraPositionState = rememberCameraPositionState {
-//                position = CameraPosition(LatLng(post.latitude!!, post.longitude!!), 14.0)
-//            }
-//            NaverMap(
-//                modifier = Modifier
-//                    .fillMaxWidth()
-//                    .height(200.dp)
-//                    .clip(RoundedCornerShape(12.dp)),
-//                cameraPositionState = cameraPositionState
-//            )
-//        } else {
-//            Box(
-//                modifier = Modifier
-//                    .fillMaxWidth()
-//                    .height(100.dp)
-//                    .clip(RoundedCornerShape(12.dp))
-//                    .background(Color(0xFFF5F5F5)),
-//                contentAlignment = Alignment.Center
-//            ) {
-//                Text("위치 정보가 없습니다.", color = Color.Gray, fontSize = 14.sp)
-//            }
-//        }
-
         Spacer(modifier = Modifier.height(20.dp))
 
         if(post.tags != null && post.tags.isNotEmpty()) {
@@ -1116,6 +1150,63 @@ private fun toFullUrl(urlOrPath: String?): String? {
     return resolveBaseUrlForDevice() + urlOrPath.trimStart('/')
 }
 
+fun nearestIndex(path: List<LatLng>, target: LatLng): Int {
+    var bestIdx = 0
+    var best = Double.MAX_VALUE
+    for(i in path.indices) {
+        val dLat = path[i].latitude - target.latitude
+        val dLng = path[i].longitude - target.longitude
+        val dist = dLat * dLat + dLng * dLng
+        if(dist < best) {
+            best = dist
+            bestIdx = i
+        }
+    }
+    return bestIdx
+}
+
+fun simplifyRoute(points: List<LatLng>, maxPoints: Int): List<LatLng> {
+    if (points.size <= maxPoints) return points
+    if (maxPoints <= 2) return listOf(points.first(), points.last())
+
+    val step = points.size.toDouble() / (maxPoints - 1)
+    val simplified = mutableListOf<LatLng>()
+    var accumulated = 0.0
+    while (accumulated < points.size - 1) {
+        simplified += points[accumulated.toInt()]
+        accumulated += step
+    }
+    simplified += points.last()
+    return simplified
+}
+
+@Composable
+fun MapEmptyPlaceholder() {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFFF5F5F5)), // 연한 회색 배경
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Icon(
+            // LocationOn 대신 LocationOff 아이콘을 쓰면 더 직관적입니다.
+            // 아이콘이 없다면 Icons.Default.LocationOn을 사용하세요.
+            imageVector = Icons.Default.LocationOn,
+            contentDescription = null,
+            tint = Color.LightGray,
+            modifier = Modifier.size(64.dp)
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+        Text(
+            text = "위치 정보가 없는 게시물입니다.",
+            color = Color.Gray,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Medium
+        )
+    }
+}
+
 // 프리뷰
 @Preview
 @Composable
@@ -1133,3 +1224,4 @@ fun PostDetailScreenPreview() {
     )
 //    PostDetailContent(post = dummyPost)
 }
+

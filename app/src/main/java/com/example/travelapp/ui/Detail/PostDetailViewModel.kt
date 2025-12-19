@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.travelapp.data.api.PostApiService
 import com.example.travelapp.data.model.Post
+import com.example.travelapp.data.model.RoutePoint
 import com.example.travelapp.data.model.comment.Comment
 import com.example.travelapp.data.repository.AuthRepository
 import com.example.travelapp.data.repository.CommentRepository
@@ -12,6 +13,7 @@ import com.example.travelapp.data.repository.PostRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -51,6 +53,9 @@ class PostDetailViewModel @Inject constructor(
 
     private val _comments = MutableStateFlow<List<Comment>>(emptyList())
     val comments = _comments.asStateFlow()
+
+    private val _routePoints = MutableStateFlow<List<RoutePoint>>(emptyList())
+    val routePoints: StateFlow<List<RoutePoint>> = _routePoints.asStateFlow()
 
     init {
         loadCurrentUserId()
@@ -223,5 +228,23 @@ class PostDetailViewModel @Inject constructor(
 
             _isLoading.value = false
         }
+    }
+
+    fun fetchRoute(locations: List<RoutePoint>) {
+        viewModelScope.launch {
+            if(locations.size < 2) {
+                _routePoints.value = emptyList()
+                return@launch
+            }
+
+            Log.d("PostDetail", "fetchRoute: locations=${locations.size}")
+            val route = postRepository.getRouteForDay(locations)
+            Log.d("PostDetail", "fetchRoute: routeSize=${route?.size}")
+            _routePoints.value = route ?: emptyList()
+        }
+    }
+
+    fun clearRoute() {
+        _routePoints.value = emptyList()
     }
 }
