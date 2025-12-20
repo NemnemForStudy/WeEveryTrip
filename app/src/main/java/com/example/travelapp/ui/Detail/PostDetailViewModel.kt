@@ -1,5 +1,6 @@
 package com.example.travelapp.ui.Detail
 
+import android.hardware.camera2.CaptureFailure
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -246,5 +247,24 @@ class PostDetailViewModel @Inject constructor(
 
     fun clearRoute() {
         _routePoints.value = emptyList()
+    }
+
+    fun deletePost(onSuccess: () -> Unit, onFailure: (String) -> Unit) {
+        val postId = _currentPostId.value
+        if(postId.isBlank()) return
+
+        viewModelScope.launch {
+            _isLoading.value = true
+            val result = postRepository.deletePost(postId)
+            _isLoading.value = false
+
+            if(result.isSuccess) {
+                onSuccess()
+            } else {
+                val message = result.exceptionOrNull()?.message ?: "게시물 삭제 실패"
+                _errorMsg.value = message
+                onFailure(message)
+            }
+        }
     }
 }

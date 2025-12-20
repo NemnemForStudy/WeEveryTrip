@@ -212,19 +212,19 @@ private fun ProfileSection(
                 )
             }
 
-            IconButton(
-                onClick = onEditClick,
-                modifier = Modifier
-                    .size(40.dp)
-                    .background(Color(0xFFF5F5F5), CircleShape)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Edit,
-                    contentDescription = "프로필 수정",
-                    tint = Color(0xFF666666),
-                    modifier = Modifier.size(20.dp)
-                )
-            }
+//            IconButton(
+//                onClick = onEditClick,
+//                modifier = Modifier
+//                    .size(40.dp)
+//                    .background(Color(0xFFF5F5F5), CircleShape)
+//            ) {
+//                Icon(
+//                    imageVector = Icons.Default.Edit,
+//                    contentDescription = "프로필 수정",
+//                    tint = Color(0xFF666666),
+//                    modifier = Modifier.size(20.dp)
+//                )
+//            }
         }
     }
 }
@@ -243,18 +243,18 @@ private fun ActivityStatsCard(
         colors = CardDefaults.cardColors(containerColor = Color.White),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 20.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly
-        ) {
-            StatItem(count = postCount, label = "게시글")
-            StatDivider()
-            StatItem(count = likeCount, label = "좋아요")
-            StatDivider()
-            StatItem(count = commentCount, label = "댓글")
-        }
+//        Row(
+//            modifier = Modifier
+//                .fillMaxWidth()
+//                .padding(vertical = 20.dp),
+//            horizontalArrangement = Arrangement.SpaceEvenly
+//        ) {
+//            StatItem(count = postCount, label = "게시글")
+//            StatDivider()
+//            StatItem(count = likeCount, label = "좋아요")
+//            StatDivider()
+//            StatItem(count = commentCount, label = "댓글")
+//        }
     }
 }
 
@@ -316,13 +316,13 @@ private fun MenuSection(
                 modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 8.dp)
             )
 
-            MenuItem(Icons.Outlined.Article, "내가 쓴 글", onClick = onMyPostsClick)
-            MenuItem(Icons.Default.Favorite, "좋아요한 글", Color(0xFFE91E63), onClick = onLikedPostsClick)
+//            MenuItem(Icons.Outlined.Article, "내가 쓴 글", onClick = onMyPostsClick)
+//            MenuItem(Icons.Default.Favorite, "좋아요한 글", Color(0xFFE91E63), onClick = onLikedPostsClick)
 
-            HorizontalDivider(
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                color = Color(0xFFF0F0F0)
-            )
+//            HorizontalDivider(
+//                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+//                color = Color(0xFFF0F0F0)
+//            )
 
             Text(
                 text = "알림 설정",

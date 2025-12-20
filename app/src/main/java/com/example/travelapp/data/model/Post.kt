@@ -2,6 +2,7 @@ package com.example.travelapp.data.model
 
 import androidx.compose.ui.layout.LayoutCoordinates
 import com.google.gson.annotations.SerializedName
+import com.kakao.sdk.template.model.Content
 import java.io.Serial
 import java.io.Serializable
 
@@ -117,4 +118,8 @@ data class PostImageLocation(
 
     @SerializedName("sort_index")
     val sortIndex: Int? = null
+)
+
+data class DeletePostRequest(
+    @SerializedName("post_id") val postId: Long
 )

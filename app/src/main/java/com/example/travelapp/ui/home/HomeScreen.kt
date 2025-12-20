@@ -31,6 +31,7 @@ import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -72,6 +73,21 @@ fun HomeScreen(
 
     val searchResults by viewModel.searchResults.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
+
+    val shouldRefresh = navController
+        .currentBackStackEntry
+        ?.savedStateHandle
+        ?.getStateFlow("post_deleted", true)
+        ?.collectAsState()
+
+    LaunchedEffect(shouldRefresh?.value) {
+        if(shouldRefresh?.value == true) {
+            viewModel.fetchMyPosts()
+            navController.currentBackStackEntry
+                ?.savedStateHandle
+                ?.set("post_deleted", false)
+        }
+    }
 
     Scaffold(
         topBar = {

@@ -142,4 +142,8 @@ class HomeViewModel @Inject constructor(
             }
         }
     }
+
+    fun fetchMyPosts() {
+        loadMyPosts()
+    }
 }

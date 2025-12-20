@@ -93,6 +93,8 @@ import com.example.travelapp.BuildConfig
 import com.example.travelapp.data.model.Post
 import com.example.travelapp.data.model.RoutePoint
 import com.example.travelapp.data.model.comment.Comment
+import com.example.travelapp.ui.home.HomeScreen
+import com.example.travelapp.ui.navigation.Screen
 import com.example.travelapp.util.AnimatedPolyline
 import com.example.travelapp.util.UtilTime
 import com.naver.maps.geometry.LatLng
@@ -200,15 +202,24 @@ fun PostDetailScreen(
                         viewModel.deleteComment(commentId)
                     },
                     onBackClick = {
-                        navController.navigate("feed") {
-                            popUpTo("feed") { inclusive = true }
+                        navController.navigate(Screen.Home.route) {
+                            popUpTo(Screen.Home.route) { inclusive = true }
                         }
                     },
                     onPostEdit = {
                         navController.navigate("edit/${postId}")
                     },
                     onPostDelete = {
-                        // TODO: 삭제 확인 다이얼로그
+                        viewModel.deletePost(
+                            onSuccess = {
+                                navController.previousBackStackEntry
+                                    ?.savedStateHandle
+                                    ?.set("post_deleted", true)
+
+                                navController.popBackStack()
+                            },
+                            onFailure = { }
+                        )
                     },
                     isMyPost = isMyPost
                 )
@@ -247,6 +258,7 @@ fun PostDetailContent(
 ) {
     var showEditDialog by remember { mutableStateOf(false) }
     var commentToEdit by remember { mutableStateOf<Comment?>(null) }
+    var hasHeader = post.images?.isNotEmpty() == true || post.imageLocations.isNotEmpty()
 
     Scaffold(
         containerColor = Color.White,
@@ -291,10 +303,15 @@ fun PostDetailContent(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Color.White)
+                .padding(top = if(!hasHeader) paddingValues.calculateTopPadding() else 0.dp)
                 .padding(bottom = paddingValues.calculateBottomPadding()),
             verticalArrangement = Arrangement.spacedBy(0.dp)
         ) {
-            item { PostMapHeader(post, routePoints) }
+            if(hasHeader) {
+                item { PostMapHeader(post, routePoints) }
+            } else {
+                item { Spacer(modifier = Modifier.height(16.dp))}
+            }
 
             item {
                 PostBodySection(
@@ -303,7 +320,8 @@ fun PostDetailContent(
                     commentCount = comments.size,
                     isMyPost = isMyPost,
                     onEditClick = onPostEdit,
-                    onDeleteClick = onPostDelete
+                    onDeleteClick = onPostDelete,
+                    isHeaderPresent = hasHeader
                 )
             }
 
@@ -412,11 +430,18 @@ fun PostMapHeader(
         simplifyRoute(routeLatLngs, maxPoints = 200)
     }
 
+    // 실제로 그릴 폴리라인 좌표 목록
+    val polylineCoords = remember(simplifiedRoute) {
+        if(simplifiedRoute.size >= 2) simplifiedRoute else emptyList()
+    }
+
     val pauseIndices = remember(simplifiedRoute, markerItems) {
         if(simplifiedRoute.size < 2 || markerItems.size < 2) emptySet()
         else {
             // 출발 도착 제외한 중간 사진 마커들의 위치에서 멈춤
-            markerItems.drop(1).dropLast(1).map { nearestIndex(simplifiedRoute, it.position) }.toSet()
+            markerItems.drop(1).dropLast(1)
+                .map { nearestIndex(simplifiedRoute, it.position) }
+                .toSet()
         }
     }
 
@@ -439,15 +464,17 @@ fun PostMapHeader(
 
             var polylinePlayKey by remember(post.id) { mutableStateOf(0) }
 
-            LaunchedEffect(pointsToShow) {
-                if(pointsToShow.size >= 2) {
+            LaunchedEffect(polylineCoords) {
+                // route가 준비된 첫 순간에만 카메라 fit + 애니 시작
+                if (polylineCoords.size >= 2 && polylinePlayKey == 0) {
                     val bounds = LatLngBounds.Builder().apply {
-                        pointsToShow.forEach { include(it) }
+                        polylineCoords.forEach { include(it) }
                     }.build()
+
                     val paddingPx = with(density) { 64.dp.roundToPx() }
                     cameraPositionState.animate(CameraUpdate.fitBounds(bounds, paddingPx))
                     delay(500)
-                    polylinePlayKey++
+                    polylinePlayKey = 1
                 }
             }
 
@@ -465,16 +492,17 @@ fun PostMapHeader(
                 uiSettings = MapUiSettings(isCompassEnabled = false, isLogoClickEnabled = false)
             ) {
 
+                // route 준비 후 1회만 애니메이션 실행
                 if (simplifiedRoute.size >= 2 && polylinePlayKey > 0) {
                     key(polylinePlayKey) {
                         AnimatedPolyline(
-                            coords = simplifiedRoute,
+                            coords = polylineCoords,
                             color = Color(0xFF1E88E5),
-                            width = 6.dp,
+                            width = 8.dp,
                             zIndex = 1,
-                            stepDelayMs = (2000L / simplifiedRoute.size.coerceAtLeast(1)).coerceIn(5L, 20L),
+                            stepDelayMs = (2500L / polylineCoords.size.coerceAtLeast(1)).coerceIn(3L, 12L),
                             pauseIndices = pauseIndices,
-                            pauseDelayMs = 400L
+                            pauseDelayMs = 300L
                         )
                     }
                 }
@@ -627,15 +655,22 @@ fun PostBodySection(
     commentCount: Int = 0,
     isMyPost: Boolean = false,
     onEditClick: () -> Unit = {},
-    onDeleteClick: () -> Unit = {}
+    onDeleteClick: () -> Unit = {},
+    isHeaderPresent: Boolean = true
 ) {
     var isMenuExpanded by remember { mutableStateOf(false) }
     
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .offset(y = (-20).dp)
-            .clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
+            .let {
+                if(isHeaderPresent) {
+                    it.offset(y = (-20).dp)
+                        .clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
+                }else {
+                    it // 헤더 없으면 평범하게 시작
+                }
+            }
             .background(Color.White)
             .padding(20.dp)
     ) {
@@ -685,20 +720,22 @@ fun PostBodySection(
 
             Spacer(modifier = Modifier.weight(1f))
 
-            Button(
-                onClick = { openNaverMapRoute(context, routePoints) },
-                enabled = routePoints.size >= 2,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = PrimaryBlue,
-                    contentColor = Color.White,
-                    disabledContainerColor = PrimaryBlue.copy(alpha = 0.35f),
-                    disabledContentColor = Color.White.copy(alpha = 0.7f)
-                ),
-                shape = RoundedCornerShape(999.dp),
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                modifier = Modifier.height(32.dp)
-            ) {
-                Text("길찾기", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+            if(isHeaderPresent) {
+                Button(
+                    onClick = { openNaverMapRoute(context, routePoints) },
+                    enabled = routePoints.size >= 2,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = PrimaryBlue,
+                        contentColor = Color.White,
+                        disabledContainerColor = PrimaryBlue.copy(alpha = 0.35f),
+                        disabledContentColor = Color.White.copy(alpha = 0.7f)
+                    ),
+                    shape = RoundedCornerShape(999.dp),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                    modifier = Modifier.height(32.dp)
+                ) {
+                    Text("길찾기", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                }
             }
         }
 

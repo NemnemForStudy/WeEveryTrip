@@ -250,6 +250,19 @@ open class PostRepository @Inject constructor(
         }
     }
 
+    suspend fun deletePost(postId: String): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            val response = postApiService.deletePost(postId)
+            if(response.isSuccessful) {
+                Result.success(Unit)
+            } else {
+                Result.failure(RuntimeException("삭제 실패: ${response.code()}"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     private fun calculateInSampleSize(options: BitmapFactory.Options, reqWidth: Int, reqHeight: Int): Int {
         val (height: Int, width: Int) = options.run { outHeight to outWidth }
         var inSampleSize = 1

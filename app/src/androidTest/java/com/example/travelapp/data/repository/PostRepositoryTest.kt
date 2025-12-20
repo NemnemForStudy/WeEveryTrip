@@ -9,9 +9,12 @@ import com.example.travelapp.data.model.Post
 import com.example.travelapp.data.model.UpdatePostRequest
 import com.example.travelapp.data.model.UpdatePostResponse
 import kotlinx.coroutines.test.runTest
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.MultipartBody
+import okhttp3.ResponseBody.Companion.toResponseBody
 // ⭐️ [변경] JUnit 4용 Import 사용 (jupiter 아님)
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -167,7 +170,8 @@ class PostRepositoryTest {
 
         // whenever 구문은 그대로 유지
         whenever(mockPostApiService.createPost(
-            any(), any(), any(), any(), anyOrNull(), any(), any()
+            any(), any(), any(), any(), anyOrNull(),
+            any(), any(), any(), any(), any()
         )).thenReturn(mockResponse) // 이제 Argument type mismatch 에러가 사라집니다.
 
         // 5. Repository 호출
@@ -190,13 +194,16 @@ class PostRepositoryTest {
 
         whenever(
             mockPostApiService.createPost(
-                any(),
-                any(),
-                any(),
-                any(),
-                anyOrNull(), // coordinates
-                any(),
-                any<List<MultipartBody.Part>>()       // images
+                any(),                       // title: RequestBody
+                any(),                       // content
+                any(),                       // category
+                anyOrNull(),                 // coordinates (nullable)
+                any(),                       // isDomestic
+                anyOrNull(),                 // imageLocations
+                anyOrNull(),                 // tags
+                any<List<MultipartBody.Part>>(), // images
+                anyOrNull(),                 // startDate
+                anyOrNull()                  // endDate
             )
         ).thenThrow(expectException)
 
@@ -472,5 +479,50 @@ class PostRepositoryTest {
         // 5. 검증
         assertTrue("게시물 수정 성공", result.isSuccess)
         assertEquals(samplePost, result.getOrNull())
+    }
+
+    @Test
+    fun testDeleteSuccess() = runTest {
+        val postId = "test-post-123"
+        val mockApiResponse = ApiResponse<Unit>(
+            success = true,
+            message = "게시물 삭제 성공",
+            data = null
+        )
+
+        val mockResponse = Response.success(mockApiResponse)
+        whenever(mockPostApiService.deletePost(postId))
+            .thenReturn(mockResponse)
+
+        val result = postRepository.deletePost(postId)
+        assertTrue("게시물 삭제 성공", result.isSuccess)
+        assertEquals("결과는 Unit이어야 함", Unit, result.getOrNull())
+    }
+
+    @Test
+    fun testDeleteFailure() = runTest {
+        val postId = "test-post-123"
+        val errorMessage = "Server error"
+
+        val errorResponse = Response.error<ApiResponse<Unit>>(
+            500,
+            errorMessage.toResponseBody("application/json".toMediaType())
+        )
+        whenever(mockPostApiService.deletePost(postId))
+            .thenReturn(errorResponse)
+
+        val result = postRepository.deletePost(postId)
+
+        // 결과가 실패인지 확인
+        assertTrue("게시물 삭제는 실패로 처리되어야 합니다.", result.isFailure)
+
+        val exception = result.exceptionOrNull()
+        assertNotNull("실패 시 예외 객체가 Result에 포함되어야 합니다.", exception)
+
+        // 타입 비교 시 실제 발생한 타입을 메시지에 포함하면 디버깅이 훨씬 쉬워집니다.
+        assertTrue(
+            "실제 발생한 예외 타입: ${exception?.javaClass?.simpleName}",
+            exception is RuntimeException
+        )
     }
 }

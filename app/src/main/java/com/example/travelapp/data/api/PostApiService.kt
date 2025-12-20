@@ -2,6 +2,7 @@ package com.example.travelapp.data.api
 
 import com.example.travelapp.data.model.ApiResponse
 import com.example.travelapp.data.model.CreatePostResponse
+import com.example.travelapp.data.model.DeletePostRequest
 import com.example.travelapp.data.model.Post
 import com.example.travelapp.data.model.RouteRequest
 import com.example.travelapp.data.model.RouteResponse
@@ -76,4 +77,9 @@ interface PostApiService {
         @Path("postId") postId: String,
         @Body request: UpdatePostRequest
     ): Response<ApiResponse<Post>>
+
+    @DELETE("api/posts/{postId}/delete")
+    suspend fun deletePost(
+        @Path("postId") postId: String,
+    ): Response<ApiResponse<Unit>>
 }
