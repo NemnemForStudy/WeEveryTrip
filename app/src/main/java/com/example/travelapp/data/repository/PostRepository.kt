@@ -353,15 +353,16 @@ open class PostRepository @Inject constructor(
             // 3. 응답 처리
             if (response.isSuccessful) {
                 // 성공 시: 응답 본문(body)에서 route 리스트를 꺼내 반환
-                response.body()?.route
+                val body = response.body()
+                Log.d("PostRepository", "route success body=${body}")
+                body?.route
             } else {
-                // 실패 시: 에러 로그 출력
-                Log.e("PostRepository", "경로 조회 실패: ${response.code()} - ${response.message()}")
+                val err = response.errorBody()?.string()
+                Log.e("PostRepository", "route fail code=${response.code()} msg=${response.message()} errBody=$err")
                 null
             }
         } catch (e: Exception) {
-            // 네트워크 오류 등 예외 처리
-            e.printStackTrace()
+            Log.e("PostRepository", "route exception=${e.message}", e)
             null
         }
     }

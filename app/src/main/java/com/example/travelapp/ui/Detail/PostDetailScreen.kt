@@ -5,11 +5,12 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapShader
 import android.graphics.Canvas
+import android.graphics.Matrix
 import android.graphics.Paint
+import android.graphics.Path
 import android.graphics.Shader
 import android.net.Uri
 import android.os.Build
-import android.util.Log
 import android.view.MotionEvent
 import android.widget.Toast
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -36,6 +37,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowForward
+import androidx.compose.material.icons.filled.ChevronLeft
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.LocationOn
@@ -81,6 +85,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import androidx.core.graphics.drawable.toBitmap
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -93,7 +98,6 @@ import com.example.travelapp.BuildConfig
 import com.example.travelapp.data.model.Post
 import com.example.travelapp.data.model.RoutePoint
 import com.example.travelapp.data.model.comment.Comment
-import com.example.travelapp.ui.home.HomeScreen
 import com.example.travelapp.ui.navigation.Screen
 import com.example.travelapp.util.AnimatedPolyline
 import com.example.travelapp.util.UtilTime
@@ -106,13 +110,11 @@ import com.naver.maps.map.compose.MapUiSettings
 import com.naver.maps.map.compose.Marker
 import com.naver.maps.map.compose.MarkerState
 import com.naver.maps.map.compose.NaverMap
-import com.naver.maps.map.compose.PolylineOverlay
 import com.naver.maps.map.compose.rememberCameraPositionState
 import com.naver.maps.map.overlay.OverlayImage
 import com.naver.maps.map.util.MarkerIcons
 import kotlinx.coroutines.delay
 import java.net.URLEncoder
-import kotlin.compareTo
 
 // 색상 상수
 val PrimaryBlue = Color(0xFF4A90E2)
@@ -161,25 +163,34 @@ fun PostDetailScreen(
             }
 
             post != null -> {
-                val orderedLocations = remember(post!!.id) {
-                    post!!.imageLocations.mapNotNull { loc ->
-                        val lat = loc.latitude
-                        val lng = loc.longitude
-                        if(lat != null && lng != null) RoutePoint(latitude = lat, longitude = lng) else null
-                    }.let { list ->
-                        if(list.isNotEmpty()) list
-                        else {
-                            val lat = post!!.latitude
-                            val lng = post!!.longitude
-                            if(lat != null && lng != null) listOf(RoutePoint(latitude = lat, longitude = lng))
-                            else emptyList()
-                        }
-                    }
-                }
+//                val orderedLocations = remember(post!!.id) {
+//                    post!!.imageLocations.mapNotNull { loc ->
+//                        val lat = loc.latitude
+//                        val lng = loc.longitude
+//                        if(lat != null && lng != null) RoutePoint(latitude = lat, longitude = lng) else null
+//                    }.let { list ->
+//                        if(list.isNotEmpty()) list
+//                        else {
+//                            val lat = post!!.latitude
+//                            val lng = post!!.longitude
+//                            if(lat != null && lng != null) listOf(RoutePoint(latitude = lat, longitude = lng))
+//                            else emptyList()
+//                        }
+//                    }
+//                }
+                val routePointsByDay by viewModel.routePointsByDay.collectAsState()
+                val currentDayIndex by viewModel.currentDayIndex.collectAsState()
 
-                LaunchedEffect(post!!.id, orderedLocations) {
-                    if(orderedLocations.size >= 2) viewModel.fetchRoute(orderedLocations)
-                    else viewModel.clearRoute()
+                LaunchedEffect(post!!.id, routePointsByDay, currentDayIndex) {
+                    val dayKeys = routePointsByDay.keys.sorted()
+                    val selectedPoints = dayKeys
+                        .getOrNull(currentDayIndex)
+                        ?.let{ routePointsByDay[it] } ?: emptyList()
+                    if(selectedPoints.size >= 2) {
+                        viewModel.fetchRoute(selectedPoints)
+                    } else {
+                        viewModel.clearRoute()
+                    }
                 }
 
                 val isMyPost = post!!.userId == currentUserId
@@ -187,6 +198,8 @@ fun PostDetailScreen(
                 PostDetailContent(
                     post = post!!,
                     routePoints = routePoints,
+                    routePointsByDay = routePointsByDay,
+                    currentDayIndex = currentDayIndex,
                     isLiked = isLiked,
                     likeCount = likeCount,
                     comments = comments,
@@ -221,6 +234,9 @@ fun PostDetailScreen(
                             onFailure = { }
                         )
                     },
+                    onPrevDay = { viewModel.goToPrevDay() },
+                    onNextDay = { viewModel.goToNextDay() },
+                    onDaySelect = { index -> viewModel.setDayIndex(index) },
                     isMyPost = isMyPost
                 )
             }
@@ -241,6 +257,8 @@ fun PostDetailScreen(
 fun PostDetailContent(
     post: Post,
     routePoints: List<RoutePoint>,
+    routePointsByDay: Map<Int, List<RoutePoint>>,
+    currentDayIndex: Int,
     isLiked: Boolean,
     likeCount: Int,
     comments: List<Comment>,
@@ -254,6 +272,9 @@ fun PostDetailContent(
     onBackClick: () -> Unit = {},
     onPostEdit: () -> Unit = {},
     onPostDelete: () -> Unit = {},
+    onPrevDay: () -> Unit = {},
+    onNextDay: () -> Unit = {},
+    onDaySelect: (Int) -> Unit = {},
     isMyPost: Boolean = false
 ) {
     var showEditDialog by remember { mutableStateOf(false) }
@@ -308,7 +329,65 @@ fun PostDetailContent(
             verticalArrangement = Arrangement.spacedBy(0.dp)
         ) {
             if(hasHeader) {
-                item { PostMapHeader(post, routePoints) }
+                item {
+                    PostMapHeader(
+                        post = post,
+                        routePoints = routePoints,
+                        routePointsByDay = routePointsByDay,
+                        currentDayIndex = currentDayIndex,
+                        onPrevDay = onPrevDay,
+                        onNextDay = onNextDay
+                    )
+                }
+
+                item {
+                    val dayKeys = routePointsByDay.keys.sorted()
+                    val totalDays = dayKeys.size
+                    if (totalDays > 0) {
+                        val canPrev = currentDayIndex > 0
+                        val canNext = currentDayIndex < totalDays - 1
+                        val dateLabel = remember(post.travelStartDate, currentDayIndex) {
+                            formatTripDateLabel(post.travelStartDate, currentDayIndex)
+                        }
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp)
+                                .padding(top = 10.dp, bottom = 18.dp)
+                                .zIndex(2f),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            IconButton(onClick = { onDaySelect(currentDayIndex - 1) }, enabled = canPrev) {
+                                Icon(
+                                    imageVector = Icons.Default.ChevronLeft,
+                                    contentDescription = "이전 날짜",
+                                    tint = if (canPrev) TextDark else TextGray.copy(alpha = 0.35f)
+                                )
+                            }
+
+                            Column(
+                                modifier = Modifier.weight(1f),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Text(
+                                    text = dateLabel ?: "Day ${dayKeys.getOrNull(currentDayIndex) ?: (currentDayIndex + 1)}",
+                                    color = TextDark,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 14.sp
+                                )
+                            }
+
+                            IconButton(onClick = { onDaySelect(currentDayIndex + 1) }, enabled = canNext) {
+                                Icon(
+                                    imageVector = Icons.Default.ChevronRight,
+                                    contentDescription = "다음 날짜",
+                                    tint = if (canNext) TextDark else TextGray.copy(alpha = 0.35f)
+                                )
+                            }
+                        }
+                    }
+                }
             } else {
                 item { Spacer(modifier = Modifier.height(16.dp))}
             }
@@ -318,6 +397,8 @@ fun PostDetailContent(
                     post = post,
                     likeCount = likeCount,
                     commentCount = comments.size,
+                    routePointsByDay = routePointsByDay,
+                    currentDayIndex = currentDayIndex,
                     isMyPost = isMyPost,
                     onEditClick = onPostEdit,
                     onDeleteClick = onPostDelete,
@@ -398,29 +479,34 @@ data class MarkerItem(
 @Composable
 fun PostMapHeader(
     post: Post,
-    routePoints: List<RoutePoint>
+    routePoints: List<RoutePoint>,
+    routePointsByDay: Map<Int, List<RoutePoint>>,
+    currentDayIndex: Int,
+    onPrevDay: () -> Unit,
+    onNextDay: () -> Unit
 ) {
     // 1) 서버가 내려준 "사진별 좌표(image_locations)"로 마커 여러개 표시
     // 2) 없으면(또는 전부 GPS가 없으면) post.coordinate(대표 좌표) 1개로 fallback
-    val markerItems: List<MarkerItem> = post.imageLocations.mapNotNull { loc ->
-        val lat = loc.latitude
-        val lng = loc.longitude
-        if (lat != null && lng != null) {
-            MarkerItem(
-                position = LatLng(lat, lng),
-                imageUrl = loc.imageUrl
-            )
-        } else null
-    }.let { list ->
-        if (list.isNotEmpty()) list
-        else {
-            val lat = post.latitude
-            val lng = post.longitude
+    val markerItems: List<MarkerItem> =
+        post.imageLocations.mapNotNull { loc ->
+            val lat = loc.latitude
+            val lng = loc.longitude
             if (lat != null && lng != null) {
-                listOf(MarkerItem(LatLng(lat, lng), post.images.firstOrNull()))
-            } else emptyList()
+                MarkerItem(
+                    position = LatLng(lat, lng),
+                    imageUrl = loc.imageUrl
+                )
+            } else null
+        }.let { list ->
+            if(list.isNotEmpty()) list
+            else {
+                val lat = post.latitude
+                val lng = post.longitude
+                if(lat != null && lng != null) {
+                    listOf(MarkerItem(LatLng(lat, lng), post.images.firstOrNull()))
+                } else emptyList()
+            }
         }
-    }
 
     val routeLatLngs = remember(routePoints) {
         routePoints.map { LatLng(it.latitude, it.longitude) }
@@ -447,12 +533,86 @@ fun PostMapHeader(
 
     val pointsToShow = if(simplifiedRoute.size >= 2) simplifiedRoute else markerItems.map { it.position }
 
+    val dayKeys = remember(routePointsByDay, currentDayIndex) {
+        routePointsByDay.keys.sorted()
+    }
+    val totalDays = dayKeys.size
+    val currentDayNumber = dayKeys.getOrNull(currentDayIndex)
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .height(350.dp)
             .background(Color.LightGray)
     ) {
+        if (totalDays > 0) {
+            Row(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = 16.dp)
+                    .clip(RoundedCornerShape(24.dp))
+                    .background(Color.White.copy(alpha = 0.9f))
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                val canPrev = currentDayIndex > 0
+                val canNext = currentDayIndex < totalDays - 1
+
+                IconButton(onClick = onPrevDay, enabled = canPrev) {
+                    Icon(
+                        imageVector = Icons.Default.ArrowBack,
+                        contentDescription = "이전 날짜",
+                        tint = if (canPrev) PrimaryBlue else TextGray.copy(alpha = 0.4f)
+                    )
+                }
+
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        text = "Day ${currentDayIndex + 1} / $totalDays",
+                        color = TextDark,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp
+                    )
+                    Text(
+                        text = currentDayNumber?.let { "여행 ${it}일차" } ?: "단일 여행일",
+                        color = TextGray,
+                        fontSize = 12.sp
+                    )
+                }
+
+                IconButton(onClick = onNextDay, enabled = canNext) {
+                    Icon(
+                        imageVector = Icons.Default.ArrowForward,
+                        contentDescription = "다음 날짜",
+                        tint = if (canNext) PrimaryBlue else TextGray.copy(alpha = 0.4f)
+                    )
+                }
+            }
+
+            if (totalDays > 1) {
+                Row(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    repeat(totalDays) { index ->
+                        val isSelected = index == currentDayIndex
+                        Box(
+                            modifier = Modifier
+                                .size(if (isSelected) 10.dp else 8.dp)
+                                .clip(CircleShape)
+                                .background(
+                                    if (isSelected) PrimaryBlue
+                                    else PrimaryBlue.copy(alpha = 0.3f)
+                                )
+                        )
+                    }
+                }
+            }
+        }
+
         if(pointsToShow.isNotEmpty()) {
             val cameraPositionState = rememberCameraPositionState {
                 // 기본 카메라는 첫 번째 포인트 기준
@@ -495,31 +655,51 @@ fun PostMapHeader(
                 // route 준비 후 1회만 애니메이션 실행
                 if (simplifiedRoute.size >= 2 && polylinePlayKey > 0) {
                     key(polylinePlayKey) {
+                        val stepDelay = (2500L / polylineCoords.size.coerceAtLeast(1))
+                            .coerceIn(3L, 12L)
+
                         AnimatedPolyline(
                             coords = polylineCoords,
-                            color = Color(0xFF1E88E5),
-                            width = 8.dp,
+                            color = Color.Black.copy(alpha = 0.55f),
+                            width = 14.dp,
                             zIndex = 1,
-                            stepDelayMs = (2500L / polylineCoords.size.coerceAtLeast(1)).coerceIn(3L, 12L),
+                            stepDelayMs = stepDelay,
+                            pauseIndices = pauseIndices,
+                            pauseDelayMs = 300L
+                        )
+
+                        AnimatedPolyline(
+                            coords = polylineCoords,
+                            color = Color(0xFF21B6FF),
+                            width = 8.dp,
+                            zIndex = 2,
+                            stepDelayMs = stepDelay,
                             pauseIndices = pauseIndices,
                             pauseDelayMs = 300L
                         )
                     }
                 }
 
+                if (polylineCoords.size >= 2) {
+                    PolylineArrowMarkers(
+                        coords = polylineCoords,
+                        color = Color(0xFF21B6FF),
+                        zIndex = 3
+                    )
+                }
+
+                val total = markerItems.size
                 // 마커 여러개 표시
                 markerItems.forEachIndexed { index, item ->
-                    val icon = rememberPhotoMarkerIcon(item.imageUrl, sizePx = 192)
-                    val total = markerItems.size
-                    val label = when {
-                        total >= 2 && index == 0 -> "출발"
-                        total >= 2 && index == total - 1 -> "도착"
-                        total >= 3 -> "여행지 ${index}"
-                        else -> "위치"
-                    }
+                    val icon = rememberPhotoMarkerIcon(item.imageUrl, sizePx = 160) // 사진은 조금 작게도 OK
+
                     Marker(
                         state = MarkerState(position = item.position),
-                        captionText = label,
+                        captionText = when {
+                            total >= 2 && index == 0 -> "출발"
+                            total >= 2 && index == total - 1 -> "도착"
+                            else -> "${index}"
+                        },
                         icon = icon ?: MarkerIcons.BLUE,
                         anchor = Offset(0.5f, 1.0f)
                     )
@@ -653,6 +833,8 @@ fun PostBodySection(
     post: Post,
     likeCount: Int = 0,
     commentCount: Int = 0,
+    routePointsByDay: Map<Int, List<RoutePoint>>,
+    currentDayIndex: Int,
     isMyPost: Boolean = false,
     onEditClick: () -> Unit = {},
     onDeleteClick: () -> Unit = {},
@@ -677,28 +859,12 @@ fun PostBodySection(
 
         val context = LocalContext.current
 
-        // 길찾기 쓸 포인트
-        val markerItems: List<MarkerItem> = post.imageLocations.mapNotNull { loc ->
-            val lat = loc.latitude
-            val lng = loc.longitude
-            if (lat != null && lng != null) {
-                MarkerItem(
-                    position = LatLng(lat, lng),
-                    imageUrl = loc.imageUrl
-                )
-            } else null
-        }.let { list ->
-            if (list.isNotEmpty()) list
-            else {
-                val lat = post.latitude
-                val lng = post.longitude
-                if (lat != null && lng != null) {
-                    listOf(MarkerItem(LatLng(lat, lng), post.images.firstOrNull()))
-                } else emptyList()
-            }
+        val routePoints: List<LatLng> =
+            post.imageLocations.mapNotNull { loc ->
+                val lat = loc.latitude
+                val lng = loc.longitude
+                if (lat != null && lng != null) LatLng(lat, lng) else null
         }
-
-        val routePoints: List<LatLng> = markerItems.map { it.position }
 
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -1034,6 +1200,105 @@ private fun circleCrop(src: Bitmap, size: Int): Bitmap {
     return output
 }
 
+@OptIn(ExperimentalNaverMapApi::class)
+@Composable
+private fun PolylineArrowMarkers(
+    coords: List<LatLng>,
+    color: Color,
+    zIndex: Int
+) {
+    // 1) 너무 촘촘하면 지저분해지니까, 일정 간격으로 샘플링해서 화살표를 배치한다.
+    //    - route가 길면 자동으로 간격을 늘려서 대략 12~24개 정도만 나오게 조절.
+    val step = remember(coords.size) {
+        val n = coords.size
+        when {
+            n <= 60 -> 4
+            n <= 120 -> 6
+            n <= 250 -> 10
+            else -> 14
+        }
+    }
+
+    // 2) 좌표/각도(bearing) 목록 계산 (끝점 제외)
+    val arrows = remember(coords, step) {
+        buildList {
+            var i = step
+            while (i < coords.size - 1) {
+                val a = coords[i]
+                val b = coords[i + 1]
+                add(ArrowData(a, bearingDeg(a, b)))
+                i += step
+            }
+        }
+    }
+
+    // 3) 화살표 마커 렌더링
+    //    - Marker 회전(angle) 지원이 불확실해서, 비트맵 자체를 회전해서 icon으로 넣는다.
+    arrows.forEach { data ->
+        val icon = remember(data.angleDeg, color) {
+            OverlayImage.fromBitmap(createRotatedArrowBitmap(data.angleDeg, color))
+        }
+
+        Marker(
+            state = MarkerState(position = data.position),
+            icon = icon,
+            anchor = Offset(0.5f, 0.5f),
+            zIndex = zIndex
+        )
+    }
+}
+
+private data class ArrowData(
+    val position: LatLng,
+    val angleDeg: Float
+)
+
+private fun bearingDeg(a: LatLng, b: LatLng): Float {
+    // 화면 좌표계가 아니라 지리 좌표계 기반의 간단 bearing(근거리용)
+    val dLon = Math.toRadians(b.longitude - a.longitude)
+    val lat1 = Math.toRadians(a.latitude)
+    val lat2 = Math.toRadians(b.latitude)
+    val y = kotlin.math.sin(dLon) * kotlin.math.cos(lat2)
+    val x = kotlin.math.cos(lat1) * kotlin.math.sin(lat2) -
+        kotlin.math.sin(lat1) * kotlin.math.cos(lat2) * kotlin.math.cos(dLon)
+    val brng = Math.toDegrees(kotlin.math.atan2(y, x))
+    // 우리가 만든 기본 화살표 비트맵은 "위쪽"을 향하도록 그릴 거라서,
+    // bearing(북=0도) 기준으로 그대로 회전시키면 된다.
+    return ((brng + 360.0) % 360.0).toFloat()
+}
+
+private fun createRotatedArrowBitmap(angleDeg: Float, color: Color): Bitmap {
+    val size = 28
+    val base = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+    val canvas = Canvas(base)
+
+    val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL
+        this.color = android.graphics.Color.argb(
+            (color.alpha * 255).toInt(),
+            (color.red * 255).toInt(),
+            (color.green * 255).toInt(),
+            (color.blue * 255).toInt()
+        )
+    }
+
+    // 위쪽을 향하는 삼각형 화살표(기본)
+    val path = android.graphics.Path().apply {
+        moveTo(size / 2f, size * 0.10f)
+        lineTo(size * 0.82f, size * 0.82f)
+        lineTo(size / 2f, size * 0.66f)
+        lineTo(size * 0.18f, size * 0.82f)
+        close()
+    }
+    canvas.drawPath(path, paint)
+
+    // 회전 적용 (중심 기준)
+    val matrix = Matrix().apply {
+        postRotate(angleDeg, size / 2f, size / 2f)
+    }
+    return Bitmap.createBitmap(base, 0, 0, size, size, matrix, true)
+}
+
 @Composable
 private fun rememberPhotoMarkerIcon(imageUrl: String?, sizePx: Int = 96): OverlayImage? {
     val context = LocalContext.current
@@ -1185,6 +1450,21 @@ private fun toFullUrl(urlOrPath: String?): String? {
     if(urlOrPath.isNullOrBlank()) return null
     if(urlOrPath.startsWith("http")) return urlOrPath
     return resolveBaseUrlForDevice() + urlOrPath.trimStart('/')
+}
+
+private fun formatTripDateLabel(travelStartDate: String?, dayIndex: Int): String? {
+    if (travelStartDate.isNullOrBlank()) return null
+    return try {
+        val inFmt = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.KOREA)
+        val outFmt = java.text.SimpleDateFormat("MM/dd", java.util.Locale.KOREA)
+        val start = inFmt.parse(travelStartDate) ?: return null
+        val cal = java.util.Calendar.getInstance()
+        cal.time = start
+        cal.add(java.util.Calendar.DAY_OF_MONTH, dayIndex)
+        outFmt.format(cal.time)
+    } catch (_: Exception) {
+        null
+    }
 }
 
 fun nearestIndex(path: List<LatLng>, target: LatLng): Int {

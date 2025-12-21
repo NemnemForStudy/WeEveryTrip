@@ -58,6 +58,12 @@ class PostDetailViewModel @Inject constructor(
     private val _routePoints = MutableStateFlow<List<RoutePoint>>(emptyList())
     val routePoints: StateFlow<List<RoutePoint>> = _routePoints.asStateFlow()
 
+    private val _routePointsByDay = MutableStateFlow<Map<Int, List<RoutePoint>>>(emptyMap())
+    val routePointsByDay: StateFlow<Map<Int, List<RoutePoint>>> = _routePointsByDay.asStateFlow()
+
+    private val _currentDayIndex = MutableStateFlow(0)
+    val currentDayIndex: StateFlow<Int> = _currentDayIndex.asStateFlow()
+
     init {
         loadCurrentUserId()
     }
@@ -79,6 +85,26 @@ class PostDetailViewModel @Inject constructor(
             _currentPostId.value = postId
             try {
                 val fetchPost = postApiService.getPostById(postId)
+                val pointsByDay = fetchPost.imageLocations
+                    .mapNotNull { loc ->
+                        val lat = loc.latitude
+                        val lng = loc.longitude
+                        val day = loc.dayNumber ?: 0
+                        if(lat != null && lng != null) day to RoutePoint(lat, lng) else null
+                    }
+                    .groupBy({ it.first }, { it.second })
+                    .toSortedMap()
+
+                Log.d("PostDetail", "days: ${pointsByDay.keys}")
+                if(pointsByDay.isNotEmpty()) {
+                    _routePointsByDay.value = pointsByDay
+                    _currentDayIndex.value = 0
+                } else {
+                    _routePointsByDay.value = emptyMap()
+                    _currentDayIndex.value = 0
+                }
+
+
                 _post.value = fetchPost
             } catch (e: Exception) {
                 _errorMsg.value = "게시물을 불러오지 못했습니다."
@@ -266,5 +292,23 @@ class PostDetailViewModel @Inject constructor(
                 onFailure(message)
             }
         }
+    }
+
+    fun goToPrevDay() {
+        val totalDays = _routePointsByDay.value.size
+        if(totalDays == 0) return
+        _currentDayIndex.value = (_currentDayIndex.value - 1).coerceAtLeast(0)
+    }
+
+    fun goToNextDay() {
+        val totalDays = _routePointsByDay.value.size
+        if(totalDays == 0) return
+        _currentDayIndex.value = (_currentDayIndex.value + 1).coerceAtMost(totalDays - 1)
+    }
+
+    fun setDayIndex(index: Int) {
+        val totalDays = _routePointsByDay.value.size
+        if(totalDays == 0) return
+        _currentDayIndex.value = index.coerceIn(0, totalDays - 1)
     }
 }
