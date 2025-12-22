@@ -111,7 +111,11 @@ fun EditPostScreen(
             is EditPostViewModel.UpdateStatus.Success -> {
                 Toast.makeText(context, "게시물이 수정되었습니다!", Toast.LENGTH_SHORT).show()
                 viewModel.resetStatus()
-                navController.popBackStack()
+
+                navController.navigate("detail/$postId") {
+                    popUpTo("edit/$postId") { inclusive = true }
+                    launchSingleTop = true
+                }
             }
             is EditPostViewModel.UpdateStatus.Error -> {
                 Toast.makeText(context, (updateStatus as EditPostViewModel.UpdateStatus.Error).message, Toast.LENGTH_LONG).show()
@@ -149,12 +153,12 @@ fun EditPostScreen(
                     context, Manifest.permission.ACCESS_MEDIA_LOCATION
                 ) == PackageManager.PERMISSION_GRANTED
                 if (hasPermission) {
-                    // TODO: viewModel.processSelectedImages(context, uris)
+                    viewModel.processSelectedImages(context, uris)
                 } else {
                     locationPermissionLauncher.launch(Manifest.permission.ACCESS_MEDIA_LOCATION)
                 }
             } else {
-                // TODO: viewModel.processSelectedImages(context, uris)
+                viewModel.processSelectedImages(context, uris)
             }
         }
     }
@@ -186,7 +190,10 @@ fun EditPostScreen(
             onDismissRequest = { showDatePickerDialog = false },
             confirmButton = {
                 TextButton(onClick = {
-                    // TODO: viewModel.updateDateRange(dateRangePickerState.selectedStartDateMillis, dateRangePickerState.selectedEndDateMillis)
+                    viewModel.updateDateRange(
+                        dateRangePickerState.selectedStartDateMillis,
+                        dateRangePickerState.selectedEndDateMillis
+                    )
                     showDatePickerDialog = false
                 }) { Text("확인") }
             },
@@ -232,7 +239,7 @@ fun EditPostScreen(
                                     Text("여행 일정", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                                     TextButton(onClick = {
                                         if (title.isNotEmpty() && content.isNotEmpty()) {
-                                            viewModel.updatePost(postId)
+                                            viewModel.updatePost(postId, context)
                                         } else {
                                             Toast.makeText(context, "제목과 내용을 입력해주세요.", Toast.LENGTH_SHORT).show()
                                         }
@@ -318,7 +325,7 @@ fun EditPostScreen(
                                         IconButton(onClick = { scope.launch { drawerState.open() } }) { Icon(Icons.Default.Menu, "메뉴") }
                                         TextButton(onClick = {
                                             if (title.isNotEmpty() && content.isNotEmpty()) {
-                                                viewModel.updatePost(postId)
+                                                viewModel.updatePost(postId, context)
                                             } else {
                                                 Toast.makeText(context, "제목과 내용을 입력해주세요.", Toast.LENGTH_SHORT).show()
                                             }

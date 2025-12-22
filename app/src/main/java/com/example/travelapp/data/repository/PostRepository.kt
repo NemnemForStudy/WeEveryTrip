@@ -14,6 +14,7 @@ import com.example.travelapp.data.model.GeoJsonPoint
 import com.example.travelapp.data.model.Post
 import com.example.travelapp.data.model.RoutePoint
 import com.example.travelapp.data.model.RouteRequest
+import com.example.travelapp.data.model.UpdateImageLocationRequest
 import com.example.travelapp.data.model.UpdatePostRequest
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -209,7 +210,11 @@ open class PostRepository @Inject constructor(
         latitude: Double? = null,
         longitude: Double? = null,
         locationName: String? = null,
-        isDomestic: Boolean? = null
+        isDomestic: Boolean? = null,
+        travelStartDate: String? = null,
+        travelEndDate: String? = null,
+        images: List<String>? = null,
+        imageLocations: List<UpdateImageLocationRequest>? = null
     ): Result<Post> = withContext(Dispatchers.IO) {
         try {
             // 좌표 정보 생성
@@ -230,7 +235,11 @@ open class PostRepository @Inject constructor(
                 tags = tags,
                 coordinate = coordinate,
                 locationName = locationName,
-                isDomestic = isDomestic
+                isDomestic = isDomestic,
+                travelStartDate = travelStartDate,
+                travelEndDate = travelEndDate,
+                images = images,
+                imageLocations = imageLocations
             )
 
             val response = postApiService.updatePost(postId, request)

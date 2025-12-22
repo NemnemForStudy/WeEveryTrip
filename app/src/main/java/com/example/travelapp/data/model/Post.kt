@@ -71,6 +71,14 @@ data class CreatePostResponse(
     val images: List<String>
 )
 
+data class UpdateImageLocationRequest(
+    val imageUrl: String,
+    val latitude: Double? = null,
+    val longitude: Double? = null,
+    val dayNumber: Int? = null,
+    val sortIndex: Int? = null
+)
+
 data class UpdatePostRequest(
     val category: String? = null,
     val title: String? = null,
@@ -78,7 +86,11 @@ data class UpdatePostRequest(
     val tags: List<String>? = null,
     val coordinate: GeoJsonPoint? = null,
     val locationName: String? = null,
-    val isDomestic: Boolean? = null
+    val isDomestic: Boolean? = null,
+    val travelStartDate: String? = null,
+    val travelEndDate: String? = null,
+    val images: List<String>? = null,
+    val imageLocations: List<UpdateImageLocationRequest>? = null
 )
 
 data class UpdatePostResponse(
@@ -122,4 +134,10 @@ data class PostImageLocation(
 
 data class DeletePostRequest(
     @SerializedName("post_id") val postId: Long
+)
+
+data class UploadImagesResponse(
+    val success: Boolean,
+    val message: String? = null,
+    val urls: List<String> = emptyList()
 )

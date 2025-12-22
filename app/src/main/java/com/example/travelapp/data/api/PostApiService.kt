@@ -7,6 +7,7 @@ import com.example.travelapp.data.model.Post
 import com.example.travelapp.data.model.RouteRequest
 import com.example.travelapp.data.model.RouteResponse
 import com.example.travelapp.data.model.UpdatePostRequest
+import com.example.travelapp.data.model.UploadImagesResponse
 import okhttp3.MultipartBody
 import okhttp3.RequestBody
 import retrofit2.Response
@@ -82,4 +83,10 @@ interface PostApiService {
     suspend fun deletePost(
         @Path("postId") postId: String,
     ): Response<ApiResponse<Unit>>
+
+    @Multipart
+    @POST("api/posts/upload-images")
+    suspend fun uploadImages(
+        @Part images: List<MultipartBody.Part>
+    ): Response<UploadImagesResponse>
 }

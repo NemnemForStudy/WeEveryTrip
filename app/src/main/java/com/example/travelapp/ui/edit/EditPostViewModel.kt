@@ -19,9 +19,13 @@ import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.MultipartBody
+import okhttp3.RequestBody.Companion.toRequestBody
 import java.sql.Timestamp
 import java.text.SimpleDateFormat
 import java.util.Calendar
+import java.util.Date
 import java.util.Locale
 import javax.inject.Inject
 
@@ -74,6 +78,10 @@ class EditPostViewModel @Inject constructor(
     private val _groupedImages = MutableStateFlow<Map<Int, List<PostImage>>>(emptyMap())
     val groupedImages = _groupedImages.asStateFlow()
 
+    // 태그 상태 추가
+    private val _tags = MutableStateFlow<List<String>>(emptyList())
+    val tags = _tags.asStateFlow()
+
     init {
         _startDate.combine(_endDate) { start, end ->
             if(start != null && end != null) {
@@ -108,6 +116,7 @@ class EditPostViewModel @Inject constructor(
                 _longitude.value = fetchedPost.longitude
                 _startDate.value = fetchedPost.travelStartDate?.let { parseDate(it) }
                 _endDate.value = fetchedPost.travelEndDate?.let { parseDate(it) }
+                _tags.value = fetchedPost.tags
             } catch (e: Exception) {
                 Log.e("EditPostViewModel", "게시물 로드 실패: ${e.message}")
             } finally {
@@ -128,26 +137,74 @@ class EditPostViewModel @Inject constructor(
         _content.value = value
     }
 
-    fun updatePost(postId: String) {
+    fun updatePost(postId: String, context: Context) {
         viewModelScope.launch {
             _updateStatus.value = UpdateStatus.Loading
 
-            val result = postRepository.updatePost(
-                postId = postId,
-                category = _category.value,
-                title = _title.value,
-                content = _content.value,
-                latitude = _latitude.value,
-                longitude = _longitude.value,
-                isDomestic = _isDomestic.value
-            )
+            try {
+                val newUris = _groupedImages.value.values.flatten().map { it.uri }
+                val uploadedUrls = if (newUris.isNotEmpty()) {
+                    // Uri -> bytes 읽기/멀티파트 생성은 무조건 IO에서 처리 (안그러면 UI 멈춤)
+                    val parts = withContext(Dispatchers.IO) {
+                        newUris.map { uri -> uriToPart(context, uri) }
+                    }
 
-            if (result.isSuccess) {
-                _updateStatus.value = UpdateStatus.Success
-            } else {
-                _updateStatus.value = UpdateStatus.Error(
-                    result.exceptionOrNull()?.message ?: "수정 실패"
+                    // 네트워크도 IO에서 수행 (suspend라도 호출부가 Main이면 준비 단계가 Main에서 걸릴 수 있음)
+                    val response = withContext(Dispatchers.IO) {
+                        postApiService.uploadImages(parts)
+                    }
+                    if (!response.isSuccessful) throw Exception("업로드 실패: ${response.code()}")
+                    response.body()?.urls ?: emptyList()
+                } else emptyList()
+
+                // 최종 이미지 목록 = 기존 유지 + 새 업로드
+                val finalImages = _images.value + uploadedUrls
+
+                // 업로드된 url <-> uri 매칭은 순서가 동일하다는 전제(멀티파트 전송 순서)
+                val groupedFlat = _groupedImages.value.values.flatten()
+                val newMetaByUrl = buildMap {
+                    val size = minOf(newUris.size, uploadedUrls.size)
+                    for (i in 0 until size) {
+                        val uri = newUris[i]
+                        val url = uploadedUrls[i]
+                        val img = groupedFlat.firstOrNull { it.uri == uri }
+                        if (img != null) {
+                            put(url, img)
+                        }
+                    }
+                }
+
+                val finalImageLocations = buildImageLocations(finalImages, newMetaByUrl)
+
+                // 날짜 포맷
+                val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+                val startDateStr = _startDate.value?.let { sdf.format(Date(it))}
+                val endDateStr = _endDate.value?.let { sdf.format(Date(it)) }
+
+                val result = postRepository.updatePost(
+                    postId = postId,
+                    category = _category.value,
+                    title = _title.value,
+                    content = _content.value,
+                    tags = _tags.value,
+                    latitude = _latitude.value,
+                    longitude = _longitude.value,
+                    isDomestic = _isDomestic.value,
+                    travelStartDate = startDateStr,
+                    travelEndDate = endDateStr,
+                    images = finalImages,
+                    imageLocations = finalImageLocations
                 )
+                Log.d("EditPostVM", "updatePost result: isSuccess=${result.isSuccess}, exception=${result.exceptionOrNull()?.message}")
+                if (result.isSuccess) {
+                    _updateStatus.value = UpdateStatus.Success
+                } else {
+                    _updateStatus.value = UpdateStatus.Error(
+                        result.exceptionOrNull()?.message ?: "수정 실패"
+                    )
+                }
+            }catch (e: Exception) {
+                _updateStatus.value = UpdateStatus.Error(e.message ?: "오류 발생")
             }
         }
     }
@@ -168,10 +225,14 @@ class EditPostViewModel @Inject constructor(
                     val index = currentTripDays.indexOf(dayStartMillis)
                     val dayNumber = if (index != -1) index + 1 else 0
 
+                    val location = ExifUtils.extractLocation(context, uri)
+
                     PostImage(
                         uri = uri,
                         timestamp = time,
-                        dayNumber = dayNumber
+                        dayNumber = dayNumber,
+                        latitude = location?.first,
+                        longitude = location?.second
                     )
                 }
                     .filter { it.dayNumber > 0 }
@@ -259,5 +320,40 @@ class EditPostViewModel @Inject constructor(
 
     fun resetStatus() {
         _updateStatus.value = UpdateStatus.Idle
+    }
+
+    fun updateTags(newTags: List<String>) {
+        _tags.value = newTags
+    }
+
+    // 최종 이미지 URL 목록 → UpdateImageLocationRequest 리스트 생성
+    private fun buildImageLocations(
+        finalImages: List<String>,
+        newMetaByUrl: Map<String, PostImage>
+    ): List<com.example.travelapp.data.model.UpdateImageLocationRequest> {
+        // 기존 post에서 가져온 imageLocations 정보를 활용
+        val existingLocations = _post.value?.imageLocations ?: emptyList()
+        val existingMap = existingLocations.associateBy { it.imageUrl }
+
+        return finalImages.mapIndexed { index, url ->
+            val existing = existingMap[url]
+            val newMeta = newMetaByUrl[url]
+
+            com.example.travelapp.data.model.UpdateImageLocationRequest(
+                imageUrl = url,
+                latitude = newMeta?.latitude ?: existing?.latitude,
+                longitude = newMeta?.longitude ?: existing?.longitude,
+                dayNumber = newMeta?.dayNumber ?: existing?.dayNumber,
+                sortIndex = index
+            )
+        }
+    }
+
+    private fun uriToPart(context: Context, uri: Uri): MultipartBody.Part {
+        val inputStream = context.contentResolver.openInputStream(uri)!!
+        val bytes = inputStream.use { it.readBytes() }
+        val mime = context.contentResolver.getType(uri) ?: "image/*"
+        val requestBody = bytes.toRequestBody(mime.toMediaTypeOrNull())
+        return MultipartBody.Part.createFormData("images", "upload.jpg", requestBody)
     }
 }
