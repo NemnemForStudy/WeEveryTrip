@@ -60,6 +60,7 @@ import androidx.compose.ui.zIndex
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.travelapp.data.model.RoutePoint
 import com.example.travelapp.util.AnimatedPolyline
+import com.example.travelapp.util.DateUtils
 import com.example.travelapp.util.ExifUtils
 import com.example.travelapp.util.ExifUtils.extractLocation
 import com.naver.maps.geometry.LatLng
@@ -353,7 +354,7 @@ fun WriteScreenContent(
                                                 val sdf = SimpleDateFormat("MM.dd (E)", Locale.KOREA)
                                                 Column {
                                                     Text("Day $dayNumber", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                                                    Text(sdf.format(Date(dayMillis)), style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                                                    Text(DateUtils.formatToDisplay(dayMillis), style = MaterialTheme.typography.bodySmall, color = Color.Gray)
                                                 }
 
                                                 // 우측: 미리보기 버튼 + 장수 + 아이콘
