@@ -17,6 +17,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Locale
 import javax.inject.Inject
 
 @HiltViewModel
@@ -84,8 +86,10 @@ class PostDetailViewModel @Inject constructor(
 
             _currentPostId.value = postId
             try {
+                // 사진이 있는 Day만 추출
                 val fetchPost = postApiService.getPostById(postId)
-                val pointsByDay = fetchPost.imageLocations
+
+                val photoDays = fetchPost.imageLocations
                     .mapNotNull { loc ->
                         val lat = loc.latitude
                         val lng = loc.longitude
@@ -93,12 +97,44 @@ class PostDetailViewModel @Inject constructor(
                         if(lat != null && lng != null) day to RoutePoint(lat, lng) else null
                     }
                     .groupBy({ it.first }, { it.second })
-                    .toSortedMap()
 
-                Log.d("PostDetail", "days: ${pointsByDay.keys}")
+                // 전체 여행 기간 계산
+                val totalDays = run {
+                    val start = fetchPost.travelStartDate
+                    val end = fetchPost.travelEndDate
+                    if(start != null && end != null) {
+                        // 날짜 차이 계산
+                        val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+                        try {
+                            val startDate = sdf.parse(start)
+                            val endDate = sdf.parse(end)
+                            if(startDate != null && endDate != null) {
+                                ((endDate.time - startDate.time) / (1000 * 60 * 60 * 24)).toInt() + 1
+                            } else 1
+                        } catch (e: Exception) { 1 }
+                    } else 1
+                }
+
+                val pointsByDay = (1..totalDays).associateWith { day ->
+                    photoDays[day] ?: emptyList()
+                }.toSortedMap()
+
                 if(pointsByDay.isNotEmpty()) {
                     _routePointsByDay.value = pointsByDay
-                    _currentDayIndex.value = 0
+                    // pointsByDay의 key 들을 오름차순 정렬
+                    val sortedKeys = pointsByDay.keys.sorted()
+
+                    // 사진이 실제로 있는 첫 번째 Day 찾기
+                    val firstDayWithPhotos = sortedKeys.firstOrNull() { day ->
+                        pointsByDay[day]?.isNotEmpty() == true
+                    }
+
+                    // 찾은 Day가 sortedKeys에서 몇 번째 인덱스인지 계산
+                    _currentDayIndex.value = if(firstDayWithPhotos != null) {
+                        sortedKeys.indexOf(firstDayWithPhotos) // 사진 있는 Day의 인덱스
+                    } else {
+                        0 // 사진 있는 Day가 없으면 그냥 0
+                    }
                 } else {
                     _routePointsByDay.value = emptyMap()
                     _currentDayIndex.value = 0

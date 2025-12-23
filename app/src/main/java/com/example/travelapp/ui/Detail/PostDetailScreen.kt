@@ -485,10 +485,16 @@ fun PostMapHeader(
     onPrevDay: () -> Unit,
     onNextDay: () -> Unit
 ) {
+    // 현재 선택된 Day 번호 계산
+    val dayKeys = routePointsByDay.keys.sorted()
+    val currentDayNumber = dayKeys.getOrNull(currentDayIndex)
+
     // 1) 서버가 내려준 "사진별 좌표(image_locations)"로 마커 여러개 표시
     // 2) 없으면(또는 전부 GPS가 없으면) post.coordinate(대표 좌표) 1개로 fallback
     val markerItems: List<MarkerItem> =
-        post.imageLocations.mapNotNull { loc ->
+        post.imageLocations
+            .filter { it.dayNumber == currentDayNumber }  // 현재 Day만 필터링
+            .mapNotNull { loc ->
             val lat = loc.latitude
             val lng = loc.longitude
             if (lat != null && lng != null) {
@@ -533,11 +539,7 @@ fun PostMapHeader(
 
     val pointsToShow = if(simplifiedRoute.size >= 2) simplifiedRoute else markerItems.map { it.position }
 
-    val dayKeys = remember(routePointsByDay, currentDayIndex) {
-        routePointsByDay.keys.sorted()
-    }
     val totalDays = dayKeys.size
-    val currentDayNumber = dayKeys.getOrNull(currentDayIndex)
 
     Box(
         modifier = Modifier
@@ -696,8 +698,9 @@ fun PostMapHeader(
                     Marker(
                         state = MarkerState(position = item.position),
                         captionText = when {
-                            total >= 2 && index == 0 -> "출발"
-                            total >= 2 && index == total - 1 -> "도착"
+                            total == 1 -> ""  // 사진 1장이면 캡션 없음
+                            index == 0 -> "출발"
+                            index == total - 1 -> "도착"
                             else -> "${index}"
                         },
                         icon = icon ?: MarkerIcons.BLUE,

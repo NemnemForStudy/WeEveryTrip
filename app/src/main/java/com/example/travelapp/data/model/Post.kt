@@ -5,6 +5,7 @@ import com.google.gson.annotations.SerializedName
 import com.kakao.sdk.template.model.Content
 import java.io.Serial
 import java.io.Serializable
+import java.sql.Timestamp
 
 // 좌표 정보 담을 데이터 클래스
 data class Post(
@@ -76,7 +77,8 @@ data class UpdateImageLocationRequest(
     val latitude: Double? = null,
     val longitude: Double? = null,
     val dayNumber: Int? = null,
-    val sortIndex: Int? = null
+    val sortIndex: Int? = null,
+    val timestamp: Long? = null
 )
 
 data class UpdatePostRequest(
@@ -129,7 +131,10 @@ data class PostImageLocation(
     val dayNumber: Int? = null,
 
     @SerializedName("sort_index")
-    val sortIndex: Int? = null
+    val sortIndex: Int? = null,
+
+    @SerializedName("timestamp")
+    val timestamp: Long ?= null
 )
 
 data class DeletePostRequest(

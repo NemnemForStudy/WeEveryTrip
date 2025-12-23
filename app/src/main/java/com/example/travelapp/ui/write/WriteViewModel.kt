@@ -9,6 +9,8 @@ import com.example.travelapp.data.api.PostApiService
 import com.example.travelapp.data.model.RoutePoint
 import com.example.travelapp.data.model.RouteRequest
 import com.example.travelapp.data.repository.PostRepository
+import com.example.travelapp.ui.common.ImageSelectionHelper
+import com.example.travelapp.util.DateUtils
 import com.example.travelapp.util.ExifUtils
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
@@ -92,7 +94,7 @@ class WriteViewModel @Inject constructor(
         // combine은 startDate, endDate 둘 중 하나라도 바뀌면 실행됨
         _startDate.combine(_endDate) { start, end ->
             if(start != null && end != null) {
-                generateDaysBetween(start, end)
+                DateUtils.generateDaysBetween(start, end)
             } else {
                 emptyList()
             }
@@ -120,45 +122,13 @@ class WriteViewModel @Inject constructor(
      */
     fun processSelectedImages(context: Context, uris: List<Uri>) {
         viewModelScope.launch {
-            // 현재 설정된 여행 날짜 리스트 가져오기
-            val currentTripDays = _tripDays.value
-
-            // EXIF 추출은 IO 작업이므로 백그라운드 스레드에서 실행
-            val processedImages = withContext(Dispatchers.IO) {
-                uris.map { uri ->
-                    // 각 사진 촬영 시간 추출(없으면 0)
-                    val time = ExifUtils.extractDate(context, uri) ?: 0L
-                    val dayStartMillis = getDayStartMillis(time)
-
-                    // 사진 찍은 날짜가 여행 기간 중 몇 번째 날인지 찾기(없으면 -1)
-                    val index = currentTripDays.indexOf(dayStartMillis)
-                    val dayNumber = if(index != -1) index + 1 else 0 // 0은 "날짜 미정" 혹은 "범위 밖"
-                    val location = ExifUtils.extractLocation(context, uri)
-                    PostImage(
-                        uri = uri,
-                        timestamp = time,
-                        dayNumber = dayNumber,
-                        latitude = location?.first,
-                        longitude = location?.second
-                    )
-                }
-                .filter { it.dayNumber > 0 } // 여행 기간에 포함된 사진만 필터링
-                .sortedBy { it.timestamp } // 날짜+시간 순 정렬
-            }
-            // Map으로 그룹핑
-            val newGrouped = processedImages.groupBy { it.dayNumber }
-
-            // 기존 데이터 유지하면서 병합하거나 새로 덮어쓰기
-            _groupedImages.value = newGrouped
-
-            // 첫 번째 사진 위치 정보로 업데이트
-            if(processedImages.isNotEmpty()) {
-                val firstUri = processedImages.first().uri
-                val location = ExifUtils.extractLocation(context, firstUri)
-                if(location != null) {
-                    updateLocation(location.first, location.second)
-                }
-            }
+            val grouped = ImageSelectionHelper.processUris(
+                context = context,
+                uris = uris,
+                tripDays = _tripDays.value,
+                onLocationDetected = { lat, lon -> updateLocation(lat, lon) }
+            )
+            _groupedImages.value = grouped
         }
     }
 
@@ -185,53 +155,6 @@ class WriteViewModel @Inject constructor(
             // State에 새로운 Map 인스턴스 할당. Compose가 상태 변경을 감지해서 UI 재구성 함.
             _groupedImages.value = currentMap
         }
-    }
-
-    /**
-     * Long 타입의 시작일과 종료일 사이의 모든 날짜(00:00:00)를 List<Long>으로 반환합니다.
-     * @param startMillis 시작일 밀리초
-     * @param endMillis 종료일 밀리초
-     */
-    private fun generateDaysBetween(startMillis: Long, endMillis: Long): List<Long> {
-        val days = mutableListOf<Long>()
-        val calendar = Calendar.getInstance().apply {
-            timeInMillis = startMillis
-            // 시 분 초를 0으로 초기화 해 정확히 하루의 시작 지점을 만듦
-            set(Calendar.HOUR_OF_DAY, 0)
-            set(Calendar.MINUTE, 0)
-            set(Calendar.SECOND, 0)
-            set(Calendar.MILLISECOND, 0)
-        }
-
-        val endCalendar = Calendar.getInstance().apply {
-            timeInMillis = endMillis
-            set(Calendar.HOUR_OF_DAY, 0)
-            set(Calendar.MINUTE, 0)
-            set(Calendar.SECOND, 0)
-            set(Calendar.MILLISECOND, 0)
-        }
-
-        // 시작일이 종료일보다 작거나 같을때까지 반복
-        while(!calendar.after(endCalendar)) {
-            days.add(calendar.timeInMillis)
-            calendar.add(Calendar.DATE, 1) // 하루 추가
-        }
-        return days
-    }
-
-    /**
-     *  주어진 밀리초(사진 촬영 일시)를 해당 날짜의 자정(00:00:00) 밀리초로 변환합니다.
-     *
-     */
-    private fun getDayStartMillis(timestamp: Long): Long {
-        val calendar = Calendar.getInstance().apply {
-            timeInMillis = timestamp
-            set(Calendar.HOUR_OF_DAY, 0)
-            set(Calendar.MINUTE, 0)
-            set(Calendar.SECOND, 0)
-            set(Calendar.MILLISECOND, 0)
-        }
-        return calendar.timeInMillis
     }
 
     /**
