@@ -184,7 +184,7 @@ fun WriteScreenContent(
     }
 
 //    var category by remember { mutableStateOf("카테고리") }
-        var category by remember { mutableStateOf("국내여행") }
+    var category by remember { mutableStateOf("국내여행") }
     var title by remember { mutableStateOf("") }
     var content by remember { mutableStateOf("") }
     var tagsInput by remember { mutableStateOf("") }
