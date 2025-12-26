@@ -6,6 +6,7 @@ import com.example.travelapp.data.model.Setting.NotificationRequest
 import com.example.travelapp.data.model.SocialLoginRequest
 import com.example.travelapp.data.model.SocialLoginResponse
 import com.example.travelapp.data.model.User
+import com.example.travelapp.data.model.WithdrawResponse
 import com.google.android.gms.fido.u2f.api.common.RegisterRequest
 import retrofit2.Response
 import retrofit2.http.Body
@@ -33,4 +34,7 @@ interface AuthApiService {
     suspend fun updateNotificationSetting(
         @Body response: NotificationRequest
     ): Response<Unit>
+
+    @POST("api/auth/withdraw")
+    suspend fun withdraw(): Response<WithdrawResponse>
 }

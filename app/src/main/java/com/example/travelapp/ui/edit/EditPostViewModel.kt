@@ -151,7 +151,7 @@ class EditPostViewModel @Inject constructor(
                         }
                         PostImage(
                             uri = Uri.parse(fullUrl),
-                            timestamp = loc.timestamp ?: -1L,  // 기존 사진은 timestamp 없음 표시
+                            timestamp = loc.timestamp,  // 기존 사진은 timestamp 없음 표시
                             dayNumber = loc.dayNumber ?: 1,
                             latitude = loc.latitude,
                             longitude = loc.longitude,
@@ -211,7 +211,8 @@ class EditPostViewModel @Inject constructor(
                         latitude = img.latitude,
                         longitude = img.longitude,
                         dayNumber = img.dayNumber,
-                        sortIndex = index
+                        sortIndex = index,
+                        timestamp = img.timestamp
                     )
                 }
 
@@ -306,29 +307,6 @@ class EditPostViewModel @Inject constructor(
 
     fun updateTags(newTags: List<String>) {
         _tags.value = newTags
-    }
-
-    // 최종 이미지 URL 목록 → UpdateImageLocationRequest 리스트 생성
-    private fun buildImageLocations(
-        finalImages: List<String>,
-        newMetaByUrl: Map<String, PostImage>
-    ): List<com.example.travelapp.data.model.UpdateImageLocationRequest> {
-        // 기존 post에서 가져온 imageLocations 정보를 활용
-        val existingLocations = _post.value?.imageLocations ?: emptyList()
-        val existingMap = existingLocations.associateBy { it.imageUrl }
-
-        return finalImages.mapIndexed { index, url ->
-            val existing = existingMap[url]
-            val newMeta = newMetaByUrl[url]
-
-            com.example.travelapp.data.model.UpdateImageLocationRequest(
-                imageUrl = url,
-                latitude = newMeta?.latitude ?: existing?.latitude,
-                longitude = newMeta?.longitude ?: existing?.longitude,
-                dayNumber = newMeta?.dayNumber ?: existing?.dayNumber,
-                sortIndex = index
-            )
-        }
     }
 
     private fun uriToPart(context: Context, uri: Uri): MultipartBody.Part {

@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapShader
+import android.graphics.Camera
 import android.graphics.Canvas
 import android.graphics.Matrix
 import android.graphics.Paint
@@ -71,6 +72,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -97,15 +99,18 @@ import coil.request.SuccessResult
 import com.example.travelapp.BuildConfig
 import com.example.travelapp.data.model.Post
 import com.example.travelapp.data.model.RoutePoint
+import com.example.travelapp.data.model.ShareUtil
 import com.example.travelapp.data.model.comment.Comment
 import com.example.travelapp.ui.navigation.Screen
 import com.example.travelapp.util.AnimatedPolyline
 import com.example.travelapp.util.UtilTime
 import com.naver.maps.geometry.LatLng
 import com.naver.maps.geometry.LatLngBounds
+import com.naver.maps.map.CameraAnimation
 import com.naver.maps.map.CameraPosition
 import com.naver.maps.map.CameraUpdate
 import com.naver.maps.map.compose.ExperimentalNaverMapApi
+import com.naver.maps.map.compose.MapEffect
 import com.naver.maps.map.compose.MapUiSettings
 import com.naver.maps.map.compose.Marker
 import com.naver.maps.map.compose.MarkerState
@@ -194,6 +199,7 @@ fun PostDetailScreen(
                 }
 
                 val isMyPost = post!!.userId == currentUserId
+                var triggerSnapshot by remember { mutableStateOf(false) }
 
                 PostDetailContent(
                     post = post!!,
@@ -237,7 +243,10 @@ fun PostDetailScreen(
                     onPrevDay = { viewModel.goToPrevDay() },
                     onNextDay = { viewModel.goToNextDay() },
                     onDaySelect = { index -> viewModel.setDayIndex(index) },
-                    isMyPost = isMyPost
+                    isMyPost = isMyPost,
+                    triggerSnapshot = triggerSnapshot,
+                    onSharedClick = { triggerSnapshot = true },
+                    onSnapshotDone = { triggerSnapshot = false }
                 )
             }
             // post 가 null, 에러 없고, 로딩도 아닐 떄 대비한 else
@@ -275,7 +284,10 @@ fun PostDetailContent(
     onPrevDay: () -> Unit = {},
     onNextDay: () -> Unit = {},
     onDaySelect: (Int) -> Unit = {},
-    isMyPost: Boolean = false
+    isMyPost: Boolean = false,
+    triggerSnapshot: Boolean = false,
+    onSharedClick: () -> Unit = {},
+    onSnapshotDone: () -> Unit = {}
 ) {
     var showEditDialog by remember { mutableStateOf(false) }
     var commentToEdit by remember { mutableStateOf<Comment?>(null) }
@@ -300,7 +312,7 @@ fun PostDetailContent(
                     }
                 },
                 actions = {
-                    IconButton(onClick = { /* 공유 기능 */ }) {
+                    IconButton(onClick = onSharedClick) {
                         Icon(Icons.Default.Share, contentDescription = "공유", tint = Color.Black)
                     }
                 },
@@ -336,7 +348,9 @@ fun PostDetailContent(
                         routePointsByDay = routePointsByDay,
                         currentDayIndex = currentDayIndex,
                         onPrevDay = onPrevDay,
-                        onNextDay = onNextDay
+                        onNextDay = onNextDay,
+                        triggerSnapshot = triggerSnapshot,
+                        onSnapshotDone = onSnapshotDone
                     )
                 }
 
@@ -483,11 +497,14 @@ fun PostMapHeader(
     routePointsByDay: Map<Int, List<RoutePoint>>,
     currentDayIndex: Int,
     onPrevDay: () -> Unit,
-    onNextDay: () -> Unit
+    onNextDay: () -> Unit,
+    triggerSnapshot: Boolean,
+    onSnapshotDone: () -> Unit
 ) {
     // 현재 선택된 Day 번호 계산
     val dayKeys = routePointsByDay.keys.sorted()
     val currentDayNumber = dayKeys.getOrNull(currentDayIndex)
+    val context = LocalContext.current // SharedUtil 실행 위해 필요.
 
     // 1) 서버가 내려준 "사진별 좌표(image_locations)"로 마커 여러개 표시
     // 2) 없으면(또는 전부 GPS가 없으면) post.coordinate(대표 좌표) 1개로 fallback
@@ -503,15 +520,6 @@ fun PostMapHeader(
                     imageUrl = loc.imageUrl
                 )
             } else null
-        }.let { list ->
-            if(list.isNotEmpty()) list
-            else {
-                val lat = post.latitude
-                val lng = post.longitude
-                if(lat != null && lng != null) {
-                    listOf(MarkerItem(LatLng(lat, lng), post.images.firstOrNull()))
-                } else emptyList()
-            }
         }
 
     val routeLatLngs = remember(routePoints) {
@@ -538,7 +546,6 @@ fun PostMapHeader(
     }
 
     val pointsToShow = if(simplifiedRoute.size >= 2) simplifiedRoute else markerItems.map { it.position }
-
     val totalDays = dayKeys.size
 
     Box(
@@ -624,18 +631,29 @@ fun PostMapHeader(
             val density = LocalDensity.current
             val view = LocalView.current
 
-            var polylinePlayKey by remember(post.id) { mutableStateOf(0) }
+            var polylinePlayKey by remember(post.id, currentDayIndex) { mutableStateOf(0) }
 
-            LaunchedEffect(polylineCoords) {
+            LaunchedEffect(currentDayIndex, pointsToShow) {
                 // route가 준비된 첫 순간에만 카메라 fit + 애니 시작
-                if (polylineCoords.size >= 2 && polylinePlayKey == 0) {
-                    val bounds = LatLngBounds.Builder().apply {
-                        polylineCoords.forEach { include(it) }
-                    }.build()
+                if(pointsToShow.isNotEmpty()) {
+                    val cameraUpdate = if (pointsToShow.size == 1) {
+                        // 사진이 1장인 경우 해당 좌표로 단순 이동
+                        CameraUpdate.scrollTo(pointsToShow.first())
+                            .animate(CameraAnimation.Easing, 1000)
+                    } else {
+                        // 사진이 여러 장이거나 경로 있는 경우 모든 좌표가 화면에 나오게
+                        val bounds = LatLngBounds.Builder().apply {
+                            polylineCoords.forEach { include(it) }
+                        }.build()
 
-                    val paddingPx = with(density) { 64.dp.roundToPx() }
-                    cameraPositionState.animate(CameraUpdate.fitBounds(bounds, paddingPx))
-                    delay(500)
+                        val paddingPx = with(density) { 64.dp.roundToPx() }
+                        CameraUpdate.fitBounds(bounds, paddingPx)
+                            .animate(CameraAnimation.Fly, 1200)
+                    }
+
+                    cameraPositionState.animate(cameraUpdate)
+
+                    delay(1200)
                     polylinePlayKey = 1
                 }
             }
@@ -653,6 +671,18 @@ fun PostMapHeader(
                 cameraPositionState = cameraPositionState,
                 uiSettings = MapUiSettings(isCompassEnabled = false, isLogoClickEnabled = false)
             ) {
+
+                // 만약 공유 버튼 신호가 true라면 지도 찍음.
+                if(triggerSnapshot) {
+                    MapEffect(key1 = triggerSnapshot) { map ->
+                        map.takeSnapshot { bitmap ->
+                            val sharedText = "[ModuTrip] ${post.title}\n${post.nickname}님의 여행기 보러가기!\\n\\n지금 확인: modutrip://post/${post.id}"
+                            ShareUtil.sharePost(context, bitmap, sharedText)
+                            // 캡처 끝났다고 보고 신호 다시 false로 바꿈
+                            onSnapshotDone()
+                        }
+                    }
+                }
 
                 // route 준비 후 1회만 애니메이션 실행
                 if (simplifiedRoute.size >= 2 && polylinePlayKey > 0) {
@@ -709,18 +739,7 @@ fun PostMapHeader(
                 }
             }
         } else {
-            Column(
-                modifier = Modifier.align(Alignment.Center),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Icon(
-                    imageVector = Icons.Default.LocationOn,
-                    contentDescription = null,
-                    tint = Color.White,
-                    modifier = Modifier.size(48.dp)
-                )
-                Text("위치 정보가 없는 게시물입니다.", color = Color.White)
-            }
+            MapEmptyPlaceholder()
         }
     }
 }
@@ -1519,7 +1538,7 @@ fun MapEmptyPlaceholder() {
         )
         Spacer(modifier = Modifier.height(12.dp))
         Text(
-            text = "위치 정보가 없는 게시물입니다.",
+            text = "해당 날짜에 사진을 추가해주세요!",
             color = Color.Gray,
             fontSize = 14.sp,
             fontWeight = FontWeight.Medium

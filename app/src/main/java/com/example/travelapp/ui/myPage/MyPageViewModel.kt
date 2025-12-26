@@ -59,6 +59,39 @@ open class MyPageViewModel @Inject constructor(
         }
     }
 
+    fun withdraw(navController: NavController) {
+        viewModelScope.launch {
+//            val result = authRepository.withdraw()
+//
+//            result.onSuccess {
+//                tokenManager.deleteToken()
+//
+//                // 메인 스레드에서 로그인 화면으로 이동
+//                withContext(Dispatchers.Main) { // 쓰레드 전환. UI를 다시 그리는 메인 쓰레드로 제어권 넘기는 작업.
+//                    navController.navigate("login") {
+//                        popUpTo(0) { inclusive = true } // 백스택 청소. 0번 지점까지 싹 다 지우라는 의미.
+//                    }
+//                }
+//            }.onFailure { e ->
+//                Log.d("MY_PAGE_DEBUG_", "회원 탈퇴 실패: ${e.message}")
+//            }
+
+            Log.d("MY_PAGE_DEBUG", "회원 탈퇴 테스트 시작 (시뮬레이션)")
+            kotlinx.coroutines.delay(1000) // 1초 기다리기
+            // 3. 바로 성공했다고 가정하고 로직 실행
+            tokenManager.deleteToken() // 로컬 토큰 삭제
+
+            // 4. 메인 스레드에서 로그인 화면으로 이동
+            withContext(Dispatchers.Main) {
+                navController.navigate("login") {
+                    popUpTo(0) { inclusive = true }
+                }
+            }
+
+            Log.d("MY_PAGE_DEBUG", "테스트 탈퇴 완료: 로그인 화면으로 이동합니다.")
+        }
+    }
+
     fun updateNotificationSetting(type: String, enabled: Boolean) {
         viewModelScope.launch {
             Log.d("MY_PAGE_DEBUG", "1. 변경 요청 시작: type=$type, value=$enabled")

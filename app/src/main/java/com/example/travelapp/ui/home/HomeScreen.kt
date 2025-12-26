@@ -135,7 +135,6 @@ fun HomeScreen(
                     }
                 },
                 actions = {
-
                     // Search button
                     IconButton(onClick = { viewModel.openSearchBar() }) {
                         Icon(Icons.Filled.Search, contentDescription = "검색")

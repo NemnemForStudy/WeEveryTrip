@@ -50,6 +50,7 @@ import coil.compose.rememberAsyncImagePainter
 import com.example.travelapp.BuildConfig
 import com.example.travelapp.ui.theme.Beige
 import com.example.travelapp.ui.write.PostImage
+import com.example.travelapp.util.AnimatedPolyline
 import com.example.travelapp.util.DateUtils
 import com.naver.maps.geometry.LatLng
 import com.naver.maps.map.CameraPosition
@@ -463,7 +464,7 @@ fun EditPostScreen(
                                 Row(modifier = Modifier.fillMaxWidth().clickable { galleryLauncher.launch("image/*") }.padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                                     Icon(Icons.Default.CameraAlt, null, tint = Color.Gray)
                                     Spacer(Modifier.width(8.dp))
-                                    val totalCount = groupedImages.values.flatten().size + images.size
+                                    val totalCount = groupedImages.values.flatten().size
                                     Text("사진 첨부하기 ($totalCount)", color = Color.Gray)
                                 }
 
@@ -560,6 +561,15 @@ fun EditPostScreen(
                                     Marker(
                                         state = MarkerState(position = LatLng(locationPair.first, locationPair.second)),
                                         captionText = "사진 ${index + 1}"
+                                    )
+                                }
+
+                                // polyline 표시(좌표가 2개 이상일 때만 그림)
+                                if(mapDialogLocations.size >= 2) {
+                                    AnimatedPolyline(
+                                        coords = mapDialogLocations.map { LatLng(it.first, it.second) },
+                                        color = Color.Blue,
+                                        width = 6.dp
                                     )
                                 }
                             }

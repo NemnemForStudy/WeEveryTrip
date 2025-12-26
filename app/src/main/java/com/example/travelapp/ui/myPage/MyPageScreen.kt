@@ -1,5 +1,7 @@
 package com.example.travelapp.ui.myPage
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -11,6 +13,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Person
@@ -24,11 +27,15 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -50,6 +57,8 @@ fun MyPageScreen(
 ) {
     val userState by viewModel.userState.collectAsState()
 
+    var showDeleteDialog by remember { mutableStateOf(false) }
+
     LaunchedEffect(Unit) {
         viewModel.fetchUserInfo()
     }
@@ -67,6 +76,30 @@ fun MyPageScreen(
     // 이벤트 함수 준비
     val onEditProfileClick = { /* viewModel.onEditProfile() */ }
     val onLogoutClick = { viewModel.logout(navController) }
+
+    if(showDeleteDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeleteDialog = false },
+            title = { Text(text = "회원 탈퇴", fontWeight = FontWeight.Bold) },
+            text = { Text(text = "정말 탈퇴하시겠습니까?\n작성하신 모든 게시글 정보는 숨김 처리됩니다.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showDeleteDialog = false
+                        viewModel.withdraw(navController) // 실제 탈퇴 로직 호출
+                    },
+                    colors = ButtonDefaults.textButtonColors(contentColor = Color(0xFFE53935))
+                ) { Text("탈퇴") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteDialog = false }) {
+                    Text("취소", color = Color.Gray)
+                }
+            },
+            containerColor = Color.White,
+            shape = RoundedCornerShape(16.dp)
+        )
+    }
 
     // 2. [UI 담당] MyPageContent를 호출합니다. (자기 자신이 아닙니다!)
     MyPageContent(
@@ -89,6 +122,7 @@ fun MyPageScreen(
 
         onEditProfileClick = onEditProfileClick,
         onLogoutClick = { viewModel.logout(navController) },
+        onDeleteAccountClick = { showDeleteDialog = true } // 버튼 클릭시 팝업 창
     )
 }
 
@@ -107,6 +141,7 @@ fun MyPageContent(
     pushMarketing: Boolean = false,
     onActivityChange: (Boolean) -> Unit = {},
     onMarketingChange: (Boolean) -> Unit = {},
+    onDeleteAccountClick: () -> Unit = {}
 ) {
     Scaffold(
         bottomBar = {
@@ -151,7 +186,8 @@ fun MyPageContent(
                 onLikedPostsClick = { },
                 onSettingsClick = { },
                 onHelpClick = { },
-                onLogoutClick = onLogoutClick
+                onLogoutClick = onLogoutClick,
+                onDeleteAccountClick = onDeleteAccountClick
             )
         }
     }
@@ -288,7 +324,6 @@ private fun StatDivider() {
 
 @Composable
 private fun MenuSection(
-
     pushActivity: Boolean,
     pushMarketing: Boolean,
     onActivityChange: (Boolean) -> Unit,
@@ -297,8 +332,13 @@ private fun MenuSection(
     onLikedPostsClick: () -> Unit,
     onSettingsClick: () -> Unit,
     onHelpClick: () -> Unit,
-    onLogoutClick: () -> Unit
+    onLogoutClick: () -> Unit,
+    onDeleteAccountClick: () -> Unit // 탈퇴 처리 함수 추가
 ) {
+    val context = LocalContext.current
+    val packageInfo = context.packageManager.getPackageInfo(context.packageName, 0)
+    val versionName = packageInfo.versionName
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -352,30 +392,58 @@ private fun MenuSection(
             )
 
             Text(
-                text = "기타",
+                text = "서비스 이용",
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Medium,
                 color = Color.Gray,
                 modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 8.dp)
             )
 
-            MenuItem(Icons.Default.Settings, "앱 설정", onClick = onSettingsClick)
-            MenuItem(Icons.Outlined.Help, "도움말", onClick = onHelpClick)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(Icons.Outlined.Article, null, tint = Color(0xFF666666), modifier = Modifier.size(24.dp))
+                Spacer(modifier = Modifier.width(16.dp))
+                Text(text = "현재 버전", fontSize = 16.sp, color = Color(0xFF333333), modifier = Modifier.weight(1f))
+                Text(text = "v$versionName", fontSize = 14.sp, color = Color.Gray)
+            }
+            // 문의하기
+            MenuItem(
+                Icons.Outlined.Help,
+                "문의하기",
+                onClick = {
+                    val intent = Intent(Intent.ACTION_SENDTO).apply {
+                        data = Uri.parse("mailto:support@modutrip.com")
+                        putExtra(Intent.EXTRA_SUBJECT, "[ModuTrip] 문의")
+                    }
+                    context.startActivity(Intent.createChooser(intent, "메일 보내기"))
+                }
+            )
 
             HorizontalDivider(
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                 color = Color(0xFFF0F0F0)
             )
 
-            MenuItem(Icons.Outlined.Logout,
-                "로그아웃",
-                Color(0xFFE53935),
-                Color(0xFFE53935),
+            MenuItem(
+                icon = Icons.Outlined.Logout,
+                title = "로그아웃",
+                iconTint = Color(0xFFE53935),
+                titleColor = Color(0xFFE53935),
                 onClick = onLogoutClick
             )
 
+            MenuItem(
+                icon = Icons.Default.Close,
+                title = "회원 탈퇴",
+                iconTint = Color(0xFFE53935),
+                titleColor = Color(0xFFE53935),
+                onClick = onDeleteAccountClick
+            )
             Spacer(modifier = Modifier.height(8.dp))
-
         }
     }
 }

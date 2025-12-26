@@ -37,12 +37,13 @@ data class ImageLocationMeta(
     val indexInDay: Int? = null,
     // GPS 없는 사진이면 null (서버에 null로 저장)
     val latitude: Double? = null,
-    val longitude: Double? = null
+    val longitude: Double? = null,
+    val timestamp: Long? = null
 )
 data class PostImage(
     val id: String = UUID.randomUUID().toString(), // 고유 ID
     val uri: Uri,
-    val timestamp: Long,
+    val timestamp: Long? = null,
     val dayNumber: Int,
     val latitude: Double? = null,
     val longitude: Double? = null
@@ -279,7 +280,8 @@ class WriteViewModel @Inject constructor(
                     dayNumber = dayNumber,
                     indexInDay = indexInDay,
                     latitude = img.latitude,
-                    longitude = img.longitude
+                    longitude = img.longitude,
+                    timestamp = img.timestamp
                 )
             }
         }

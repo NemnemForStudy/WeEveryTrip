@@ -24,6 +24,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import javax.annotation.meta.TypeQualifierNickname
 import javax.inject.Inject
 
 data class LoginUiState(
@@ -76,13 +77,17 @@ class LoginViewModel @Inject constructor(
                             override fun onSuccess(response: NidProfileResponse) {
                                 val email = response.profile?.email
                                 val id = response.profile?.id?.toString()
+                                val nickname = response.profile?.nickname
+                                val profileImage = response.profile?.profileImage
 
                                 if (email != null && id != null) {
                                     requestSocialLogin(
                                         provider = "NAVER",
                                         token = accessToken,
                                         email = email,
-                                        socialId = id
+                                        socialId = id,
+                                        nickname = nickname,
+                                        profileImage = profileImage
                                     )
                                 } else {
                                     emitLoginFailed("네이버 프로필 정보를 가져오지 못했습니다.")
@@ -138,13 +143,17 @@ class LoginViewModel @Inject constructor(
                         } else if (user != null) {
                             val email = user.kakaoAccount?.email
                             val id = user.id.toString()
+                            val nickname = user.kakaoAccount?.profile?.nickname
+                            val profileImage = user.kakaoAccount?.profile?.thumbnailImageUrl
 
                             if (email != null) {
                                 requestSocialLogin(
                                     provider = "KAKAO",
                                     token = token.accessToken,
                                     email = email,
-                                    socialId = id
+                                    socialId = id,
+                                    nickname = nickname,
+                                    profileImage = profileImage
                                 )
                             } else {
                                 emitLoginFailed("이메일 동의가 필요합니다.")
@@ -170,13 +179,17 @@ class LoginViewModel @Inject constructor(
                     } else if (user != null) {
                         val email = user.kakaoAccount?.email
                         val id = user.id.toString()
+                        val nickname = user.kakaoAccount?.profile?.nickname
+                        val profileImage = user.kakaoAccount?.profile?.thumbnailImageUrl
 
                         if (email != null) {
                             requestSocialLogin(
                                 provider = "KAKAO",
                                 token = token.accessToken,
                                 email = email,
-                                socialId = id
+                                socialId = id,
+                                nickname = nickname,
+                                profileImage = profileImage
                             )
                         } else {
                             emitLoginFailed("이메일 동의가 필요합니다.")
@@ -204,7 +217,9 @@ class LoginViewModel @Inject constructor(
                         provider = "GOOGLE",
                         token = idToken,
                         email = email,
-                        socialId = id
+                        socialId = id,
+                        nickname = account.displayName,
+                        profileImage = account.photoUrl?.toString()
                     )
                 } else {
                     emitLoginFailed("구글 계정 정보를 가져오지 못했습니다.")
@@ -221,7 +236,14 @@ class LoginViewModel @Inject constructor(
     // ------------------------------------------------------------------------
     // [공통] 서버로 소셜 로그인 요청
     // ------------------------------------------------------------------------
-    private fun requestSocialLogin(provider: String, token: String, email: String, socialId: String) {
+    private fun requestSocialLogin(
+        provider: String,
+        token: String,
+        email: String,
+        socialId: String,
+        nickname: String?,
+        profileImage: String?
+    ) {
         viewModelScope.launch {
             _loginUiState.value = LoginUiState(isLoading = true)
 
@@ -230,7 +252,9 @@ class LoginViewModel @Inject constructor(
                     provider = provider,
                     token = token,
                     email = email,
-                    socialId = socialId
+                    socialId = socialId,
+                    nickname = nickname,
+                    profileImage = profileImage
                 )
 
                 result.onSuccess {

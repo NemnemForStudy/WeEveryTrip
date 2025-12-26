@@ -16,7 +16,11 @@ data class SocialLoginRequest(
     val socialProvider: String,
 
     @SerializedName("social_id")
-    val socialId: String
+    val socialId: String,
+
+    @SerializedName("nickname")
+    val nickname: String? = null,
+    val profileImage: String? = null
 )
 
 data class LoginRequest(

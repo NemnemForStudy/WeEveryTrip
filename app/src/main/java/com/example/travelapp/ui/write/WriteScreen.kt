@@ -47,6 +47,7 @@ import java.util.Locale
 import androidx.compose.runtime.getValue
 import androidx.core.content.ContextCompat
 import android.Manifest
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Arrangement
@@ -182,7 +183,8 @@ fun WriteScreenContent(
         groupedImages.values.flatten().size
     }
 
-    var category by remember { mutableStateOf("카테고리") }
+//    var category by remember { mutableStateOf("카테고리") }
+        var category by remember { mutableStateOf("국내여행") }
     var title by remember { mutableStateOf("") }
     var content by remember { mutableStateOf("") }
     var tagsInput by remember { mutableStateOf("") }
@@ -220,7 +222,7 @@ fun WriteScreenContent(
 
     // 갤러리 런처
     val galleryLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetMultipleContents()
+        contract = ActivityResultContracts.PickMultipleVisualMedia(MAX_PHOTOS)
     ) { uris: List<Uri> ->
         if (uris.isNotEmpty()) {
             if(uris.size > MAX_PHOTOS) {
@@ -229,6 +231,7 @@ fun WriteScreenContent(
             }
 
             tempSelectedUris = uris
+            // Android 13(API 33) 이상에서 사진의 GPS 정보를 읽으려면 이 권한이 필요.
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 val hasPermission = ContextCompat.checkSelfPermission(
                     context,
@@ -245,16 +248,16 @@ fun WriteScreenContent(
         }
     }
 
-    // 카테고리 다이얼로그
-    if (showDialog) {
-        AlertDialog(
-            onDismissRequest = { showDialog = false },
-            title = { Text(text = "여행 유형 선택") },
-            text = { Text(text = "작성할 글의 여행 유형을 선택해주세요.") },
-            dismissButton = { TextButton(onClick = { category = "국내여행"; showDialog = false }) { Text("국내여행") } },
-            confirmButton = { TextButton(onClick = { category = "국외여행"; showDialog = false }) { Text("국외여행") } }
-        )
-    }
+//    // 카테고리 다이얼로그
+//    if (showDialog) {
+//        AlertDialog(
+//            onDismissRequest = { showDialog = false },
+//            title = { Text(text = "여행 유형 선택") },
+//            text = { Text(text = "작성할 글의 여행 유형을 선택해주세요.") },
+//            dismissButton = { TextButton(onClick = { category = "국내여행"; showDialog = false }) { Text("국내여행") } },
+//            confirmButton = { TextButton(onClick = { category = "국외여행"; showDialog = false }) { Text("국외여행") } }
+//        )
+//    }
 
     // 날짜 선택 다이얼로그
     if (showDatePickerDialog) {
@@ -368,15 +371,15 @@ fun WriteScreenContent(
                                                                         dayImages.mapNotNull { ExifUtils.extractLocation(context, it.uri) }
                                                                     }
 
-                                                                        if(extractedLocations.isNotEmpty()) {
-                                                                            mapDialogLocations = extractedLocations
-                                                                            mapDialogTitle = "Day $dayNumber 위치 미리보기"
-                                                                            showMapDialog = true
+                                                                    if(extractedLocations.isNotEmpty()) {
+                                                                        mapDialogLocations = extractedLocations
+                                                                        mapDialogTitle = "Day $dayNumber 위치 미리보기"
+                                                                        showMapDialog = true
 
-                                                                            onFetchRoute(extractedLocations)
-                                                                        } else {
-                                                                            Toast.makeText(context, "이 사진에는 위치 정보가 없습니다.", Toast.LENGTH_SHORT).show()
-                                                                        }
+                                                                        onFetchRoute(extractedLocations)
+                                                                    } else {
+                                                                        Toast.makeText(context, "이 사진에는 위치 정보가 없습니다.", Toast.LENGTH_SHORT).show()
+                                                                    }
                                                                 }
                                                             },
                                                             contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
@@ -430,14 +433,17 @@ fun WriteScreenContent(
                                                                 contentScale = ContentScale.Crop
                                                             )
                                                             Spacer(Modifier.width(12.dp))
-                                                            val timeSdf = SimpleDateFormat(
-                                                                "a hh:mm",
-                                                                Locale.KOREA
-                                                            )
+                                                            val timeSdf = SimpleDateFormat("a hh:mm", Locale.KOREA)
                                                             Column(modifier = Modifier.weight(1f)) {
+                                                                val timeText = if(image.timestamp != null && image.timestamp > 0) {
+                                                                    timeSdf.format(Date(image.timestamp))
+                                                                } else {
+                                                                    "시간 정보 없음"
+                                                                }
                                                                 Text(
-                                                                    timeSdf.format(Date(image.timestamp)),
-                                                                    style = MaterialTheme.typography.bodyMedium
+                                                                    text = timeText,
+                                                                    style = MaterialTheme.typography.bodyMedium,
+                                                                    color = if (image.timestamp != null) Color.Unspecified else Color.Gray // 정보 없을 때 회색 처리(선택)
                                                                 )
                                                             }
 
@@ -581,8 +587,13 @@ fun WriteScreenContent(
                             // 사진 첨부
                             Row(modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable { galleryLauncher.launch("image/*") }
-                                .padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                                .clickable {
+                                    galleryLauncher.launch(
+                                        // 갤러리 열기 명령
+                                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                                    )
+                                } .padding(vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically) {
                                 Icon(Icons.Default.CameraAlt, null, tint = Color.Gray)
                                 Spacer(Modifier.width(8.dp))
                                 val totalCount = groupedImages.values.flatten().size

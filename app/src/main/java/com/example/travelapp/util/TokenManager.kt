@@ -39,10 +39,13 @@ class TokenManager @Inject constructor(@ApplicationContext context: Context) {
         return prefs.getString(KEY_AUTH_TOKEN, null)
     }
 
+    fun deleteToken() {
+        prefs.edit().remove(KEY_AUTH_TOKEN).apply()
+    }
+
     /**
      * 저장된 토큰을 삭제함. (로그아웃 시 사용)
      */
-
     fun clearToken() {
         prefs.edit().remove(KEY_AUTH_TOKEN).apply()
     }

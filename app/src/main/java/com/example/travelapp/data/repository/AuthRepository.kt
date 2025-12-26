@@ -20,12 +20,14 @@ class AuthRepository @Inject constructor(
     // ViewModel에서 함수 호출하게 됨.
     // 파라미터로 받은 SocialLoginRequest 객체를 ApiService에 그대로 전달
     // Request(요청서)를 서버로 보내고 Response에 담에서 그대로 되돌려줌.
-    suspend fun socialLogin(provider: String, token: String, email: String, socialId: String): Result<Boolean> {
+    suspend fun socialLogin(provider: String, token: String, email: String, socialId: String, nickname: String?, profileImage: String?): Result<Boolean> {
         return try {
             val request = SocialLoginRequest(
                 email = email,
                 socialProvider = provider,
-                socialId = socialId
+                socialId = socialId,
+                nickname = nickname,
+                profileImage = profileImage
             )
             val response = authApiService.socialLogin(request)
 
@@ -104,6 +106,22 @@ class AuthRepository @Inject constructor(
                 Result.success(Unit)
             } else {
                 Result.failure(RuntimeException("변경 실패"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun withdraw(): Result<Unit> {
+        return try {
+            val response = authApiService.withdraw()
+
+            if(response.isSuccessful && response.body()?.success == true) {
+                // 탈퇴 성공
+                tokenManager.deleteToken()
+                Result.success(Unit)
+            } else {
+                Result.failure(kotlin.RuntimeException("회원 탈퇴 실패: ${response.message()}"))
             }
         } catch (e: Exception) {
             Result.failure(e)
