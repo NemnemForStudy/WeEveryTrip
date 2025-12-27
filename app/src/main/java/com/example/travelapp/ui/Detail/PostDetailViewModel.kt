@@ -11,6 +11,7 @@ import com.example.travelapp.data.model.comment.Comment
 import com.example.travelapp.data.repository.AuthRepository
 import com.example.travelapp.data.repository.CommentRepository
 import com.example.travelapp.data.repository.PostRepository
+import com.example.travelapp.util.TokenManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -26,7 +27,8 @@ class PostDetailViewModel @Inject constructor(
     private val postApiService: PostApiService,
     private val postRepository: PostRepository,
     private val commentRepository: CommentRepository,
-    private val authRepository: AuthRepository
+    private val authRepository: AuthRepository,
+    private val tokenManager: TokenManager
 ): ViewModel() {
     // UI가 바라볼 상태 변수들
     // 게시물 데이터
@@ -346,5 +348,9 @@ class PostDetailViewModel @Inject constructor(
         val totalDays = _routePointsByDay.value.size
         if(totalDays == 0) return
         _currentDayIndex.value = index.coerceIn(0, totalDays - 1)
+    }
+
+    fun getUserToken(): String? {
+        return tokenManager.getToken()
     }
 }

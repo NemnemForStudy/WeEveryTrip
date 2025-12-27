@@ -14,6 +14,8 @@ import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
+import androidx.navigation.navDeepLink
+import com.example.travelapp.BuildConfig.KAKAO_NATIVE_APP_KEY
 import com.example.travelapp.ui.Detail.PostDetailScreen
 import com.example.travelapp.ui.auth.LoginScreen
 import com.example.travelapp.ui.auth.SplashScreen
@@ -117,7 +119,23 @@ fun AppNavHost(
                     navController = navController
                 )
             }
+        }
 
+        composable(
+            route = "postDetail/{postId}",
+            arguments = listOf(navArgument("postId") { type = NavType.StringType }),
+            deepLinks = listOf(
+                navDeepLink { uriPattern = "kakao${KAKAO_NATIVE_APP_KEY}://kakaolink?postId={postId}" },
+                navDeepLink { uriPattern = "modutrip://post/{postId}" }
+            )
+        ) { backStackEntry ->
+            val postId = backStackEntry.arguments?.getString("postId")
+            if(postId != null) {
+                PostDetailScreen(
+                    postId = postId,
+                    navController = navController
+                )
+            }
         }
     }
 }

@@ -14,28 +14,24 @@ import com.example.travelapp.data.repository.PostRepository
 import com.example.travelapp.ui.common.ImageSelectionHelper
 import com.example.travelapp.ui.write.PostImage
 import com.example.travelapp.util.DateUtils
+import com.example.travelapp.util.TokenManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.launchIn
-import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.text.SimpleDateFormat
-import java.util.Calendar
-import java.util.Date
-import java.util.Locale
+import java.util.*
 import javax.inject.Inject
 
 @HiltViewModel
 class EditPostViewModel @Inject constructor(
     private val postApiService: PostApiService,
-    private val postRepository: PostRepository
+    private val postRepository: PostRepository,
+    private val tokenManager: TokenManager
 ) : ViewModel() {
 
     private val _post = MutableStateFlow<Post?>(null)
@@ -47,7 +43,6 @@ class EditPostViewModel @Inject constructor(
     private val _updateStatus = MutableStateFlow<UpdateStatus>(UpdateStatus.Idle)
     val updateStatus = _updateStatus.asStateFlow()
 
-    // 입력 필드 상태
     private val _category = MutableStateFlow("")
     val category = _category.asStateFlow()
 
@@ -81,21 +76,18 @@ class EditPostViewModel @Inject constructor(
     private val _groupedImages = MutableStateFlow<Map<Int, List<PostImage>>>(emptyMap())
     val groupedImages = _groupedImages.asStateFlow()
 
-    // 태그 상태 추가
     private val _tags = MutableStateFlow<List<String>>(emptyList())
     val tags = _tags.asStateFlow()
 
     init {
         _startDate.combine(_endDate) { start, end ->
-            if(start != null && end != null) {
-                DateUtils.generateDaysBetween(start, end)
-            } else {
-                emptyList()
-            }
+            if(start != null && end != null) DateUtils.generateDaysBetween(start, end)
+            else emptyList()
         }.onEach { days ->
             _tripDays.value = days
         }.launchIn(viewModelScope)
     }
+
     sealed class UpdateStatus {
         object Idle : UpdateStatus()
         object Loading : UpdateStatus()
@@ -108,50 +100,31 @@ class EditPostViewModel @Inject constructor(
             _isLoading.value = true
             try {
                 val fetchedPost = postApiService.getPostById(postId)
-
-                fetchedPost.imageLocations.forEach { loc ->
-                    Log.d("DEBUG_LOAD", "이미지: ${loc.imageUrl}, 시간: ${loc.timestamp}")
-                }
                 _post.value = fetchedPost
+
                 // 입력 필드 초기화
-                _category.value = fetchedPost.category
-                _title.value = fetchedPost.title
-                _content.value = fetchedPost.content
+                _category.value = fetchedPost.category ?: ""
+                _title.value = fetchedPost.title ?: ""
+                _content.value = fetchedPost.content ?: ""
                 _images.value = fetchedPost.images ?: emptyList()
                 _isDomestic.value = fetchedPost.isDomestic
                 _latitude.value = fetchedPost.latitude
                 _longitude.value = fetchedPost.longitude
                 _startDate.value = fetchedPost.travelStartDate?.let { DateUtils.parseDate(it) }
                 _endDate.value = fetchedPost.travelEndDate?.let { DateUtils.parseDate(it) }
-                _tags.value = fetchedPost.tags
+                _tags.value = fetchedPost.tags ?: emptyList()
 
-                // 에뮬레이터/실기기 분기
-                val isEmulator = (Build.FINGERPRINT.startsWith("generic")
-                        || Build.FINGERPRINT.startsWith("unknown")
-                        || Build.MODEL.contains("Emulator")
-                        || Build.MODEL.contains("Android SDK built for x86")
-                        || (Build.BRAND.startsWith("generic") && Build.DEVICE.startsWith("generic")))
-                val phoneBaseUrl = runCatching {
-                    BuildConfig::class.java.getField("PHONE_BASE_URL").get(null) as String
-                }.getOrNull()
-                val baseUrl = if (isEmulator) {
-                    BuildConfig.BASE_URL
-                } else {
-                    phoneBaseUrl?.takeIf { it.isNotBlank() } ?: BuildConfig.BASE_URL
-                }.trimEnd('/') + "/"
+                // BaseURL 결정 (이미지 경로 복원용)
+                val baseUrl = resolveBaseUrl()
 
                 val existingGrouped = fetchedPost.imageLocations
                     .filter { it.dayNumber != null && it.dayNumber > 0 }
-                    .mapIndexed { index, loc ->
-                        // 서버 URL을 전체 경로로 변환
-                        val fullUrl = if (loc.imageUrl.startsWith("http")) {
-                            loc.imageUrl
-                        } else {
-                            "$baseUrl${loc.imageUrl.trimStart('/')}"
-                        }
+                    .map { loc ->
+                        val fullUrl = if (loc.imageUrl.startsWith("http")) loc.imageUrl
+                        else "$baseUrl${loc.imageUrl.trimStart('/')}"
                         PostImage(
                             uri = Uri.parse(fullUrl),
-                            timestamp = loc.timestamp,  // 기존 사진은 timestamp 없음 표시
+                            timestamp = loc.timestamp,
                             dayNumber = loc.dayNumber ?: 1,
                             latitude = loc.latitude,
                             longitude = loc.longitude,
@@ -160,51 +133,52 @@ class EditPostViewModel @Inject constructor(
                     .groupBy { it.dayNumber }
                 _groupedImages.value = existingGrouped
             } catch (e: Exception) {
-                Log.e("EditPostViewModel", "게시물 로드 실패: ${e.message}")
+                Log.e("EditPostViewModel", "로드 실패: ${e.message}")
             } finally {
                 _isLoading.value = false
             }
         }
     }
 
-    fun updateCategory(value: String) {
-        _category.value = value
-    }
-
-    fun updateTitle(value: String) {
-        _title.value = value
-    }
-
-    fun updateContent(value: String) {
-        _content.value = value
-    }
-
+    // ✅ 핵심 수정: updatePost 로직 재구성
     fun updatePost(postId: String, context: Context) {
         viewModelScope.launch {
             _updateStatus.value = UpdateStatus.Loading
 
             try {
+                val token = tokenManager.getToken() ?: throw Exception("로그인 정보가 없습니다.")
+
+                // 1. 모든 이미지를 하나의 리스트로 평탄화
                 val allImagesInDrawer = _groupedImages.value.entries
                     .sortedBy { it.key }
                     .flatMap { it.value }
 
+                // 2. 새로 추가된 로컬 이미지들만 필터링하여 업로드
                 val localImages = allImagesInDrawer.filter { it.uri.scheme == "content" || it.uri.scheme == "file" }
-                val newUrls = if(localImages.isNotEmpty()) {
+
+                val newUrls = if (localImages.isNotEmpty()) {
                     val parts = withContext(Dispatchers.IO) {
                         localImages.map { uriToPart(context, it.uri) }
                     }
-                    postApiService.uploadImages(parts).body()?.urls ?: emptyList()
-                } else emptyList()
 
-                // 업로드된 URL을 다시 allImagesInDrawer의 로컬 이미지 자리에 매칭
-                var newUrlIndex = 0
-                // 최종 이미지 목록 = 기존 유지 + 새 업로드
-                val finalLocationRequests = allImagesInDrawer.mapIndexed { index, img ->
-                    val finalUrl = if(img.uri.scheme == "http" || img.uri.scheme == "https") {
-                        img.uri.toString() // 기존 서버 이미지는 그대로 사용
+                    // 🔥 수정 포인트 1: 첫 번째 인자로 토큰을 전달함
+                    val response = postApiService.uploadImages("Bearer $token", parts)
+
+                    if (response.isSuccessful) {
+                        response.body()?.urls ?: emptyList()
                     } else {
-                        newUrls.getOrNull(newUrlIndex++) ?: "" // 새 이미지는 업로드된 URL로 교체
+                        throw Exception("이미지 업로드 실패 (${response.code()})")
                     }
+                } else {
+                    emptyList()
+                }
+
+                // 3. 업로드된 URL을 원본 위치에 매칭하여 최종 요청 객체 생성
+                var newUrlIndex = 0
+                val finalLocationRequests = allImagesInDrawer.mapIndexed { index, img ->
+                    val isRemote = img.uri.scheme == "http" || img.uri.scheme == "https"
+                    val finalUrl = if (isRemote) img.uri.toString()
+                    else newUrls.getOrNull(newUrlIndex++) ?: ""
 
                     UpdateImageLocationRequest(
                         imageUrl = finalUrl,
@@ -216,11 +190,11 @@ class EditPostViewModel @Inject constructor(
                     )
                 }
 
+                // 4. 날짜 포맷팅 및 Repository 호출
                 val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
                 val startDateStr = _startDate.value?.let { sdf.format(Date(it)) }
                 val endDateStr = _endDate.value?.let { sdf.format(Date(it)) }
 
-                val finalImageUrlList = finalLocationRequests.map { it.imageUrl }
                 val result = postRepository.updatePost(
                     postId = postId,
                     category = _category.value,
@@ -232,88 +206,91 @@ class EditPostViewModel @Inject constructor(
                     isDomestic = _isDomestic.value,
                     travelStartDate = startDateStr,
                     travelEndDate = endDateStr,
-                    images = finalImageUrlList,
+                    images = finalLocationRequests.map { it.imageUrl },
                     imageLocations = finalLocationRequests
                 )
+
                 if (result.isSuccess) {
                     _updateStatus.value = UpdateStatus.Success
                 } else {
                     _updateStatus.value = UpdateStatus.Error(result.exceptionOrNull()?.message ?: "수정 실패")
                 }
-            }catch (e: Exception) {
+
+            } catch (e: Exception) {
+                Log.e("EditPostViewModel", "수정 오류: ${e.message}")
                 _updateStatus.value = UpdateStatus.Error(e.message ?: "오류 발생")
             }
         }
     }
 
-    fun updateDateRange(start: Long?, end: Long?) {
-        _startDate.value = start
-        _endDate.value = end
+    private fun resolveBaseUrl(): String {
+        val isEmulator = (Build.FINGERPRINT.startsWith("generic") || Build.MODEL.contains("Emulator"))
+        val phoneBaseUrl = runCatching {
+            BuildConfig::class.java.getField("PHONE_BASE_URL").get(null) as String
+        }.getOrNull()
+
+        return (if (isEmulator) BuildConfig.BASE_URL
+        else phoneBaseUrl?.takeIf { it.isNotBlank() } ?: BuildConfig.BASE_URL)
+            .trimEnd('/') + "/"
     }
 
-    fun processSelectedImages(context: Context, uris: List<Uri>) {
-        viewModelScope.launch {
-            val existingCoords = _post.value?.imageLocations
-                ?.mapNotNull { loc ->
-                    if(loc.latitude != null && loc.longitude != null) {
-                        Pair(loc.latitude, loc.longitude)
-                    } else null
-                }?.toSet() ?: emptySet()
+    // ... (이하 processSelectedImages, swapImages 등 기존 유틸 함수들은 동일하게 유지)
 
-            val grouped = ImageSelectionHelper.processUris(
-                context = context,
-                uris = uris,
-                tripDays = _tripDays.value,
-                existingCoordinates = existingCoords,
-                onLocationDetected = { lat, lon -> updateLocation(lat, lon)}
-            )
-
-            // 현재 보관중인 이미지 묶음을 가져와서 수정이 가능한 복사본을 만듦.(원본 데이터 건드리지 않는다.)
-            val current = _groupedImages.value.toMutableMap()
-            // 새로 분류된 데이터를 하나씩 꺼낸다. day는 날짜(key)이고, images는 그날의 사진 리스트(value)
-            grouped.forEach { (day, images) ->
-                // 기본 복사본(current)에 해당 날짜 데이터가 이미 있는지 확인함.
-                current[day] = (current[day] ?: emptyList()) + images
-            }
-            // 합치기가 완료된 새 지도를 다시 원본 데이터 변수에 저장하여 화면을 갱신하게 만든다.
-            _groupedImages.value = current
-        }
-    }
-
-    fun swapImages(dayNumber: Int, fromIndex: Int, toIndex: Int) {
-        val currentMap = _groupedImages.value.toMutableMap()
-        val list = currentMap[dayNumber]?.toMutableList() ?: return
-
-        if(fromIndex in list.indices && toIndex in list.indices) {
-            val item = list.removeAt(fromIndex)
-            list.add(toIndex, item)
-            currentMap[dayNumber] = list
-            _groupedImages.value = currentMap
-        }
-    }
-
-    fun updateIsDomestic(value: Boolean) {
-        _isDomestic.value = value
-    }
-
-    fun updateLocation(lat: Double?, lon: Double?) {
-        _latitude.value = lat
-        _longitude.value = lon
-    }
-
-    fun resetStatus() {
-        _updateStatus.value = UpdateStatus.Idle
-    }
-
-    fun updateTags(newTags: List<String>) {
-        _tags.value = newTags
-    }
+    fun updateCategory(value: String) { _category.value = value }
+    fun updateTitle(value: String) { _title.value = value }
+    fun updateContent(value: String) { _content.value = value }
+    fun updateDateRange(start: Long?, end: Long?) { _startDate.value = start; _endDate.value = end }
+    fun updateIsDomestic(value: Boolean) { _isDomestic.value = value }
+    fun updateLocation(lat: Double?, lon: Double?) { _latitude.value = lat; _longitude.value = lon }
+    fun resetStatus() { _updateStatus.value = UpdateStatus.Idle }
+    fun updateTags(newTags: List<String>) { _tags.value = newTags }
 
     private fun uriToPart(context: Context, uri: Uri): MultipartBody.Part {
         val inputStream = context.contentResolver.openInputStream(uri)!!
         val bytes = inputStream.use { it.readBytes() }
-        val mime = context.contentResolver.getType(uri) ?: "image/*"
+        val mime = context.contentResolver.getType(uri) ?: "image/jpeg"
         val requestBody = bytes.toRequestBody(mime.toMediaTypeOrNull())
-        return MultipartBody.Part.createFormData("images", "upload.jpg", requestBody)
+        return MultipartBody.Part.createFormData("images", "upload_${System.currentTimeMillis()}.jpg", requestBody)
+    }
+
+    fun processSelectedImages(context: Context, uris: List<Uri>) {
+        viewModelScope.launch {
+            val existingCoords = _post.value?.imageLocations?.mapNotNull { loc ->
+                if(loc.latitude != null && loc.longitude != null) Pair(loc.latitude, loc.longitude) else null
+            }?.toSet() ?: emptySet()
+
+            val grouped = ImageSelectionHelper.processUris(context, uris, _tripDays.value, existingCoords) { lat, lon ->
+                updateLocation(lat, lon)
+            }
+
+            val current = _groupedImages.value.toMutableMap()
+            grouped.forEach { (day, images) ->
+                current[day] = (current[day] ?: emptyList()) + images
+            }
+            _groupedImages.value = current
+        }
+    }
+
+    /**
+     * 특정 날짜(Day) 내에서 이미지의 순서를 변경하는 함수
+     * @param dayNumber 수정할 날짜 번호
+     * @param fromIndex 원래 위치
+     * @param toIndex 바꿀 위치
+     */
+    fun swapImages(dayNumber: Int, fromIndex: Int, toIndex: Int) {
+        // 1. 현재의 맵 데이터를 복사
+        val currentMap = _groupedImages.value.toMutableMap()
+        // 2. 해당 날짜의 리스트를 가져와서 수정 가능한 리스트로 변환
+        val list = currentMap[dayNumber]?.toMutableList() ?: return
+
+        // 3. 인덱스 범위를 벗어나지 않는지 확인 후 순서 교체
+        if (fromIndex in list.indices && toIndex in list.indices) {
+            val item = list.removeAt(fromIndex)
+            list.add(toIndex, item)
+
+            // 4. 수정한 리스트를 다시 맵에 넣고 StateFlow 업데이트
+            currentMap[dayNumber] = list
+            _groupedImages.value = currentMap
+        }
     }
 }

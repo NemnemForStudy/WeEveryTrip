@@ -19,7 +19,7 @@ data class Post(
     val content: String,
     val nickname: String,
     val created_at: String,
-    val tags: List<String> = emptyList(),
+    val tags: List<String>? = emptyList(),
     val images: List<String> = emptyList(),
 
     @SerializedName("thumbnail_url")

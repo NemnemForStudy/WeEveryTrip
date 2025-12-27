@@ -53,7 +53,7 @@
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="modutrip" android:host="post" />
+                <data android:scheme="kakao${KAKAO_NATIVE_APP_KEY}" android:host="kakaolink" />
             </intent-filter>
         </activity>
         <!--    리다이렉트 URI 설정   -->
@@ -64,7 +64,7 @@
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:host="oauth" android:scheme="${kakao_app_key}" />
+                <data android:host="oauth" android:scheme="${KAKAO_NATIVE_APP_KEY}" />
             </intent-filter>
         </activity>
         <meta-data

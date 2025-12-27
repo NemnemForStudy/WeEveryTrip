@@ -68,6 +68,10 @@ android {
         buildConfigField("String", "NAVER_MAP_CLIENT_ID", "\"$naverMapClientId\"")
         // 메니페스트(XML)용 변수 연결
         manifestPlaceholders["NAVER_MAP_CLIENT_ID"] = naverMapClientId
+
+        val kakaoNativeAppKey = properties.getProperty("kakao.native.app.key") ?: ""
+        buildConfigField("String","KAKAO_NATIVE_APP_KEY", "\"$kakaoNativeAppKey\"")
+        manifestPlaceholders["KAKAO_NATIVE_APP_KEY"] = kakaoNativeAppKey
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
@@ -111,6 +115,7 @@ dependencies {
 
     // --- Hilt (의존성 주입) ---
     implementation(libs.hilt.android)
+    implementation(libs.androidx.ui)
     kapt(libs.hilt.compiler)
     kaptAndroidTest(libs.hilt.compiler)
 

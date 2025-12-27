@@ -1,14 +1,13 @@
 package com.example.travelapp.ui.Detail // 패키지명 확인
 
+import androidx.compose.ui.ExperimentalComposeUiApi
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapShader
-import android.graphics.Camera
 import android.graphics.Canvas
 import android.graphics.Matrix
 import android.graphics.Paint
-import android.graphics.Path
 import android.graphics.Shader
 import android.net.Uri
 import android.os.Build
@@ -16,6 +15,8 @@ import android.view.MotionEvent
 import android.widget.Toast
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -56,6 +57,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
@@ -63,26 +65,30 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.pointerInteropFilter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -97,9 +103,11 @@ import coil.imageLoader
 import coil.request.ImageRequest
 import coil.request.SuccessResult
 import com.example.travelapp.BuildConfig
+import com.example.travelapp.R
 import com.example.travelapp.data.model.Post
 import com.example.travelapp.data.model.RoutePoint
 import com.example.travelapp.data.model.ShareUtil
+import com.example.travelapp.data.model.ShareUtil.uploadMapCapture
 import com.example.travelapp.data.model.comment.Comment
 import com.example.travelapp.ui.navigation.Screen
 import com.example.travelapp.util.AnimatedPolyline
@@ -109,16 +117,19 @@ import com.naver.maps.geometry.LatLngBounds
 import com.naver.maps.map.CameraAnimation
 import com.naver.maps.map.CameraPosition
 import com.naver.maps.map.CameraUpdate
+import com.naver.maps.map.compose.CameraPositionState
 import com.naver.maps.map.compose.ExperimentalNaverMapApi
 import com.naver.maps.map.compose.MapEffect
 import com.naver.maps.map.compose.MapUiSettings
 import com.naver.maps.map.compose.Marker
 import com.naver.maps.map.compose.MarkerState
 import com.naver.maps.map.compose.NaverMap
+import com.naver.maps.map.compose.PolylineOverlay
 import com.naver.maps.map.compose.rememberCameraPositionState
 import com.naver.maps.map.overlay.OverlayImage
 import com.naver.maps.map.util.MarkerIcons
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.net.URLEncoder
 
 // 색상 상수
@@ -143,6 +154,8 @@ fun PostDetailScreen(
     val commentContent by viewModel.commentContent.collectAsStateWithLifecycle()
     val currentUserId by viewModel.currentUserId.collectAsStateWithLifecycle()
     val routePoints by viewModel.routePoints.collectAsStateWithLifecycle()
+    val userToken = remember { viewModel.getUserToken() }
+    val isCapturing by remember { mutableStateOf(false) }
 
     // 화면 진입 시 딱 한 번 실행 (데이터 요청)
     LaunchedEffect(postId) {
@@ -246,7 +259,8 @@ fun PostDetailScreen(
                     isMyPost = isMyPost,
                     triggerSnapshot = triggerSnapshot,
                     onSharedClick = { triggerSnapshot = true },
-                    onSnapshotDone = { triggerSnapshot = false }
+                    onSnapshotDone = { triggerSnapshot = false },
+                    userToken = userToken
                 )
             }
             // post 가 null, 에러 없고, 로딩도 아닐 떄 대비한 else
@@ -287,11 +301,47 @@ fun PostDetailContent(
     isMyPost: Boolean = false,
     triggerSnapshot: Boolean = false,
     onSharedClick: () -> Unit = {},
-    onSnapshotDone: () -> Unit = {}
+    onSnapshotDone: () -> Unit = {},
+    userToken: String?
 ) {
     var showEditDialog by remember { mutableStateOf(false) }
     var commentToEdit by remember { mutableStateOf<Comment?>(null) }
     var hasHeader = post.images?.isNotEmpty() == true || post.imageLocations.isNotEmpty()
+    var showShareSheet by remember { mutableStateOf(false) }
+    val sheetState = rememberModalBottomSheetState()
+
+    if(showShareSheet) {
+        ModalBottomSheet(
+            onDismissRequest = { showShareSheet = false },
+            sheetState = sheetState,
+            containerColor = Color.White
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 40.dp, top = 10.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text("여행기 공유", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                Spacer(modifier = Modifier.height(24.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    ShareOptionItem(
+                        label = "카카오톡",
+                        iconRes = R.drawable.kakao_icon, // 카톡 아이콘 이미지 넣어야함.
+                        backgroundColor = Color(0xFFFEE500),
+                        onClick = {
+                            showShareSheet = false
+                            onSharedClick()
+                        }
+                    )
+                }
+            }
+        }
+    }
 
     Scaffold(
         containerColor = Color.White,
@@ -312,7 +362,9 @@ fun PostDetailContent(
                     }
                 },
                 actions = {
-                    IconButton(onClick = onSharedClick) {
+                    IconButton(onClick = {
+                        showShareSheet = true
+                    }) {
                         Icon(Icons.Default.Share, contentDescription = "공유", tint = Color.Black)
                     }
                 },
@@ -350,7 +402,8 @@ fun PostDetailContent(
                         onPrevDay = onPrevDay,
                         onNextDay = onNextDay,
                         triggerSnapshot = triggerSnapshot,
-                        onSnapshotDone = onSnapshotDone
+                        onSnapshotDone = onSnapshotDone,
+                        token = userToken
                     )
                 }
 
@@ -499,28 +552,31 @@ fun PostMapHeader(
     onPrevDay: () -> Unit,
     onNextDay: () -> Unit,
     triggerSnapshot: Boolean,
-    onSnapshotDone: () -> Unit
+    onSnapshotDone: () -> Unit,
+    token: String?
 ) {
     // 현재 선택된 Day 번호 계산
     val dayKeys = routePointsByDay.keys.sorted()
     val currentDayNumber = dayKeys.getOrNull(currentDayIndex)
     val context = LocalContext.current // SharedUtil 실행 위해 필요.
+    val scope = rememberCoroutineScope()
 
     // 1) 서버가 내려준 "사진별 좌표(image_locations)"로 마커 여러개 표시
     // 2) 없으면(또는 전부 GPS가 없으면) post.coordinate(대표 좌표) 1개로 fallback
-    val markerItems: List<MarkerItem> =
+    val markerItems: List<MarkerItem> = remember(post.imageLocations, currentDayNumber) {
         post.imageLocations
             .filter { it.dayNumber == currentDayNumber }  // 현재 Day만 필터링
             .mapNotNull { loc ->
-            val lat = loc.latitude
-            val lng = loc.longitude
-            if (lat != null && lng != null) {
-                MarkerItem(
-                    position = LatLng(lat, lng),
-                    imageUrl = loc.imageUrl
-                )
-            } else null
-        }
+                val lat = loc.latitude
+                val lng = loc.longitude
+                if (lat != null && lng != null) {
+                    MarkerItem(
+                        position = LatLng(lat, lng),
+                        imageUrl = loc.imageUrl
+                    )
+                } else null
+            }
+    }
 
     val routeLatLngs = remember(routePoints) {
         routePoints.map { LatLng(it.latitude, it.longitude) }
@@ -548,198 +604,275 @@ fun PostMapHeader(
     val pointsToShow = if(simplifiedRoute.size >= 2) simplifiedRoute else markerItems.map { it.position }
     val totalDays = dayKeys.size
 
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(350.dp)
-            .background(Color.LightGray)
-    ) {
-        if (totalDays > 0) {
-            Row(
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(top = 16.dp)
-                    .clip(RoundedCornerShape(24.dp))
-                    .background(Color.White.copy(alpha = 0.9f))
-                    .padding(horizontal = 12.dp, vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                val canPrev = currentDayIndex > 0
-                val canNext = currentDayIndex < totalDays - 1
-
-                IconButton(onClick = onPrevDay, enabled = canPrev) {
-                    Icon(
-                        imageVector = Icons.Default.ArrowBack,
-                        contentDescription = "이전 날짜",
-                        tint = if (canPrev) PrimaryBlue else TextGray.copy(alpha = 0.4f)
-                    )
-                }
-
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        text = "Day ${currentDayIndex + 1} / $totalDays",
-                        color = TextDark,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 16.sp
-                    )
-                    Text(
-                        text = currentDayNumber?.let { "여행 ${it}일차" } ?: "단일 여행일",
-                        color = TextGray,
-                        fontSize = 12.sp
-                    )
-                }
-
-                IconButton(onClick = onNextDay, enabled = canNext) {
-                    Icon(
-                        imageVector = Icons.Default.ArrowForward,
-                        contentDescription = "다음 날짜",
-                        tint = if (canNext) PrimaryBlue else TextGray.copy(alpha = 0.4f)
-                    )
-                }
-            }
-
-            if (totalDays > 1) {
-                Row(
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(bottom = 16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    repeat(totalDays) { index ->
-                        val isSelected = index == currentDayIndex
-                        Box(
-                            modifier = Modifier
-                                .size(if (isSelected) 10.dp else 8.dp)
-                                .clip(CircleShape)
-                                .background(
-                                    if (isSelected) PrimaryBlue
-                                    else PrimaryBlue.copy(alpha = 0.3f)
-                                )
-                        )
-                    }
-                }
-            }
+    if(pointsToShow.isNotEmpty()) {
+        val cameraPositionState = rememberCameraPositionState {
+            position = CameraPosition(pointsToShow.first(), 14.0)
         }
 
-        if(pointsToShow.isNotEmpty()) {
-            val cameraPositionState = rememberCameraPositionState {
-                // 기본 카메라는 첫 번째 포인트 기준
-                position = CameraPosition(pointsToShow.first(), 14.0)
-            }
+        val view = LocalView.current
 
-            val density = LocalDensity.current
-            val view = LocalView.current
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(350.dp)
+                .background(Color.LightGray)
+        ) {
+            if (totalDays > 0) {
+                Row(
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(top = 16.dp)
+                        .clip(RoundedCornerShape(24.dp))
+                        .background(Color.White.copy(alpha = 0.9f))
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    val canPrev = currentDayIndex > 0
+                    val canNext = currentDayIndex < totalDays - 1
 
-            var polylinePlayKey by remember(post.id, currentDayIndex) { mutableStateOf(0) }
-
-            LaunchedEffect(currentDayIndex, pointsToShow) {
-                // route가 준비된 첫 순간에만 카메라 fit + 애니 시작
-                if(pointsToShow.isNotEmpty()) {
-                    val cameraUpdate = if (pointsToShow.size == 1) {
-                        // 사진이 1장인 경우 해당 좌표로 단순 이동
-                        CameraUpdate.scrollTo(pointsToShow.first())
-                            .animate(CameraAnimation.Easing, 1000)
-                    } else {
-                        // 사진이 여러 장이거나 경로 있는 경우 모든 좌표가 화면에 나오게
-                        val bounds = LatLngBounds.Builder().apply {
-                            polylineCoords.forEach { include(it) }
-                        }.build()
-
-                        val paddingPx = with(density) { 64.dp.roundToPx() }
-                        CameraUpdate.fitBounds(bounds, paddingPx)
-                            .animate(CameraAnimation.Fly, 1200)
-                    }
-
-                    cameraPositionState.animate(cameraUpdate)
-
-                    delay(1200)
-                    polylinePlayKey = 1
-                }
-            }
-
-            NaverMap(
-                modifier = Modifier.fillMaxSize()
-                    .pointerInteropFilter { event ->
-                        when(event.actionMasked) {
-                            MotionEvent.ACTION_DOWN -> view.parent?.requestDisallowInterceptTouchEvent(true)
-                            MotionEvent.ACTION_UP,
-                            MotionEvent.ACTION_CANCEL -> view.parent?.requestDisallowInterceptTouchEvent(false)
-                        }
-                        false
-                    },
-                cameraPositionState = cameraPositionState,
-                uiSettings = MapUiSettings(isCompassEnabled = false, isLogoClickEnabled = false)
-            ) {
-
-                // 만약 공유 버튼 신호가 true라면 지도 찍음.
-                if(triggerSnapshot) {
-                    MapEffect(key1 = triggerSnapshot) { map ->
-                        map.takeSnapshot { bitmap ->
-                            val sharedText = "[ModuTrip] ${post.title}\n${post.nickname}님의 여행기 보러가기!\\n\\n지금 확인: modutrip://post/${post.id}"
-                            ShareUtil.sharePost(context, bitmap, sharedText)
-                            // 캡처 끝났다고 보고 신호 다시 false로 바꿈
-                            onSnapshotDone()
-                        }
-                    }
-                }
-
-                // route 준비 후 1회만 애니메이션 실행
-                if (simplifiedRoute.size >= 2 && polylinePlayKey > 0) {
-                    key(polylinePlayKey) {
-                        val stepDelay = (2500L / polylineCoords.size.coerceAtLeast(1))
-                            .coerceIn(3L, 12L)
-
-                        AnimatedPolyline(
-                            coords = polylineCoords,
-                            color = Color.Black.copy(alpha = 0.55f),
-                            width = 14.dp,
-                            zIndex = 1,
-                            stepDelayMs = stepDelay,
-                            pauseIndices = pauseIndices,
-                            pauseDelayMs = 300L
+                    IconButton(onClick = onPrevDay, enabled = canPrev) {
+                        Icon(
+                            imageVector = Icons.Default.ArrowBack,
+                            contentDescription = "이전 날짜",
+                            tint = if (canPrev) PrimaryBlue else TextGray.copy(alpha = 0.4f)
                         )
+                    }
 
-                        AnimatedPolyline(
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            text = "Day ${currentDayIndex + 1} / $totalDays",
+                            color = TextDark,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 16.sp
+                        )
+                        Text(
+                            text = currentDayNumber?.let { "여행 ${it}일차" } ?: "단일 여행일",
+                            color = TextGray,
+                            fontSize = 12.sp
+                        )
+                    }
+
+                    IconButton(onClick = onNextDay, enabled = canNext) {
+                        Icon(
+                            imageVector = Icons.Default.ArrowForward,
+                            contentDescription = "다음 날짜",
+                            tint = if (canNext) PrimaryBlue else TextGray.copy(alpha = 0.4f)
+                        )
+                    }
+                }
+
+                if (totalDays > 1) {
+                    Row(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(bottom = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        repeat(totalDays) { index ->
+                            val isSelected = index == currentDayIndex
+                            Box(
+                                modifier = Modifier
+                                    .size(if (isSelected) 10.dp else 8.dp)
+                                    .clip(CircleShape)
+                                    .background(
+                                        if (isSelected) PrimaryBlue
+                                        else PrimaryBlue.copy(alpha = 0.3f)
+                                    )
+                            )
+                        }
+                    }
+                }
+            }
+
+            if(pointsToShow.isNotEmpty()) {
+                val cameraPositionState = rememberCameraPositionState {
+                    // 기본 카메라는 첫 번째 포인트 기준
+                    position = CameraPosition(pointsToShow.first(), 14.0)
+                }
+
+                val isMapMoving by remember {
+                    derivedStateOf { cameraPositionState.isMoving }
+                }
+
+                val density = LocalDensity.current
+                val view = LocalView.current
+
+                var polylinePlayKey by remember(post.id, currentDayIndex) { mutableStateOf(0) }
+
+                LaunchedEffect(currentDayIndex, pointsToShow) {
+                    // route가 준비된 첫 순간에만 카메라 fit + 애니 시작
+                    if(pointsToShow.isNotEmpty()) {
+                        val cameraUpdate = if (pointsToShow.size == 1) {
+                            // 사진이 1장인 경우 해당 좌표로 단순 이동
+                            CameraUpdate.scrollTo(pointsToShow.first())
+                                .animate(CameraAnimation.Easing, 1000)
+                        } else {
+                            if(polylineCoords.isNotEmpty()) {
+                                val builder = LatLngBounds.Builder()
+                                polylineCoords.forEach { builder.include(it) }
+
+                                val bounds = builder.build()
+                                val paddingPx = with(density) { 64.dp.roundToPx() }
+                                CameraUpdate.fitBounds(bounds, paddingPx)
+                                    .animate(CameraAnimation.Fly, 1200)
+                            } else {
+                                // 폴리라인은 없지만 마커 등 다른 포인트가 있다면 그것으로 대체하거나 무시
+                                CameraUpdate.scrollTo(pointsToShow.first())
+                                    .animate(CameraAnimation.Easing, 1000)
+                            }
+                        }
+
+                        cameraPositionState.animate(cameraUpdate)
+
+                        delay(1200)
+                        polylinePlayKey = 1
+                    }
+                }
+
+                val mapUiSettings = remember(triggerSnapshot) {
+                    MapUiSettings(
+                        isZoomControlEnabled = !triggerSnapshot, // 캡쳐중 일때만 버튼 숨김
+                        isCompassEnabled = false,
+                        isLogoClickEnabled = false,
+                        isLocationButtonEnabled = false // 공유 이미지에는 내 위치 버튼도 없애기.
+                    )
+                }
+
+                NaverMap(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .pointerInput(Unit) {
+                            detectTapGestures(
+                                onPress = {
+                                    try {
+                                        view.parent?.requestDisallowInterceptTouchEvent(true)
+                                    } catch (e: Exception) {
+                                        e.printStackTrace()
+                                    }
+                                }
+                            )
+                        },
+                    uiSettings = remember(triggerSnapshot) {
+                        MapUiSettings(
+                            isZoomControlEnabled = !triggerSnapshot,
+                            isCompassEnabled = false,
+                            isLogoClickEnabled = false,
+                            isLocationButtonEnabled = false,
+                            isScrollGesturesEnabled = true
+                        )
+                    },
+                    cameraPositionState = cameraPositionState,
+                ) {
+
+                    // 만약 공유 버튼 신호가 true라면 지도 찍음.
+                    MapEffect(key1 = triggerSnapshot) { map ->
+                        if(triggerSnapshot) {
+                            Toast.makeText(context, "공유 이미지를 생성 중입니다!", Toast.LENGTH_SHORT).show()
+                            map.takeSnapshot { bitmap ->
+                                scope.launch {
+                                    try {
+                                        if (token != null) {
+                                            // 1. 서버 업로드 (토큰 포함)
+                                            val mapImageUrl = uploadMapCapture(context, bitmap, token)
+                                            android.util.Log.d("SHARE_DEBUG", "Post 데이터: $post")
+                                            android.util.Log.d("SHARE_DEBUG", "받아온 이미지 URL: $mapImageUrl")
+                                            android.util.Log.d("SHARE_DEBUG", "서버 응답 URL: $mapImageUrl")
+
+                                            if(post != null && mapImageUrl != null) {
+                                                val sharePost = post.copy(imgUrl = mapImageUrl)
+                                                ShareUtil.shareToKakao(context, sharePost)
+                                            } else {
+                                                Toast.makeText(context, "이미지 업로드에 실패했습니다.", Toast.LENGTH_SHORT).show()
+                                            }
+                                        } else {
+                                            Toast.makeText(context, "로그인 정보가 유효하지 않습니다.", Toast.LENGTH_SHORT).show()
+                                        }
+                                    } catch (e: Exception) {
+                                        Toast.makeText(context, "공유 중 오류 발생: ${e.message}", Toast.LENGTH_SHORT).show()
+                                    } finally {
+                                        onSnapshotDone() // ✅ 상태 리셋
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    if (triggerSnapshot && polylineCoords.size >= 2) {
+                        PolylineOverlay(
                             coords = polylineCoords,
                             color = Color(0xFF21B6FF),
                             width = 8.dp,
-                            zIndex = 2,
-                            stepDelayMs = stepDelay,
-                            pauseIndices = pauseIndices,
-                            pauseDelayMs = 300L
+                            zIndex = 10
                         )
                     }
-                }
 
-                if (polylineCoords.size >= 2) {
-                    PolylineArrowMarkers(
-                        coords = polylineCoords,
-                        color = Color(0xFF21B6FF),
-                        zIndex = 3
-                    )
-                }
+                    // route 준비 후 1회만 애니메이션 실행
+                    if(!cameraPositionState.isMoving) {
+                        if (simplifiedRoute.size >= 2 && polylinePlayKey > 0) {
+                            key(polylinePlayKey) {
+                                val stepDelay = (2500L / polylineCoords.size.coerceAtLeast(1))
+                                    .coerceIn(3L, 12L)
 
-                val total = markerItems.size
-                // 마커 여러개 표시
-                markerItems.forEachIndexed { index, item ->
-                    val icon = rememberPhotoMarkerIcon(item.imageUrl, sizePx = 160) // 사진은 조금 작게도 OK
+                                AnimatedPolyline(
+                                    coords = polylineCoords,
+                                    color = Color.Black.copy(alpha = 0.55f),
+                                    width = 14.dp,
+                                    zIndex = 1,
+                                    stepDelayMs = stepDelay,
+                                    pauseIndices = pauseIndices,
+                                    pauseDelayMs = 300L
+                                )
 
-                    Marker(
-                        state = MarkerState(position = item.position),
-                        captionText = when {
-                            total == 1 -> ""  // 사진 1장이면 캡션 없음
-                            index == 0 -> "출발"
-                            index == total - 1 -> "도착"
-                            else -> "${index}"
-                        },
-                        icon = icon ?: MarkerIcons.BLUE,
-                        anchor = Offset(0.5f, 1.0f)
-                    )
+                                AnimatedPolyline(
+                                    coords = polylineCoords,
+                                    color = Color(0xFF21B6FF),
+                                    width = 8.dp,
+                                    zIndex = 2,
+                                    stepDelayMs = stepDelay,
+                                    pauseIndices = pauseIndices,
+                                    pauseDelayMs = 300L
+                                )
+                            }
+                        }
+                    }
+
+
+                    if (polylineCoords.size >= 2) {
+                        PolylineArrowMarkers(
+                            coords = polylineCoords,
+                            color = Color(0xFF21B6FF),
+                            zIndex = 3,
+                            isVisible = !isMapMoving
+                        )
+                    }
+
+                    // 마커 여러개 표시
+                    markerItems.forEachIndexed { index, item ->
+                        val icon = rememberPhotoMarkerIcon(item.imageUrl, sizePx = 160) // 사진은 조금 작게도 OK
+                        // MarkerState를 remember로 묶어서 드래그 시 좌표 재계산 방지
+                        val state = remember(item.position) { MarkerState(position = item.position) }
+
+                        Marker(
+                            state = state,
+                            // [최적화] 이동 중에는 캡션 텍스트도 숨겨서 GPU 부하를 줄임
+                            captionText = if (isMapMoving) "" else when {
+                                markerItems.size == 1 -> ""
+                                index == 0 -> "출발"
+                                index == markerItems.size - 1 -> "도착"
+                                else -> "$index"
+                            },
+                            icon = icon ?: MarkerIcons.BLUE,
+                            anchor = Offset(0.5f, 1.0f)
+                        )
+                    }
+                    if (polylineCoords.size >= 2) {
+                        PolylineOverlay(coords = polylineCoords, color = Color(0xFF21B6FF), width = 6.dp)
+                    }
                 }
+            } else {
+                MapEmptyPlaceholder()
             }
-        } else {
-            MapEmptyPlaceholder()
         }
     }
 }
@@ -832,7 +965,7 @@ fun PostImageHeader(post: Post) {
                                 .background(
                                     if (isSelected) Color.White
                                     else Color.White.copy(alpha = 0.5f)
-                            )
+                                )
                         )
                     }
                 }
@@ -863,7 +996,7 @@ fun PostBodySection(
     isHeaderPresent: Boolean = true
 ) {
     var isMenuExpanded by remember { mutableStateOf(false) }
-    
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -886,7 +1019,7 @@ fun PostBodySection(
                 val lat = loc.latitude
                 val lng = loc.longitude
                 if (lat != null && lng != null) LatLng(lat, lng) else null
-        }
+            }
 
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -933,59 +1066,59 @@ fun PostBodySection(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.fillMaxWidth()
         ) {
-                Surface(
-                    modifier = Modifier.size(40.dp),
-                    shape = CircleShape,
-                    color = Color(0xFFE0E0E0)
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Text(post.nickname.take(1), fontWeight = FontWeight.Bold)
-                    }
+            Surface(
+                modifier = Modifier.size(40.dp),
+                shape = CircleShape,
+                color = Color(0xFFE0E0E0)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Text(post.nickname.take(1), fontWeight = FontWeight.Bold)
                 }
-                Spacer(modifier = Modifier.width(10.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(text = post.nickname, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                        Text(
-                            text = UtilTime.formatRelativeTime(post.created_at),
-                            color = TextGray,
-                            fontSize = 12.sp
+            }
+            Spacer(modifier = Modifier.width(10.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(text = post.nickname, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    Text(
+                        text = UtilTime.formatRelativeTime(post.created_at),
+                        color = TextGray,
+                        fontSize = 12.sp
+                    )
+                }
+            }
+
+            // 본인 게시물일 때만 점 세개 표시
+            if (isMyPost) {
+                Box {
+                    IconButton(onClick = { isMenuExpanded = true }) {
+                        Icon(
+                            imageVector = Icons.Default.MoreVert,
+                            contentDescription = "더보기",
+                            tint = Color.Gray
+                        )
+                    }
+                    DropdownMenu(
+                        expanded = isMenuExpanded,
+                        onDismissRequest = { isMenuExpanded = false },
+                        modifier = Modifier.background(Color.White)
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("수정") },
+                            onClick = {
+                                isMenuExpanded = false
+                                onEditClick()
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("삭제", color = Color.Red) },
+                            onClick = {
+                                isMenuExpanded = false
+                                onDeleteClick()
+                            }
                         )
                     }
                 }
-
-                // 본인 게시물일 때만 점 세개 표시
-                if (isMyPost) {
-                    Box {
-                        IconButton(onClick = { isMenuExpanded = true }) {
-                            Icon(
-                                imageVector = Icons.Default.MoreVert,
-                                contentDescription = "더보기",
-                                tint = Color.Gray
-                            )
-                        }
-                        DropdownMenu(
-                            expanded = isMenuExpanded,
-                            onDismissRequest = { isMenuExpanded = false },
-                            modifier = Modifier.background(Color.White)
-                        ) {
-                            DropdownMenuItem(
-                                text = { Text("수정") },
-                                onClick = {
-                                    isMenuExpanded = false
-                                    onEditClick()
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text("삭제", color = Color.Red) },
-                                onClick = {
-                                    isMenuExpanded = false
-                                    onDeleteClick()
-                                }
-                            )
-                        }
-                    }
-                }
+            }
         }
 
         Divider(modifier = Modifier.padding(vertical = 24.dp), color = Color(0xFFE0E0E0))
@@ -1227,17 +1360,16 @@ private fun circleCrop(src: Bitmap, size: Int): Bitmap {
 private fun PolylineArrowMarkers(
     coords: List<LatLng>,
     color: Color,
-    zIndex: Int
+    zIndex: Int,
+    isVisible: Boolean
 ) {
-    // 1) 너무 촘촘하면 지저분해지니까, 일정 간격으로 샘플링해서 화살표를 배치한다.
-    //    - route가 길면 자동으로 간격을 늘려서 대략 12~24개 정도만 나오게 조절.
+    if (!isVisible || coords.size < 2) return // 이동 중이면 아예 계산 안 함
+
     val step = remember(coords.size) {
-        val n = coords.size
         when {
-            n <= 60 -> 4
-            n <= 120 -> 6
-            n <= 250 -> 10
-            else -> 14
+            coords.size <= 60 -> 4
+            coords.size <= 120 -> 6
+            else -> 10
         }
     }
 
@@ -1257,6 +1389,7 @@ private fun PolylineArrowMarkers(
     // 3) 화살표 마커 렌더링
     //    - Marker 회전(angle) 지원이 불확실해서, 비트맵 자체를 회전해서 icon으로 넣는다.
     arrows.forEach { data ->
+        val markerState = remember(data.position) { MarkerState(position = data.position) }
         val icon = remember(data.angleDeg, color) {
             OverlayImage.fromBitmap(createRotatedArrowBitmap(data.angleDeg, color))
         }
@@ -1265,7 +1398,8 @@ private fun PolylineArrowMarkers(
             state = MarkerState(position = data.position),
             icon = icon,
             anchor = Offset(0.5f, 0.5f),
-            zIndex = zIndex
+            zIndex = zIndex,
+            isIconPerspectiveEnabled = false // 성능 최적화
         )
     }
 }
@@ -1282,7 +1416,7 @@ private fun bearingDeg(a: LatLng, b: LatLng): Float {
     val lat2 = Math.toRadians(b.latitude)
     val y = kotlin.math.sin(dLon) * kotlin.math.cos(lat2)
     val x = kotlin.math.cos(lat1) * kotlin.math.sin(lat2) -
-        kotlin.math.sin(lat1) * kotlin.math.cos(lat2) * kotlin.math.cos(dLon)
+            kotlin.math.sin(lat1) * kotlin.math.cos(lat2) * kotlin.math.cos(dLon)
     val brng = Math.toDegrees(kotlin.math.atan2(y, x))
     // 우리가 만든 기본 화살표 비트맵은 "위쪽"을 향하도록 그릴 거라서,
     // bearing(북=0도) 기준으로 그대로 회전시키면 된다.
@@ -1543,6 +1677,40 @@ fun MapEmptyPlaceholder() {
             fontSize = 14.sp,
             fontWeight = FontWeight.Medium
         )
+    }
+}
+
+@Composable
+fun ShareOptionItem(
+    label: String,
+    iconRes: Int,              // 🔥 리소스 ID를 직접 받음
+    backgroundColor: Color,
+    tint: Color = Color.Unspecified, // 로고 색상을 유지하기 위해 기본값 Unspecified
+    onClick: () -> Unit
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier
+            .clip(RoundedCornerShape(12.dp))
+            .clickable { onClick() }
+            .padding(8.dp)
+    ) {
+        Surface(
+            modifier = Modifier.size(60.dp),
+            shape = CircleShape,
+            color = backgroundColor
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    painter = painterResource(id = iconRes),
+                    contentDescription = label,
+                    tint = tint, // 아이콘 고유 색상을 쓰려면 Unspecified, 아니면 특정 색상 지정
+                    modifier = Modifier.size(32.dp)
+                )
+            }
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(text = label, fontSize = 12.sp, color = TextDark, fontWeight = FontWeight.Medium)
     }
 }
 
