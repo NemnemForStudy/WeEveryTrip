@@ -40,12 +40,14 @@ fun SplashScreen(onTimeout: () -> Unit) {
             Column {
                 Text(
                     text = "우리",
-                    style = MaterialTheme.typography.headlineLarge
+                    style = MaterialTheme.typography.headlineLarge,
+                    color = androidx.compose.ui.graphics.Color(0xFF212121)
                 )
 
                 Text(
                     text = "모두의",
                     style = MaterialTheme.typography.headlineLarge,
+                    color = androidx.compose.ui.graphics.Color(0xFF212121)
                 )
 
                 // 여행(공간과 함께 가로로 배치)
@@ -55,7 +57,8 @@ fun SplashScreen(onTimeout: () -> Unit) {
 
                     Text(
                         text = "여행",
-                        style = MaterialTheme.typography.headlineLarge
+                        style = MaterialTheme.typography.headlineLarge,
+                        color = androidx.compose.ui.graphics.Color(0xFF212121)
                     )
                 }
             }

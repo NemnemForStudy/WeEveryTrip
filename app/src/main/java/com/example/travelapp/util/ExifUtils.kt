@@ -69,6 +69,14 @@ object ExifUtils {
         }
     }
 
+    fun extractTimestamp(context: Context, uri: Uri): Long? {
+        return try {
+            extractDate(context, uri)
+        } catch (e: Exception) {
+            null
+        }
+    }
+
     private fun queryDateFromMediaStore(context: Context, uri: Uri): Long? {
         val cursor = context.contentResolver.query(
             uri, arrayOf(MediaStore.Images.Media.DATE_TAKEN), null, null, null

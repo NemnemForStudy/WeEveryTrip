@@ -9,24 +9,36 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 
 private val DarkColorScheme = darkColorScheme(
     primary = Purple80,
     secondary = PurpleGrey80,
     tertiary = Pink80,
-
     background = Beige,
-    surface = Beige
+    surface = Beige,
+    // ✅ 글자색 강제 지정
+    onBackground = Color.Black,
+    onSurface = Color.Black
 )
 
 private val LightColorScheme = lightColorScheme(
     primary = Purple40,
     secondary = PurpleGrey40,
     tertiary = Pink40,
-
     background = Beige,
-    surface = Beige
+    surface = Beige,
+
+    // 배경과 카드 위에 올라가는 모든 글자를 "Pure Black"으로 고정
+    onBackground = Color(0xFF000000),
+    onSurface = Color(0xFF000000),
+
+    // TextField 등에서 강조되지 않은 글자색도 진하게 처리
+    surfaceVariant = Beige,
+    onSurfaceVariant = Color(0xFF212121),
+
+    scrim = Color.Black.copy(alpha = 0.32f)
 
     /* Other default colors to override
     background = Color(0xFFFFFBFE),

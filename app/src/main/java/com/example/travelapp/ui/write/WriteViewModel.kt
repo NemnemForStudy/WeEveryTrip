@@ -3,6 +3,7 @@ package com.example.travelapp.ui.write
 import android.content.Context
 import android.icu.util.Calendar
 import android.net.Uri
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.travelapp.data.api.PostApiService
@@ -122,14 +123,58 @@ class WriteViewModel @Inject constructor(
      * 사진 선택하면 'Day N' 기준으로 자동 분류
      */
     fun processSelectedImages(context: Context, uris: List<Uri>) {
-        viewModelScope.launch {
-            val grouped = ImageSelectionHelper.processUris(
-                context = context,
-                uris = uris,
-                tripDays = _tripDays.value,
-                onLocationDetected = { lat, lon -> updateLocation(lat, lon) }
-            )
-            _groupedImages.value = grouped
+        viewModelScope.launch(Dispatchers.IO) { // 1. 무거운 이미지 처리는 IO 스레드에서
+            try {
+                Log.d("PhotoDebug", "2. 처리 시작 - 개수: ${uris.size}")
+
+                val currentStartDate = _startDate.value ?: System.currentTimeMillis()
+                val dayInMillis = 24 * 60 * 60 * 1000L
+
+                // 2. 새로운 이미지 객체 생성 및 정보 추출
+                val newPostImages = uris.map { uri ->
+                    val timestamp = ExifUtils.extractTimestamp(context, uri)
+                    val location = ExifUtils.extractLocation(context, uri)
+
+                    // 3. 사진의 촬영 날짜를 기반으로 Day 계산 (실무형 로직)
+                    val calculatedDay = if (timestamp != null && timestamp >= currentStartDate) {
+                        ((timestamp - currentStartDate) / dayInMillis).toInt() + 1
+                    } else {
+                        1 // 정보가 없으면 1일차로 할당
+                    }
+
+                    PostImage(
+                        uri = uri,
+                        timestamp = timestamp,
+                        dayNumber = calculatedDay,
+                        latitude = location?.first,
+                        longitude = location?.second
+                    )
+                }
+
+                // 4. 상태 업데이트 (Immutable State)
+                // 기존 맵을 가져와서 새로운 맵을 생성 (Compose UI 갱신을 위함)
+                val updatedMap = _groupedImages.value.toMutableMap()
+
+                newPostImages.forEach { image ->
+                    val day = image.dayNumber
+                    val existingList = updatedMap[day] ?: emptyList()
+
+                    // 중복 추가 방지 로직 (실무에서는 Uri 중복 체크도 수행)
+                    if (existingList.none { it.uri == image.uri }) {
+                        updatedMap[day] = existingList + image
+                    }
+                }
+
+                // 5. 메인 스레드에서 UI 상태 반영
+                withContext(Dispatchers.Main) {
+                    _groupedImages.value = updatedMap.toMap()
+                    Log.d("PhotoDebug", "3. 상태 업데이트 완료")
+                }
+
+            } catch (e: Exception) {
+                Log.e("PhotoDebug", "이미지 처리 중 에러 발생", e)
+                // 실제 서비스라면 여기서 에러 이벤트를 발행하여 UI에 에러 메시지를 띄움
+            }
         }
     }
 

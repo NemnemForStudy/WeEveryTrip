@@ -61,6 +61,7 @@ import android.text.format.DateUtils // DateUtils에 필요
 import androidx.annotation.RequiresApi
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.navigation.NavHostController
 import com.example.travelapp.ui.components.BottomNavigationBar
@@ -160,7 +161,7 @@ fun FeedScreen(
                     ) {
                         Text(
                             text = "게시물이 없습니다.",
-                            color = Color.Gray,
+                            color = Color(0xFF616161),
                             fontSize = 16.sp
                         )
                     }
@@ -226,7 +227,7 @@ fun CustomSearchBar(modifier: Modifier = Modifier) {
         TextField(
             value = searchText,
             onValueChange = { searchText = it },
-            placeholder = { Text("게시물 검색...", fontSize = 14.sp, color = Color.Gray) },
+            placeholder = { Text("게시물 검색...", fontSize = 14.sp, color = Color(0xFF616161)) },
             modifier = Modifier
                 .weight(1f)
                 .background(Color.White),
@@ -278,7 +279,7 @@ fun CategoryTabs(
                 modifier = Modifier.height(36.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = if (isSelected) Color(0xFF1976D2) else Color.White,
-                    contentColor = if (isSelected) Color.White else Color.Gray
+                    contentColor = if (isSelected) Color.White else Color(0xFF616161)
                 ),
                 shape = RoundedCornerShape(20.dp),
                 border = if (!isSelected) {
@@ -356,7 +357,7 @@ fun PostCard(
                     Icon(
                         imageVector = Icons.Default.Image,
                         contentDescription = null,
-                        tint = Color.Gray
+                        tint = Color(0xFF757575)
                     )
                 }
             }
@@ -369,8 +370,10 @@ fun PostCard(
             ) {
                 Text(
                     text = post.title,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        color = Color(0xFF111111), // 확실한 진한 블랙
+                        fontWeight = FontWeight.Bold // 제목은 더 두껍게
+                    ),
                     maxLines = 2,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -383,18 +386,21 @@ fun PostCard(
                 ) {
                     Text(
                         text = post.nickname,
-                        fontSize = 12.sp,
-                        color = Color.Gray
+                        style = MaterialTheme.typography.labelMedium.copy(
+                            color = Color(0xFF444444), // 616161보다 훨씬 진한 그레이
+                            fontWeight = FontWeight.SemiBold // 닉네임은 조금 더 진하게
+                        )
                     )
                     Text(
                         text = "•",
                         fontSize = 12.sp,
-                        color = Color.Gray
+                        color = Color(0xFF616161)
                     )
                     Text(
                         text = formatRelativeTime(post.created_at),
-                        fontSize = 12.sp,
-                        color = Color.Gray
+                        style = MaterialTheme.typography.labelMedium.copy(
+                            color = Color(0xFF666666)
+                        )
                     )
                 }
 
@@ -416,7 +422,7 @@ fun PostCard(
                         Text(
                             text = "+${safeTags.size - 2}",
                             fontSize = 11.sp,
-                            color = Color.Gray
+                            color = Color(0xFF616161)
                         )
                     }
                 }
@@ -429,23 +435,23 @@ fun PostCard(
                         imageVector = Icons.Default.FavoriteBorder,
                         contentDescription = "좋아요",
                         modifier = Modifier.size(14.dp),
-                        tint = Color.Gray
+                        tint = Color(0xFF757575)
                     )
                     Text(
                         text = "${post.likeCount}",
                         fontSize = 11.sp,
-                        color = Color.Gray
+                        color = Color(0xFF616161)
                     )
                     Icon(
                         imageVector = Icons.Outlined.ChatBubbleOutline,
                         contentDescription = "댓글",
                         modifier = Modifier.size(14.dp),
-                        tint = Color.Gray
+                        tint = Color(0xFF757575)
                     )
                     Text(
                         text = "${post.commentCount}",
                         fontSize = 11.sp,
-                        color = Color.Gray
+                        color = Color(0xFF616161)
                     )
                 }
             }

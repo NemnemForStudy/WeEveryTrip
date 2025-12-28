@@ -12,7 +12,6 @@ import com.example.travelapp.data.api.PostApiService
 import com.example.travelapp.data.model.CreatePostResponse
 import com.example.travelapp.data.model.GeoJsonPoint
 import com.example.travelapp.data.model.Post
-import com.example.travelapp.data.model.RoutePoint
 import com.example.travelapp.data.model.RouteRequest
 import com.example.travelapp.data.model.UpdateImageLocationRequest
 import com.example.travelapp.data.model.UpdatePostRequest
@@ -25,6 +24,7 @@ import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.asRequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
+import com.example.travelapp.data.model.RoutePoint
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException

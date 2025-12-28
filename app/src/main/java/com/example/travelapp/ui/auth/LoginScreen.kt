@@ -134,8 +134,8 @@ fun LoginScreen(navController: NavController) {
             Spacer(modifier = Modifier.weight(1f))
             Text(
                 text = "로그인 시 서비스 이용 약관 및 개인정보 처리 방침에 동의하게 됩니다.",
-                style = MaterialTheme.typography.bodySmall,
-                color = Color.Gray
+                style = MaterialTheme.typography.labelMedium,
+                color = Color(0xFF616161)
             )
         }
 

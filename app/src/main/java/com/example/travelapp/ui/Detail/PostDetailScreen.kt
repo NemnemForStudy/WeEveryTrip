@@ -57,6 +57,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -203,7 +204,7 @@ fun PostDetailScreen(
                     val dayKeys = routePointsByDay.keys.sorted()
                     val selectedPoints = dayKeys
                         .getOrNull(currentDayIndex)
-                        ?.let{ routePointsByDay[it] } ?: emptyList()
+                        ?.let{ routePointsByDay[it] } ?: emptyList<RoutePoint>()
                     if(selectedPoints.size >= 2) {
                         viewModel.fetchRoute(selectedPoints)
                     } else {
@@ -353,11 +354,14 @@ fun PostDetailContent(
                     Surface(
                         modifier = Modifier.padding(8.dp),
                         shape = CircleShape,
-                        color = Color.White.copy(alpha = 0.8f),
+                        color = Color.White,
                         shadowElevation = 4.dp
                     ) {
                         IconButton(onClick = onBackClick) {
-                            Icon(Icons.Default.ArrowBack, contentDescription = "뒤로가기")
+                            Icon(
+                                imageVector = Icons.Default.ArrowBack,
+                                contentDescription = "뒤로가기",
+                                tint = TextDark)
                         }
                     }
                 },
@@ -1077,12 +1081,20 @@ fun PostBodySection(
             }
             Spacer(modifier = Modifier.width(10.dp))
             Column(modifier = Modifier.weight(1f)) {
-                Text(text = post.nickname, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                Text(
+                    text = post.nickname,
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        color = Color(0xFF111111),
+                        fontWeight = FontWeight.Bold
+                    )
+                )
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                     Text(
                         text = UtilTime.formatRelativeTime(post.created_at),
-                        color = TextGray,
-                        fontSize = 12.sp
+                        // ✅ 날짜 등 부가 정보도 옅은 회색 대신 조금 더 진하게
+                        style = MaterialTheme.typography.labelMedium.copy(
+                            color = Color(0xFF666666)
+                        )
                     )
                 }
             }
@@ -1094,7 +1106,7 @@ fun PostBodySection(
                         Icon(
                             imageVector = Icons.Default.MoreVert,
                             contentDescription = "더보기",
-                            tint = Color.Gray
+                            tint = Color(0xFF757575)
                         )
                     }
                     DropdownMenu(
@@ -1180,7 +1192,7 @@ fun CommentItem(
                 imageVector = Icons.Default.AccountCircle,
                 contentDescription = null,
                 modifier = Modifier.size(36.dp),
-                tint = Color.LightGray
+                tint = Color(0xFF757575)
             )
 
             Spacer(modifier = Modifier.width(12.dp))
@@ -1199,7 +1211,7 @@ fun CommentItem(
                     // 날짜
                     Text(
                         text = comment.createdAt.take(10),
-                        color = Color.Gray,
+                        color = Color(0xFF616161),
                         fontSize = 12.sp
                     )
                 }
@@ -1223,7 +1235,7 @@ fun CommentItem(
                         Icon(
                             imageVector = Icons.Default.MoreVert,
                             contentDescription = "더보기",
-                            tint = Color.Gray
+                            tint = Color(0xFF757575)
                         )
                     }
 
@@ -1287,10 +1299,10 @@ fun CommentInputBar(
                     Icon(
                         imageVector = if (isLiked) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
                         contentDescription = "좋아요",
-                        tint = if (isLiked) Color.Red else Color.Gray
+                        tint = if (isLiked) Color.Red else Color(0xFF757575)
                     )
                 }
-                Text(text = "$likeCount", fontSize = 12.sp, color = Color.Gray)
+                Text(text = "$likeCount", fontSize = 12.sp, color = Color(0xFF616161))
             }
 
             // 입력창 (중간)

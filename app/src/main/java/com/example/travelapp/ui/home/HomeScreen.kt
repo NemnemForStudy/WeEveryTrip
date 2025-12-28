@@ -116,7 +116,7 @@ fun HomeScreen(
                                     viewModel.closeSearchBar()
                                     searchQuery = ""
                                 }) {
-                                    Icon(Icons.Default.ArrowBack, "뒤로 가기")
+                                    Icon(Icons.Default.ArrowBack, "뒤로 가기", tint = Color(0xFF212121))
                                 }
                             },
                             colors = TextFieldDefaults.colors(
@@ -129,7 +129,10 @@ fun HomeScreen(
                     } else {
                         Text(
                             text = "모여로그",
-                            style = MaterialTheme.typography.headlineMedium,
+                            // ✅ headlineMedium에서 headlineLarge(우리가 정한 ExtraBold)로 변경
+                            style = MaterialTheme.typography.headlineLarge.copy(
+                                color = Color(0xFF111111)
+                            ),
                             modifier = Modifier.padding(start = 8.dp)
                         )
                     }
@@ -137,7 +140,7 @@ fun HomeScreen(
                 actions = {
                     // Search button
                     IconButton(onClick = { viewModel.openSearchBar() }) {
-                        Icon(Icons.Filled.Search, contentDescription = "검색")
+                        Icon(Icons.Filled.Search, contentDescription = "검색", tint = Color(0xFF212121))
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -176,6 +179,7 @@ fun HomeScreen(
                         Text(
                             text = "검색 중...",
                             style = MaterialTheme.typography.bodyMedium,
+                            color = Color(0xFF616161),
                             modifier = Modifier.padding(16.dp)
                         )
                     }
@@ -184,6 +188,7 @@ fun HomeScreen(
                         Text(
                             text = "검색 결과가 없습니다.",
                             style = MaterialTheme.typography.bodyMedium,
+                            color = Color(0xFF616161),
                             modifier = Modifier.padding(16.dp)
                         )
                     }
@@ -212,6 +217,7 @@ fun HomeScreen(
                         Text(
                             text = "내 글 불러오는 중...",
                             style = MaterialTheme.typography.bodyMedium,
+                            color = Color(0xFF616161),
                             modifier = Modifier.padding(16.dp)
                         )
                     }
@@ -229,6 +235,7 @@ fun HomeScreen(
                         Text(
                             text = "작성한 글이 없습니다.",
                             style = MaterialTheme.typography.bodyMedium,
+                            color = Color(0xFF616161),
                             modifier = Modifier.padding(16.dp)
                         )
                     }

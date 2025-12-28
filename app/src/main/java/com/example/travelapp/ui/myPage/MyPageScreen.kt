@@ -244,7 +244,7 @@ private fun ProfileSection(
                 Text(
                     text = email,
                     fontSize = 14.sp,
-                    color = Color.Gray
+                    color = Color(0xFF616161)
                 )
             }
 
@@ -307,7 +307,7 @@ private fun StatItem(count: Int, label: String) {
         Text(
             text = label,
             fontSize = 12.sp,
-            color = Color.Gray
+            color = Color(0xFF616161)
         )
     }
 }
@@ -352,7 +352,7 @@ private fun MenuSection(
                 text = "내 활동",
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Bold,
-                color = Color.Gray,
+                color = Color(0xFF616161),
                 modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 8.dp)
             )
 
@@ -368,7 +368,7 @@ private fun MenuSection(
                 text = "알림 설정",
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Medium,
-                color = Color.Gray,
+                color = Color(0xFF616161),
                 modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 8.dp)
             )
 
@@ -395,7 +395,7 @@ private fun MenuSection(
                 text = "서비스 이용",
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Medium,
-                color = Color.Gray,
+                color = Color(0xFF616161),
                 modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 8.dp)
             )
 
@@ -408,7 +408,7 @@ private fun MenuSection(
                 Icon(Icons.Outlined.Article, null, tint = Color(0xFF666666), modifier = Modifier.size(24.dp))
                 Spacer(modifier = Modifier.width(16.dp))
                 Text(text = "현재 버전", fontSize = 16.sp, color = Color(0xFF333333), modifier = Modifier.weight(1f))
-                Text(text = "v$versionName", fontSize = 14.sp, color = Color.Gray)
+                Text(text = "v$versionName", fontSize = 14.sp, color = Color(0xFF616161))
             }
             // 문의하기
             MenuItem(
@@ -479,7 +479,7 @@ private fun MenuItem(
         Icon(
             imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
             contentDescription = null,
-            tint = Color(0xFFBDBDBD),
+            tint = Color(0xFF757575),
             modifier = Modifier.size(20.dp)
         )
     }
@@ -501,9 +501,9 @@ fun NotificationSwitch(
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         Column (modifier = Modifier.weight(1f)) {
-            Text(text = title, fontSize = 16.sp, fontWeight = FontWeight.Medium)
+            Text(text = title, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF212121))
             Spacer(modifier = Modifier.height(4.dp))
-            Text(text = subtitle, fontSize = 12.sp, color = Color.Gray)
+            Text(text = subtitle, fontSize = 12.sp, color = Color(0xFF616161))
         }
 
         Switch(

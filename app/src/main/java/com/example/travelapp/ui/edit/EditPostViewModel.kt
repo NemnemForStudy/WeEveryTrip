@@ -9,6 +9,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.travelapp.BuildConfig
 import com.example.travelapp.data.api.PostApiService
 import com.example.travelapp.data.model.Post
+import com.example.travelapp.data.model.RoutePoint
 import com.example.travelapp.data.model.UpdateImageLocationRequest
 import com.example.travelapp.data.repository.PostRepository
 import com.example.travelapp.ui.common.ImageSelectionHelper
@@ -78,6 +79,9 @@ class EditPostViewModel @Inject constructor(
 
     private val _tags = MutableStateFlow<List<String>>(emptyList())
     val tags = _tags.asStateFlow()
+
+    private val _routePoints = MutableStateFlow<List<RoutePoint>>(emptyList())
+    val routePoints: StateFlow<List<RoutePoint>> = _routePoints.asStateFlow()
 
     init {
         _startDate.combine(_endDate) { start, end ->
@@ -256,10 +260,18 @@ class EditPostViewModel @Inject constructor(
     fun processSelectedImages(context: Context, uris: List<Uri>) {
         viewModelScope.launch {
             val existingCoords = _post.value?.imageLocations?.mapNotNull { loc ->
-                if(loc.latitude != null && loc.longitude != null) Pair(loc.latitude, loc.longitude) else null
+                if (loc.latitude != null && loc.longitude != null) Pair(
+                    loc.latitude,
+                    loc.longitude
+                ) else null
             }?.toSet() ?: emptySet()
 
-            val grouped = ImageSelectionHelper.processUris(context, uris, _tripDays.value, existingCoords) { lat, lon ->
+            val grouped = ImageSelectionHelper.processUris(
+                context,
+                uris,
+                _tripDays.value,
+                existingCoords
+            ) { lat, lon ->
                 updateLocation(lat, lon)
             }
 
@@ -291,6 +303,13 @@ class EditPostViewModel @Inject constructor(
             // 4. 수정한 리스트를 다시 맵에 넣고 StateFlow 업데이트
             currentMap[dayNumber] = list
             _groupedImages.value = currentMap
+        }
+    }
+
+    fun fetchRoute(locations: List<Pair<Double, Double>>) {
+        viewModelScope.launch {
+            val points = locations.map { RoutePoint(it.first, it.second) }
+            _routePoints.value = points
         }
     }
 }

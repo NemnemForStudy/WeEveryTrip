@@ -120,9 +120,9 @@ private fun BottomNavItemView(
             contentDescription = item.label,
             modifier = Modifier.size(24.dp),
             tint = if (isSelected) {
-                MaterialTheme.colorScheme.primary
+                androidx.compose.ui.graphics.Color(0xFF1976D2)
             } else {
-                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                androidx.compose.ui.graphics.Color(0xFF616161)
             }
         )
         Spacer(modifier = Modifier.height(4.dp))
@@ -130,9 +130,9 @@ private fun BottomNavItemView(
             text = item.label,
             fontSize = 10.sp,
             color = if (isSelected) {
-                MaterialTheme.colorScheme.primary
+                androidx.compose.ui.graphics.Color(0xFF1976D2)
             } else {
-                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                androidx.compose.ui.graphics.Color(0xFF616161)
             }
         )
     }
