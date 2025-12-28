@@ -65,7 +65,8 @@ object ShareUtil {
             cachePath.mkdirs() // 폴더 없으면 생성
 
             // 폴더 안에 파일명 생성
-            val file = File(cachePath, "temp_shared_map.jpg")
+            // saveBitmapToCache 함수 내부
+            val file = File(cachePath, "temp_share_${System.currentTimeMillis()}.jpg") // 파일명 중복 방지를 위해 시간값 추가
             val stream = FileOutputStream(file)
 
             // 비트맵 데이터 JPEG 형식으로 압축해 파일에 기록
@@ -116,6 +117,29 @@ object ShareUtil {
         } else {
             // 카카오톡 없으면 웹 공유 등 시도하거나 안내
             Toast.makeText(context, "카카오톡이 설치되어 있지 않습니다.", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    // 인스타 스토리로 공유
+    fun shareToInstagramFeed(context: Context, bitmap: Bitmap) {
+        // 비트맵 임시 파일로 저장
+        val imageUri = saveBitmapToCache(context, bitmap) ?: return
+
+        // 스토리 전용 액션이 아닌 표준 SEND 액션 사용해야 한다.
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = "image/*"
+            // 인스타그램에서 파일을 읽을 수 있도록 임시 권한 부여
+            putExtra(Intent.EXTRA_STREAM, imageUri)
+            setPackage("com.instagram.android")
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        context.grantUriPermission("com.instagram.android", imageUri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        try {
+            context.startActivity(intent)
+        } catch (e: Exception) {
+            // 인스타 앱이 없을 경우 일반 공유창 띄우기
+            val chooser = Intent.createChooser(intent, "공유하기")
+            context.startActivity(chooser)
         }
     }
 

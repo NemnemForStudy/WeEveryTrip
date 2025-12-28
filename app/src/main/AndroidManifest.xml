@@ -77,6 +77,8 @@
     <queries>
         <!-- 카카오톡 앱으로 로그인하기 위한 설정 -->
         <package android:name="com.kakao.talk" />
+        <!-- 인스타 -->
+        <package android:name="com.instagram.android" />
 
         <!-- 네이버 앱으로 로그인하기 위한 설정 -->
         <package android:name="com.nhn.android.nid" />

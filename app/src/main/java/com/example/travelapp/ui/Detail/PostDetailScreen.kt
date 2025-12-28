@@ -1,6 +1,5 @@
 package com.example.travelapp.ui.Detail // 패키지명 확인
 
-import androidx.compose.ui.ExperimentalComposeUiApi
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
@@ -11,7 +10,6 @@ import android.graphics.Paint
 import android.graphics.Shader
 import android.net.Uri
 import android.os.Build
-import android.view.MotionEvent
 import android.widget.Toast
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -82,9 +80,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.input.pointer.pointerInteropFilter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -118,7 +116,6 @@ import com.naver.maps.geometry.LatLngBounds
 import com.naver.maps.map.CameraAnimation
 import com.naver.maps.map.CameraPosition
 import com.naver.maps.map.CameraUpdate
-import com.naver.maps.map.compose.CameraPositionState
 import com.naver.maps.map.compose.ExperimentalNaverMapApi
 import com.naver.maps.map.compose.MapEffect
 import com.naver.maps.map.compose.MapUiSettings
@@ -156,7 +153,7 @@ fun PostDetailScreen(
     val currentUserId by viewModel.currentUserId.collectAsStateWithLifecycle()
     val routePoints by viewModel.routePoints.collectAsStateWithLifecycle()
     val userToken = remember { viewModel.getUserToken() }
-    val isCapturing by remember { mutableStateOf(false) }
+    var shareTarget by remember { mutableStateOf<ShareTarget?>(null) }
 
     // 화면 진입 시 딱 한 번 실행 (데이터 요청)
     LaunchedEffect(postId) {
@@ -258,9 +255,10 @@ fun PostDetailScreen(
                     onNextDay = { viewModel.goToNextDay() },
                     onDaySelect = { index -> viewModel.setDayIndex(index) },
                     isMyPost = isMyPost,
-                    triggerSnapshot = triggerSnapshot,
-                    onSharedClick = { triggerSnapshot = true },
-                    onSnapshotDone = { triggerSnapshot = false },
+                    triggerSnapshot = shareTarget != null,
+                    shareTarget = shareTarget,
+                    onSharedClick = { target -> shareTarget = target },
+                    onSnapshotDone = { shareTarget = null },
                     userToken = userToken
                 )
             }
@@ -301,7 +299,8 @@ fun PostDetailContent(
     onDaySelect: (Int) -> Unit = {},
     isMyPost: Boolean = false,
     triggerSnapshot: Boolean = false,
-    onSharedClick: () -> Unit = {},
+    shareTarget: ShareTarget? = null,
+    onSharedClick: (ShareTarget) -> Unit = {},
     onSnapshotDone: () -> Unit = {},
     userToken: String?
 ) {
@@ -310,6 +309,7 @@ fun PostDetailContent(
     var hasHeader = post.images?.isNotEmpty() == true || post.imageLocations.isNotEmpty()
     var showShareSheet by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState()
+    val KakaoYellow = Color(0xFFFFEB3B)
 
     if(showShareSheet) {
         ModalBottomSheet(
@@ -333,10 +333,20 @@ fun PostDetailContent(
                     ShareOptionItem(
                         label = "카카오톡",
                         iconRes = R.drawable.kakao_icon, // 카톡 아이콘 이미지 넣어야함.
-                        backgroundColor = Color(0xFFFEE500),
+                        backgroundColor = KakaoYellow,    // 우리가 정한 옐로우
                         onClick = {
                             showShareSheet = false
-                            onSharedClick()
+                            onSharedClick(ShareTarget.KAKAO)
+                        }
+                    )
+
+                    ShareOptionItem(
+                        label = "인스타그램",
+                        iconRes = R.drawable.instagram_icon,
+                        backgroundColor = Color.Transparent,
+                        onClick = {
+                            showShareSheet = false
+                            onSharedClick(ShareTarget.INSTAGRAM)
                         }
                     )
                 }
@@ -406,6 +416,7 @@ fun PostDetailContent(
                         onPrevDay = onPrevDay,
                         onNextDay = onNextDay,
                         triggerSnapshot = triggerSnapshot,
+                        shareTarget = shareTarget,
                         onSnapshotDone = onSnapshotDone,
                         token = userToken
                     )
@@ -556,6 +567,7 @@ fun PostMapHeader(
     onPrevDay: () -> Unit,
     onNextDay: () -> Unit,
     triggerSnapshot: Boolean,
+    shareTarget: ShareTarget? = null,
     onSnapshotDone: () -> Unit,
     token: String?
 ) {
@@ -776,21 +788,23 @@ fun PostMapHeader(
                             map.takeSnapshot { bitmap ->
                                 scope.launch {
                                     try {
-                                        if (token != null) {
-                                            // 1. 서버 업로드 (토큰 포함)
-                                            val mapImageUrl = uploadMapCapture(context, bitmap, token)
-                                            android.util.Log.d("SHARE_DEBUG", "Post 데이터: $post")
-                                            android.util.Log.d("SHARE_DEBUG", "받아온 이미지 URL: $mapImageUrl")
-                                            android.util.Log.d("SHARE_DEBUG", "서버 응답 URL: $mapImageUrl")
-
-                                            if(post != null && mapImageUrl != null) {
-                                                val sharePost = post.copy(imgUrl = mapImageUrl)
-                                                ShareUtil.shareToKakao(context, sharePost)
-                                            } else {
-                                                Toast.makeText(context, "이미지 업로드에 실패했습니다.", Toast.LENGTH_SHORT).show()
-                                            }
+                                        if (shareTarget == ShareTarget.INSTAGRAM) {
+                                            // 서버 업로드 없이 비트맵을 바로 인스타 스토리로 전송
+                                            ShareUtil.shareToInstagramFeed(context, bitmap)
                                         } else {
-                                            Toast.makeText(context, "로그인 정보가 유효하지 않습니다.", Toast.LENGTH_SHORT).show()
+                                            // 서버 업로드 (토큰 포함)
+                                            if(token != null) {
+                                                val mapImageUrl = uploadMapCapture(context, bitmap, token)
+
+                                                if(post != null && mapImageUrl != null) {
+                                                    val sharePost = post.copy(imgUrl = mapImageUrl)
+                                                    ShareUtil.shareToKakao(context, sharePost)
+                                                } else {
+                                                    Toast.makeText(context, "이미지 업로드에 실패했습니다.", Toast.LENGTH_SHORT).show()
+                                                }
+                                            } else {
+                                                Toast.makeText(context, "로그인 정보가 유효하지 않습니다.", Toast.LENGTH_SHORT).show()
+                                            }
                                         }
                                     } catch (e: Exception) {
                                         Toast.makeText(context, "공유 중 오류 발생: ${e.message}", Toast.LENGTH_SHORT).show()
@@ -1695,7 +1709,7 @@ fun MapEmptyPlaceholder() {
 @Composable
 fun ShareOptionItem(
     label: String,
-    iconRes: Int,              // 🔥 리소스 ID를 직접 받음
+    iconRes: Int,
     backgroundColor: Color,
     tint: Color = Color.Unspecified, // 로고 색상을 유지하기 위해 기본값 Unspecified
     onClick: () -> Unit
@@ -1717,7 +1731,7 @@ fun ShareOptionItem(
                     painter = painterResource(id = iconRes),
                     contentDescription = label,
                     tint = tint, // 아이콘 고유 색상을 쓰려면 Unspecified, 아니면 특정 색상 지정
-                    modifier = Modifier.size(32.dp)
+                    modifier = Modifier.size(40.dp)
                 )
             }
         }
@@ -1744,3 +1758,4 @@ fun PostDetailScreenPreview() {
 //    PostDetailContent(post = dummyPost)
 }
 
+enum class ShareTarget { KAKAO, INSTAGRAM }

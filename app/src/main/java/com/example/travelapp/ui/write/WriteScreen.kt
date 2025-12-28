@@ -3,19 +3,25 @@ package com.example.travelapp.ui.write
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.DateRangePicker
 import androidx.compose.material3.DrawerValue
@@ -23,6 +29,8 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.lightColorScheme
@@ -37,6 +45,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -178,17 +187,28 @@ fun WriteScreen(
 
         // 1. 카테고리 선택 다이얼로그
         if (showCategoryDialog) {
-            AlertDialog(
+            ModalBottomSheet(
                 onDismissRequest = { showCategoryDialog = false },
-                title = { Text("여행 유형 선택") },
-                text = { Text("작성할 글의 여행 유형을 선택해주세요.") },
-                confirmButton = {
-                    TextButton(onClick = { category = "국내여행"; showCategoryDialog = false }) { Text("국내여행") }
-                },
-                dismissButton = {
-                    TextButton(onClick = { category = "국외여행"; showCategoryDialog = false }) { Text("국외여행") }
+                containerColor = Color.White,
+                dragHandle = { BottomSheetDefaults.DragHandle(color = Color.LightGray) }
+            ) {
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 32.dp, start = 16.dp, end = 16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text("어떤 여행인가요?", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Black)
+                    Spacer(Modifier.height(24.dp))
+
+                    // 버튼을 꽉 차게 만들고 디자인 입히기
+                    CategoryItem("국내여행", isSelected = category == "국내여행") {
+                        category = "국내여행"; showCategoryDialog = false
+                    }
+                    Spacer(Modifier.height(12.dp))
+                    CategoryItem("국외여행", isSelected = category == "국외여행") {
+                        category = "국외여행"; showCategoryDialog = false
+                    }
                 }
-            )
+            }
         }
 
         // 2. 날짜 선택 다이얼로그
@@ -267,21 +287,33 @@ fun WriteScreen(
         if (showMapDialog && mapDialogLocations.isNotEmpty()) {
             Dialog(onDismissRequest = { showMapDialog = false }) {
                 Card(
-                    modifier = Modifier.fillMaxWidth().height(450.dp),
-                    shape = RoundedCornerShape(16.dp)
+                    modifier = Modifier.fillMaxWidth().height(500.dp),
+                    shape = RoundedCornerShape(28.dp),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
                 ) {
                     Column {
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(12.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(mapDialogTitle, fontWeight = FontWeight.Bold)
-                            IconButton(onClick = { showMapDialog = false }) {
-                                Icon(Icons.Default.Close, contentDescription = "닫기")
+                        Box(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+                            Text(
+                                mapDialogTitle,
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Black,
+                                modifier = Modifier.align(Alignment.Center)
+                            )
+                            Surface(
+                                onClick = { showMapDialog = false },
+                                shape = RoundedCornerShape(12.dp),
+                                color = Color(0xFFF5F5F5),
+                                modifier = Modifier.align(Alignment.CenterEnd).size(36.dp)
+                            ) {
+                                Icon(Icons.Default.Close, "닫기", modifier = Modifier.padding(8.dp))
                             }
                         }
-                        Box(modifier = Modifier.fillMaxSize()) {
+                        Box(
+                            modifier = Modifier.weight(1f)
+                            .padding(horizontal = 12.dp)
+                            .padding(bottom = 12.dp)
+                            .clip(RoundedCornerShape(20.dp))
+                        ) {
                             val firstLoc = mapDialogLocations.first()
                             val cameraPositionState = rememberCameraPositionState {
                                 position = CameraPosition(LatLng(firstLoc.first, firstLoc.second), 13.0)
@@ -319,6 +351,47 @@ fun WriteScreen(
                     }
                 }
             }
+        }
+
+        if(postCreationStatus is WriteViewModel.PostCreationStatus.Loading) {
+            Surface(
+                color = Color.Black.copy(alpha = 0.5f),
+                modifier = Modifier.fillMaxSize()
+            ) {
+                Column(
+                    verticalArrangement = Arrangement.Center,
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    CircularProgressIndicator(
+                        color = Color.White,
+                        strokeWidth = 4.dp
+                    )
+                    Spacer(Modifier.height(16.dp))
+                    Text(
+                        "소중한 추억을 서버에 올리는 중...",
+                        color = Color.White,
+                        fontWeight = FontWeight.Black, // 우리 컨셉에 맞게 더 두껍게
+                        fontSize = 18.sp,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
+        }
+
+    }
+}
+
+@Composable
+fun CategoryItem(text: String, isSelected: Boolean, onClick: () -> Unit) {
+    Surface(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth().height(56.dp),
+        shape = RoundedCornerShape(16.dp),
+        color = if (isSelected) Color(0xFF1976D2).copy(alpha = 0.1f) else Color(0xFFF5F5F5),
+        border = if (isSelected) BorderStroke(2.dp, Color(0xFF1976D2)) else null
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Text(text, fontWeight = if (isSelected) FontWeight.Black else FontWeight.Medium)
         }
     }
 }
