@@ -5,41 +5,26 @@ import android.util.Log
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.systemBarsPadding
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -48,47 +33,50 @@ import androidx.navigation.NavController
 import com.example.travelapp.BuildConfig
 import com.example.travelapp.R
 import com.example.travelapp.ui.navigation.Screen
-import com.example.travelapp.ui.theme.TravelAppTheme
+import com.example.travelapp.ui.theme.Beige
+import com.example.travelapp.ui.theme.PointRed
+import com.example.travelapp.ui.theme.TextMain
+import com.example.travelapp.ui.theme.TextSub
 import com.example.travelapp.ui.viewModel.LoginEvent
 import com.example.travelapp.ui.viewModel.LoginViewModel
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount
-import com.google.android.gms.auth.api.signin.GoogleSignInClient
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.android.gms.tasks.Task
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 @Composable
 fun LoginScreen(navController: NavController) {
+    // --- 1. 로직 관련 설정 ---
     val loginViewModel: LoginViewModel = hiltViewModel()
     val context = LocalContext.current
+    val uiState by loginViewModel.loginUiState.collectAsStateWithLifecycle()
     val TAG = "LoginScreen"
 
-    val uiState by loginViewModel.loginUiState.collectAsStateWithLifecycle()
+    // 구글 로그인 클라이언트 설정
+    val gso = remember {
+        GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+            .requestIdToken(BuildConfig.GOOGLE_WEB_CLIENT_ID)
+            .requestEmail()
+            .build()
+    }
+    val googleSignInClient = remember { GoogleSignIn.getClient(context, gso) }
 
-    // GoogleSignInClient 초기화
-    // 웹 클라이언트 ID 사용해 구글 로그인 옵션 설정
-    val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-        .requestIdToken(BuildConfig.GOOGLE_WEB_CLIENT_ID)
-        .requestEmail()
-        .build()
-    val googleSignInClient: GoogleSignInClient = remember(context) { GoogleSignIn.getClient(context, gso) }
-
-    // Google 로그인 결과를 처리하기 위한 ActivityResultLauncher
-    val googleAuthLauncher = rememberLauncherForActivityResult(contract = ActivityResultContracts.StartActivityForResult()) { result ->
-        Log.d(TAG, "구글 로그인 결과 코드: ${result.resultCode}")
-
+    // 구글 로그인 결과 처리 런처
+    val googleAuthLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
         if (result.resultCode == Activity.RESULT_OK) {
-            Log.d(TAG, "구글 로그인 결과 OK - 계정 정보 처리 시작")
-            val task: Task<GoogleSignInAccount> = GoogleSignIn.getSignedInAccountFromIntent(result.data)
+            val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
             loginViewModel.handleGoogleSignInResult(task)
         } else {
-            Log.w(TAG, "구글 로그인 취소 또는 실패 - 결과 코드: ${result.resultCode}")
             loginViewModel.emitLoginFailed("구글 로그인이 취소되었습니다")
         }
     }
 
-    // 로그인 이벤트 관찰 및 처리
-    LaunchedEffect(key1 = loginViewModel) {
+    // 로그인 이벤트 관찰 (성공/실패 시 화면 이동 및 토스트)
+    LaunchedEffect(Unit) {
         loginViewModel.loginEvent.collect { event ->
             when (event) {
                 is LoginEvent.LoginSuccess -> {
@@ -97,166 +85,174 @@ fun LoginScreen(navController: NavController) {
                     }
                 }
                 is LoginEvent.LoginFailed -> {
-                    Toast.makeText(context, "로그인 실패: ${event.message}", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, event.message, Toast.LENGTH_SHORT).show()
                 }
             }
         }
     }
 
-    LaunchedEffect(key1 = uiState.error) {
-        uiState.error?.let {
-            Toast.makeText(context, it, Toast.LENGTH_LONG).show()
+    // --- 2. 애니메이션 설정 ---
+    val animStates = List(5) { remember { Animatable(0f) } }
+    LaunchedEffect(Unit) {
+        animStates.forEachIndexed { index, animatable ->
+            launch {
+                delay(index * 100L)
+                animatable.animateTo(1f, animationSpec = tween(800, easing = EaseOutBack))
+            }
         }
     }
 
-    Box(modifier = Modifier.fillMaxSize()) {
-        Column (
+    // --- 3. UI 그리기 ---
+    Box(modifier = Modifier.fillMaxSize().background(Beige)) {
+        Column(
             modifier = Modifier
                 .fillMaxSize()
-                // 상단 상태바 + 하단 내비게이션 바를 모두 피하도록 설정
-                .systemBarsPadding()
-                .padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+                .padding(horizontal = 30.dp)
+                .systemBarsPadding(), // 상태바, 내비바 영역 자동 확보
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.SpaceBetween
         ) {
-            Spacer(modifier = Modifier.weight(1f))
-            Text(
-                text = "모여로그",
-                style = MaterialTheme.typography.headlineLarge
-            )
-            Spacer(modifier = Modifier.weight(1f))
+            // [상단] 브랜드 로고 영역
+            Column(
+                modifier = Modifier
+                    .padding(top = 100.dp)
+                    .alpha(animStates[0].value)
+                    .offset(y = (20 * (1 - animStates[0].value)).dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Row(verticalAlignment = Alignment.Bottom) {
+                    Text(
+                        text = "ModuTrip",
+                        fontSize = 32.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = TextMain,
+                        modifier = Modifier.offset(x = (-10).dp)
+                    )
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    text = "나의 발자취가 지도가 되는 순간",
+                    fontSize = 16.sp,
+                    color = Color(0xFF616161),
+                    fontWeight = FontWeight.Medium
+                )
+            }
+
+            // [중간] 소셜 로그인 버튼 영역
             Column(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                NaverLoginButton(onClick = { loginViewModel.loginWithNaver(context) })
-                KakaoLoginButton(onClick = { loginViewModel.loginWithKakaoTalk(context) })
-                GoogleLoginButton(
-                    onClick = {
-                        val signInIntent = googleSignInClient.signInIntent
-                        googleAuthLauncher.launch(signInIntent)
-                    }
+                // 네이버
+                Box(modifier = Modifier.alpha(animStates[1].value).offset(y = (10 * (1 - animStates[1].value)).dp)) {
+                    SocialLoginButton(
+                        text = "네이버로 시작하기",
+                        containerColor = Color(0xFF03C75A),
+                        contentColor = Color.White,
+                        iconRes = R.drawable.ic_naver_logo,
+                        onClick = { loginViewModel.loginWithNaver(context) }
+                    )
+                }
+                // 카카오
+                Box(modifier = Modifier.alpha(animStates[2].value).offset(y = (10 * (1 - animStates[2].value)).dp)) {
+                    SocialLoginButton(
+                        text = "카카오톡으로 시작하기",
+                        containerColor = Color(0xFFFEE500),
+                        contentColor = Color(0xDB000000),
+                        iconRes = R.drawable.ic_kakao_symbol,
+                        onClick = { loginViewModel.loginWithKakaoTalk(context) }
+                    )
+                }
+                // 구글
+                Box(modifier = Modifier.alpha(animStates[3].value).offset(y = (10 * (1 - animStates[3].value)).dp)) {
+                    SocialLoginButton(
+                        text = "Google 계정으로 시작하기",
+                        containerColor = Color.White,
+                        contentColor = Color(0xFF1F1F1F),
+                        iconRes = R.drawable.ic_google_logo,
+                        borderStroke = BorderStroke(1.dp, Color(0xFF747775)),
+                        onClick = { googleAuthLauncher.launch(googleSignInClient.signInIntent) }
+                    )
+                }
+            }
+
+            // [하단] 푸터 영역
+            Column(
+                modifier = Modifier
+                    .padding(bottom = 40.dp)
+                    .alpha(animStates[4].value),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = "로그인 없이 둘러보기",
+                    fontSize = 14.sp,
+                    color = TextSub,
+                    textDecoration = TextDecoration.Underline,
+                    modifier = Modifier
+                        .padding(bottom = 20.dp)
+                        .clickable {
+                            // 비회원 둘러보기 로직 (필요시 홈으로 바로 이동)
+                            navController.navigate(Screen.Home.route)
+                        }
+                )
+                Text(
+                    text = "로그인 시 이용약관 및 개인정보처리방침에 동의하게 됩니다.",
+                    fontSize = 11.sp,
+                    color = Color(0xFFBDBDBD),
+                    textAlign = TextAlign.Center
                 )
             }
-            Spacer(modifier = Modifier.weight(1f))
-            Text(
-                text = "로그인 시 서비스 이용 약관 및\n개인정보 처리 방침에 동의하게 됩니다.",
-                style = MaterialTheme.typography.labelMedium,
-                color = Color(0xFF616161),
-                textAlign = TextAlign.Center
-            )
         }
 
-        // [추가] 로딩 중일 때 화면 중앙에 프로그레스 바를 표시합니다.
+        // 로딩 화면 (중앙 프로그레스 바)
         if (uiState.isLoading) {
-            CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
+            Box(
+                modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.3f)),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator(color = PointRed)
+            }
         }
     }
 }
 
+/**
+ * [DRY 원칙] 공통 소셜 로그인 버튼 컴포넌트
+ */
 @Composable
-fun NaverLoginButton(onClick: () -> Unit) {
+fun SocialLoginButton(
+    text: String,
+    containerColor: Color,
+    contentColor: Color,
+    iconRes: Int,
+    borderStroke: BorderStroke? = null,
+    onClick: () -> Unit
+) {
     Button(
         onClick = onClick,
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(50.dp),
-        shape = RoundedCornerShape(12.dp),
-        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF03C75A)), // 컨테이너 색상 #03C75A
-        contentPadding = PaddingValues(horizontal = 20.dp) // 좌우 패딩
+        modifier = Modifier.fillMaxWidth().height(54.dp),
+        shape = RoundedCornerShape(27.dp), // Pill 모양
+        colors = ButtonDefaults.buttonColors(containerColor = containerColor, contentColor = contentColor),
+        border = borderStroke,
+        elevation = ButtonDefaults.buttonElevation(defaultElevation = 2.dp)
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center // 심볼과 레이블 중앙 정렬
+            modifier = Modifier.fillMaxWidth()
         ) {
             Image(
-                painter = painterResource(id = R.drawable.ic_naver_logo), // 네이버 심볼 (Path로 그린 XML)
-                contentDescription = "네이버 로그인",
-                modifier = Modifier.size(30.dp) // 심볼 크기
+                painter = painterResource(id = iconRes),
+                contentDescription = null,
+                modifier = Modifier.size(24.dp)
             )
-            Spacer(modifier = Modifier.width(8.dp)) // 심볼과 텍스트 사이 간격
             Text(
-                text = "네이버 로그인", // 완성형 레이블
-                color = Color.White, // 레이블 색상 WHITE
-                fontSize = 17.sp, // 폰트 크기
-                fontWeight = FontWeight.Bold // 폰트 두께
+                text = text,
+                modifier = Modifier.weight(1f),
+                textAlign = TextAlign.Center,
+                fontWeight = FontWeight.Bold,
+                fontSize = 16.sp
             )
-        }
-    }
-}
-
-@Composable
-fun KakaoLoginButton(onClick: () -> Unit) {
-    Button(
-        onClick = onClick,
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(50.dp), // 버튼의 최소 높이를 고려하여 50dp로 설정
-        shape = RoundedCornerShape(12.dp),
-        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFEE500)), // 컨테이너 색상 #FEE500
-        contentPadding = PaddingValues(horizontal = 20.dp) // 좌우 패딩으로 심볼과 텍스트가 너무 가장자리에 붙지 않도록
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center // 심볼과 레이블을 함께 중앙 정렬
-        ) {
-            Image(
-                painter = painterResource(id = R.drawable.ic_kakao_symbol), // 카카오 심볼 (Path로 그린 XML)
-                contentDescription = "카카오 심볼",
-                modifier = Modifier.size(30.dp) // 심볼 크기
-            )
-            Spacer(modifier = Modifier.width(8.dp)) // 심볼과 텍스트 사이 간격
-            Text(
-                text = "카카오 로그인", // 완성형 레이블
-                color = Color(0xDB000000), // 레이블 색상 #000000 85%
-                fontSize = 17.sp, // 폰트 크기
-                fontWeight = FontWeight.Bold // OS 기본 시스템 서체를 사용하므로 Bold로 강조
-            )
-        }
-    }
-}
-
-@Composable
-fun GoogleLoginButton(onClick: () -> Unit) {
-    Button(
-        onClick = onClick,
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(50.dp), // 카카오 버튼과 동일한 높이
-        shape = RoundedCornerShape(12.dp), // 카카오 버튼과 동일한 radius
-        colors = ButtonDefaults.buttonColors(containerColor = Color.White), // 컨테이너 색상 WHITE
-        border = BorderStroke(1.dp, Color(0xFF747775)), // 테두리 1px solid #747775
-        contentPadding = ButtonDefaults.ContentPadding // 기본 패딩 사용
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center // 심볼과 레이블 중앙 정렬
-        ) {
-            Image(
-                painter = painterResource(id = R.drawable.ic_google_logo), // 구글 심볼 (기존 XML)
-                contentDescription = "구글 로그인",
-                modifier = Modifier.size(20.dp) // 심볼 크기 20px
-            )
-            Spacer(modifier = Modifier.width(12.dp)) // 심볼과 텍스트 사이 간격 12px
-            Text(
-                text = "Google 계정으로 로그인", // 레이블 텍스트
-                color = Color(0xFF1F1F1F), // 텍스트 색상 #1f1f1f
-                fontSize = 14.sp, // 폰트 크기 14px
-                fontWeight = FontWeight.Medium // 폰트 두께 500
-            )
-        }
-    }
-}
-
-@Preview(showBackground = true)
-@Composable
-fun LoginScreenPreview() {
-    TravelAppTheme {
-        Surface(color = MaterialTheme.colorScheme.background) {
-            LoginScreen(navController = NavController(LocalContext.current))
         }
     }
 }

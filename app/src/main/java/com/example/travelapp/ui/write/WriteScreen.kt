@@ -58,6 +58,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import com.example.travelapp.data.model.RoutePoint
 import com.example.travelapp.ui.components.PostForm
+import com.example.travelapp.ui.theme.TextSub
 import com.example.travelapp.util.AnimatedPolyline
 import com.naver.maps.geometry.LatLng
 import com.naver.maps.map.CameraPosition
@@ -234,7 +235,7 @@ fun WriteScreen(
                     },
                     dismissButton = {
                         TextButton(onClick = { showDatePicker = false }) {
-                            Text("취소", fontWeight = FontWeight.Bold, color = Color.Gray)
+                            Text("취소", fontWeight = FontWeight.Bold, color = TextSub)
                         }
                     }
                 ) {

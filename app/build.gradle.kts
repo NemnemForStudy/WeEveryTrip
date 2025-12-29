@@ -1,6 +1,7 @@
 import java.util.Properties
 
 plugins {
+    alias(libs.plugins.google.gms.google.services)
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
@@ -116,6 +117,10 @@ dependencies {
     // --- Hilt (의존성 주입) ---
     implementation(libs.hilt.android)
     implementation(libs.androidx.ui)
+    implementation(libs.firebase.auth)
+    implementation(libs.androidx.credentials)
+    implementation(libs.androidx.credentials.play.services.auth)
+//    implementation(libs.firebase.firestore.ktx)
     kapt(libs.hilt.compiler)
     kaptAndroidTest(libs.hilt.compiler)
 
@@ -141,7 +146,7 @@ dependencies {
     implementation("org.jetbrains.kotlin:kotlin-reflect:2.0.21")
     androidTestImplementation("org.jetbrains.kotlin:kotlin-reflect:2.0.21")
 
-    // ⭐️ [필수 추가] Hilt Testing 라이브러리 (kaptAndroidTest가 동작하려면 이 라이브러리가 꼭 필요합니다!)
+    // Hilt Testing 라이브러리 (kaptAndroidTest가 동작하려면 이 라이브러리가 꼭 필요합니다!)
     // 버전은 사용 중인 Hilt 버전에 맞춰야 합니다. (보통 2.48 ~ 2.51.1)
     androidTestImplementation("com.google.dagger:hilt-android-testing:2.51.1")
 
@@ -168,4 +173,16 @@ dependencies {
     implementation("io.github.fornewid:naver-map-compose:1.7.2")
     implementation("androidx.exifinterface:exifinterface:1.3.7")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.0")
+
+    // 1. Firebase BoM을 가장 먼저 선언 (버전 관리자)
+    implementation(platform("com.google.firebase:firebase-bom:34.7.0"))
+
+    // 2. 나머지 라이브러리 (버전 생략 가능)
+    implementation("com.google.firebase:firebase-auth")
+    implementation("com.google.firebase:firebase-firestore")
+    implementation("com.google.firebase:firebase-analytics")
+
+    // ... 기존에 있던 hilt, navigation, google-auth 등 라이브러리들 ...
+    implementation(libs.androidx.core.ktx)
+    implementation(libs.hilt.android)
 }

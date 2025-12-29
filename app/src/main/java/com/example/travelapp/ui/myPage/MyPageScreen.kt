@@ -48,6 +48,7 @@ import com.example.travelapp.ui.components.BottomNavigationBar
 import com.example.travelapp.ui.theme.Beige
 import com.example.travelapp.data.model.User
 import com.example.travelapp.ui.navigation.Screen
+import com.example.travelapp.ui.theme.TextSub
 
 // 1. [로직 담당] ViewModel 연결하고 데이터 준비하는 곳
 @Composable
@@ -93,7 +94,7 @@ fun MyPageScreen(
             },
             dismissButton = {
                 TextButton(onClick = { showDeleteDialog = false }) {
-                    Text("취소", color = Color.Gray)
+                    Text("취소", color = TextSub)
                 }
             },
             containerColor = Color.White,
@@ -178,6 +179,7 @@ fun MyPageContent(
             Spacer(modifier = Modifier.height(24.dp))
 
             MenuSection(
+                navController = navController,
                 pushActivity = pushActivity,
                 pushMarketing = pushMarketing,
                 onActivityChange = onActivityChange,
@@ -324,6 +326,7 @@ private fun StatDivider() {
 
 @Composable
 private fun MenuSection(
+    navController: NavController,
     pushActivity: Boolean,
     pushMarketing: Boolean,
     onActivityChange: (Boolean) -> Unit,
@@ -415,11 +418,7 @@ private fun MenuSection(
                 Icons.Outlined.Help,
                 "문의하기",
                 onClick = {
-                    val intent = Intent(Intent.ACTION_SENDTO).apply {
-                        data = Uri.parse("mailto:support@modutrip.com")
-                        putExtra(Intent.EXTRA_SUBJECT, "[ModuTrip] 문의")
-                    }
-                    context.startActivity(Intent.createChooser(intent, "메일 보내기"))
+                    navController.navigate(Screen.Inquiry.route)
                 }
             )
 

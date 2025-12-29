@@ -109,6 +109,7 @@ import com.example.travelapp.data.model.ShareUtil
 import com.example.travelapp.data.model.ShareUtil.uploadMapCapture
 import com.example.travelapp.data.model.comment.Comment
 import com.example.travelapp.ui.navigation.Screen
+import com.example.travelapp.ui.theme.TextSub
 import com.example.travelapp.util.AnimatedPolyline
 import com.example.travelapp.util.UtilTime
 import com.naver.maps.geometry.LatLng
@@ -1699,7 +1700,7 @@ fun MapEmptyPlaceholder() {
         Spacer(modifier = Modifier.height(12.dp))
         Text(
             text = "해당 날짜에 사진을 추가해주세요!",
-            color = Color.Gray,
+            color = TextSub,
             fontSize = 14.sp,
             fontWeight = FontWeight.Medium
         )

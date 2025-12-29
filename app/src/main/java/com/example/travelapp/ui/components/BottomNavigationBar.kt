@@ -15,7 +15,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -25,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import com.example.travelapp.ui.navigation.Screen
+import com.example.travelapp.ui.theme.bottomColor
 
 /**
  * 앱 전체에서 사용되는 하단 네비게이션 바
@@ -45,7 +45,7 @@ fun BottomNavigationBar(
     Row (
       modifier = Modifier
           .fillMaxWidth()
-          .background(MaterialTheme.colorScheme.background)
+          .background(bottomColor)
           .navigationBarsPadding() // 시스템 네비게이션 바 영역만큼 패딩 추가
           .padding(horizontal = 8.dp)
           .height(60.dp),
@@ -53,7 +53,7 @@ fun BottomNavigationBar(
         verticalAlignment = Alignment.CenterVertically
     ) {
         // 각 네비게이션 아이템 정의
-        // [Kotlin 문법] data class를 사용해 아이템 정보를 구조화
+        // data class를 사용해 아이템 정보를 구조화
         val navItems = listOf(
             BottomNavItem(
                 icon = Icons.Filled.Home,

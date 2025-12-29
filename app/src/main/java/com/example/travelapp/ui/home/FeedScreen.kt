@@ -66,6 +66,7 @@ import androidx.compose.material3.Scaffold
 import androidx.navigation.NavHostController
 import com.example.travelapp.ui.components.BottomNavigationBar
 import com.example.travelapp.ui.navigation.Screen
+import com.example.travelapp.ui.theme.TextSub
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -305,7 +306,6 @@ fun CategoryTabs(
  * - 작성자 및 작성 날짜
  * - 태그 목록
  */
-@RequiresApi(Build.VERSION_CODES.O)
 @Composable
 fun PostCard(
     post: Post,
@@ -323,31 +323,23 @@ fun PostCard(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(100.dp)
+                .height(110.dp)
                 .padding(12.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // 썸네일 이미지 또는 기본 배경
+            // 1. 왼쪽 썸네일 이미지 영역
             Box(
                 modifier = Modifier
-                    .size(76.dp)
+                    .size(86.dp)
                     .clip(RoundedCornerShape(8.dp))
-                    .background(Color(0xFFE0E0E0)),
+                    .background(Color(0xFFF5F5F5)),
                 contentAlignment = Alignment.Center
             ) {
-
-                val base_url = BuildConfig.BASE_URL
-                val full_url = toFullUrl(post.imgUrl)
-
-                val context = LocalContext.current // 컴포저블 안에서 컨텍스트 가져오기
-                // 이미지가 있을때는 이미지 보여주기
-                if(post.imgUrl != null) {
-                    Log.d("DEBUG_IMAGE", "실제 요청 주소: ${post.imgUrl}")
+                if (!post.imgUrl.isNullOrEmpty()) {
                     AsyncImage(
-                        model = ImageRequest.Builder(context)
-                            .data(full_url)
-                            .crossfade(true) // 이미지가 부드럽게 뜬다고 함.
-                            .size(300, 300) // 300px 크기로 메모리에 로딩
+                        model = ImageRequest.Builder(LocalContext.current)
+                            .data(toFullUrl(post.imgUrl)) // 📍 아래 정의된 함수 사용
+                            .crossfade(true)
                             .build(),
                         contentDescription = "썸네일",
                         contentScale = ContentScale.Crop,
@@ -357,105 +349,75 @@ fun PostCard(
                     Icon(
                         imageVector = Icons.Default.Image,
                         contentDescription = null,
-                        tint = Color(0xFF757575)
+                        tint = Color.LightGray
                     )
                 }
             }
-            // 게시물 정보
+
+            // 2. 오른쪽 게시물 정보 영역
             Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxHeight(),
+                modifier = Modifier.weight(1f).fillMaxHeight(),
                 verticalArrangement = Arrangement.SpaceBetween
             ) {
+                // 제목
                 Text(
                     text = post.title,
                     style = MaterialTheme.typography.titleMedium.copy(
-                        color = Color(0xFF111111), // 확실한 진한 블랙
-                        fontWeight = FontWeight.Bold // 제목은 더 두껍게
+                        color = Color(0xFF111111),
+                        fontWeight = FontWeight.Bold
                     ),
-                    maxLines = 2,
+                    maxLines = 1, // 한 줄로 깔끔하게 처리
                     modifier = Modifier.fillMaxWidth()
                 )
 
-                // 작성자 및 날짜
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+                // 닉네임 및 시간
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         text = post.nickname,
-                        style = MaterialTheme.typography.labelMedium.copy(
-                            color = Color(0xFF444444), // 616161보다 훨씬 진한 그레이
-                            fontWeight = FontWeight.SemiBold // 닉네임은 조금 더 진하게
-                        )
-                    )
-                    Text(
-                        text = "•",
                         fontSize = 12.sp,
-                        color = Color(0xFF616161)
+                        color = Color(0xFF444444),
+                        fontWeight = FontWeight.SemiBold
                     )
+                    Text(text = " • ", fontSize = 12.sp, color = TextSub)
                     Text(
-                        text = formatRelativeTime(post.created_at),
-                        style = MaterialTheme.typography.labelMedium.copy(
-                            color = Color(0xFF666666)
-                        )
+                        text = formatRelativeTime(post.created_at), // 📍 아래 정의된 함수 사용
+                        fontSize = 12.sp,
+                        color = TextSub
                     )
                 }
 
-                // 태그
+                // 태그 및 하단 아이콘 (좋아요, 댓글)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    val safeTags = post.tags ?: emptyList()
-                    // null 이면 빈 리스트
-                    safeTags.take(2).forEach { tag ->
-                        Text(
-                            text = "#$tag",
-                            fontSize = 11.sp,
-                            color = Color(0xFF1976D2)
-                        )
-                    }
-                    if (safeTags.size > 2) {
-                        Text(
-                            text = "+${safeTags.size - 2}",
-                            fontSize = 11.sp,
-                            color = Color(0xFF616161)
-                        )
-                    }
-                }
-
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.FavoriteBorder,
-                        contentDescription = "좋아요",
-                        modifier = Modifier.size(14.dp),
-                        tint = Color(0xFF757575)
-                    )
-                    Text(
-                        text = "${post.likeCount}",
-                        fontSize = 11.sp,
-                        color = Color(0xFF616161)
-                    )
-                    Icon(
-                        imageVector = Icons.Outlined.ChatBubbleOutline,
-                        contentDescription = "댓글",
-                        modifier = Modifier.size(14.dp),
-                        tint = Color(0xFF757575)
-                    )
-                    Text(
-                        text = "${post.commentCount}",
-                        fontSize = 11.sp,
-                        color = Color(0xFF616161)
-                    )
+                    // 태그 (최대 2개)
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        post.tags?.take(2)?.forEach { tag ->
+                            Text(text = "#$tag", fontSize = 11.sp, color = Color(0xFF1976D2))
+                        }
+                    }
+
+                    // 반응 (좋아요, 댓글)
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        ReactionItem(Icons.Default.FavoriteBorder, post.likeCount.toString())
+                        ReactionItem(Icons.Outlined.ChatBubbleOutline, post.commentCount.toString())
+                    }
                 }
             }
         }
+    }
+}
+
+/**
+ * [DRY 원칙] 좋아요/댓글 아이콘 세트 함수화
+ */
+@Composable
+fun ReactionItem(icon: androidx.compose.ui.graphics.vector.ImageVector, count: String) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+        Icon(imageVector = icon, contentDescription = null, modifier = Modifier.size(14.dp), tint = Color.Gray)
+        Text(text = count, fontSize = 11.sp, color = Color.Gray)
     }
 }
 
@@ -476,23 +438,17 @@ fun formatIsoDateTime(isoString: String): String {
 /**
  * ISO 8601 형식 날짜를 현재 시간과의 상대적인 시간으로 포매팅
  */
-@RequiresApi(Build.VERSION_CODES.O)
-fun formatRelativeTime(isoString: String): String {
+fun formatRelativeTime(timeString: String?): String {
+    // 1. null 체크 (String?로 받으면 null이 들어올 수 있어서 안전하게 체크!)
+    if (timeString.isNullOrEmpty()) return "방금 전"
+
     return try {
-        // ZonedDateTime.parse(isoString)
-        val zonedDateTime = ZonedDateTime.parse(isoString)
-        val instant = zonedDateTime.toInstant() // 🔥 Instant import 필요!
-
-        val timeInMillis = instant.toEpochMilli()
-
-        // DateUtils.getRelativeTimeSpanString 사용 (android.text.format.DateUtils import 필요!)
-        android.text.format.DateUtils.getRelativeTimeSpanString(
-            timeInMillis,
-            System.currentTimeMillis(),
-            android.text.format.DateUtils.MINUTE_IN_MILLIS
-        ).toString()
+        // 2. 글자 자르기 (이건 API 레벨 상관없이 다 작동해요)
+        // "2023-12-01T10:00:00" -> ["2023-12-01", "10:00:00"] 로 나눠서 앞부분만 가져옴
+        timeString.split("T")[0]
     } catch (e: Exception) {
-        formatIsoDateTime(isoString)
+        // 3. 혹시라도 형식이 이상하면 앱이 꺼지지 않게 기본값 반환
+        "방금 전"
     }
 }
 

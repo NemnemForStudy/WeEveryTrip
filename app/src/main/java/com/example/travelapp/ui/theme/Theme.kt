@@ -13,42 +13,19 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 
 private val DarkColorScheme = darkColorScheme(
-    primary = Purple80,
-    secondary = PurpleGrey80,
+    primary = PointRed,        // Purple80 대신 우리가 만든 PointRed
+    secondary = TextSub,       // PurpleGrey80 대신 TextSub
     tertiary = Pink80,
-    background = Beige,
-    surface = Beige,
-    // ✅ 글자색 강제 지정
-    onBackground = Color.Black,
-    onSurface = Color.Black
+    background = TextMain, // 배경도 테마에 맞춰 설정
+    surface = TextMain
 )
 
 private val LightColorScheme = lightColorScheme(
-    primary = Purple40,
-    secondary = PurpleGrey40,
-    tertiary = Pink40,
+    primary = PointRed,
     background = Beige,
-    surface = Beige,
-
-    // 배경과 카드 위에 올라가는 모든 글자를 "Pure Black"으로 고정
-    onBackground = Color(0xFF000000),
-    onSurface = Color(0xFF000000),
-
-    // TextField 등에서 강조되지 않은 글자색도 진하게 처리
-    surfaceVariant = Beige,
-    onSurfaceVariant = Color(0xFF212121),
-
-    scrim = Color.Black.copy(alpha = 0.32f)
-
-    /* Other default colors to override
-    background = Color(0xFFFFFBFE),
-    surface = Color(0xFFFFFBFE),
-    onPrimary = Color.White,
-    onSecondary = Color.White,
-    onTertiary = Color.White,
-    onBackground = Color(0xFF1C1B1F),
-    onSurface = Color(0xFF1C1B1F),
-    */
+    surface = CardWhite,
+    onBackground = TextMain,
+    onSurface = TextMain
 )
 
 @Composable

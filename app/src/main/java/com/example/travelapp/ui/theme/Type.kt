@@ -7,53 +7,50 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
-// 폰트 선명도를 위한 공통 스타일 설정 (백엔드의 공통 상수로 이해하시면 됩니다)
+// 폰트 선명도를 위한 공통 설정
 private val defaultPlatformStyle = PlatformTextStyle(
-    includeFontPadding = false // 불필요한 패딩을 제거해 폰트가 뭉개지는 것을 방지
+    includeFontPadding = false
 )
 
 val Typography = Typography(
-    // 1. "모여로그" 같은 대형 타이틀용
+    // 1. "모여로그", "로그인" 같은 초대형 타이틀
     headlineLarge = TextStyle(
         fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.ExtraBold, // ✅ Normal -> ExtraBold로 격상
+        fontWeight = FontWeight.ExtraBold,
         fontSize = 32.sp,
         lineHeight = 40.sp,
-        letterSpacing = (-0.5).sp, // 자간을 살짝 조여 더 꽉 차 보이게 함
+        letterSpacing = (-0.5).sp, // 자간 조여서 쫀쫀하게
         platformStyle = defaultPlatformStyle
     ),
 
-    // 2. "내 활동", "알림 설정" 같은 섹션 제목용
+    // 2. 카드 제목, 섹션 이름
     titleLarge = TextStyle(
         fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Bold, // ✅ Normal -> Bold로 격상
+        fontWeight = FontWeight.Bold,
         fontSize = 20.sp,
         lineHeight = 28.sp,
-        letterSpacing = 0.sp,
         platformStyle = defaultPlatformStyle
     ),
 
-    // 3. 메뉴 이름, 설정 항목 이름용
+    // 3. 닉네임, 중간 강조 텍스트
     titleMedium = TextStyle(
         fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.SemiBold, // ✅ 중간 두께를 SemiBold로 확실하게
+        fontWeight = FontWeight.SemiBold,
         fontSize = 16.sp,
         lineHeight = 24.sp,
-        letterSpacing = 0.15.sp,
         platformStyle = defaultPlatformStyle
     ),
 
-    // 4. 일반 본문 글자용
+    // 4. 일반 본문 (Medium으로 설정하여 폴드4에서 선명하게 보임)
     bodyLarge = TextStyle(
         fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Medium, // ✅ Normal -> Medium으로 한 단계 업그레이드
+        fontWeight = FontWeight.Medium,
         fontSize = 16.sp,
         lineHeight = 24.sp,
-        letterSpacing = 0.5.sp,
         platformStyle = defaultPlatformStyle
     ),
 
-    // 5. 부가 설명, 날짜 등 작은 글자용
+    // 5. 날짜, 통계 숫자, 작은 태그 등
     labelMedium = TextStyle(
         fontFamily = FontFamily.Default,
         fontWeight = FontWeight.Medium,
