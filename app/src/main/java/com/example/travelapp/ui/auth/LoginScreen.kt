@@ -16,8 +16,10 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
@@ -36,6 +38,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -108,7 +111,11 @@ fun LoginScreen(navController: NavController) {
 
     Box(modifier = Modifier.fillMaxSize()) {
         Column (
-            modifier = Modifier.fillMaxSize().padding(24.dp),
+            modifier = Modifier
+                .fillMaxSize()
+                // 상단 상태바 + 하단 내비게이션 바를 모두 피하도록 설정
+                .systemBarsPadding()
+                .padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Spacer(modifier = Modifier.weight(1f))
@@ -133,9 +140,10 @@ fun LoginScreen(navController: NavController) {
             }
             Spacer(modifier = Modifier.weight(1f))
             Text(
-                text = "로그인 시 서비스 이용 약관 및 개인정보 처리 방침에 동의하게 됩니다.",
+                text = "로그인 시 서비스 이용 약관 및\n개인정보 처리 방침에 동의하게 됩니다.",
                 style = MaterialTheme.typography.labelMedium,
-                color = Color(0xFF616161)
+                color = Color(0xFF616161),
+                textAlign = TextAlign.Center
             )
         }
 
