@@ -10,6 +10,8 @@ import com.example.travelapp.util.TokenManager
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount
 import com.google.android.gms.common.api.ApiException
 import com.google.android.gms.tasks.Task
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.GoogleAuthProvider
 import com.kakao.sdk.common.model.ClientError
 import com.kakao.sdk.common.model.ClientErrorCause
 import com.kakao.sdk.user.UserApiClient
@@ -213,19 +215,31 @@ class LoginViewModel @Inject constructor(
                 val id = account.id
 
                 if (idToken != null && email != null && id != null) {
-                    requestSocialLogin(
-                        provider = "GOOGLE",
-                        token = idToken,
-                        email = email,
-                        socialId = id,
-                        nickname = account.displayName,
-                        profileImage = account.photoUrl?.toString()
-                    )
+                    // Firebase용 Credential 생성
+                    val credential = GoogleAuthProvider.getCredential(idToken, null)
+                    FirebaseAuth.getInstance()
+                        .signInWithCredential(credential)
+                        .addOnCompleteListener { firebaseTask ->
+                            if (firebaseTask.isSuccessful) {
+                                Log.d(TAG, "Firebase 로그인 성공: ${firebaseTask.result.user?.email}")
+
+                                requestSocialLogin(
+                                    provider = "GOOGLE",
+                                    token = idToken,
+                                    email = email,
+                                    socialId = id,
+                                    nickname = account.displayName,
+                                    profileImage = account.photoUrl?.toString()
+                                )
+                            } else {
+                                // Firebase 로그인 실패
+                                Log.e(TAG, "Firebase 로그인 실패", firebaseTask.exception)
+                                emitLoginFailed("Firebase 인증 실패: ${firebaseTask.exception?.message}")
+                            }
+                        }
                 } else {
                     emitLoginFailed("구글 계정 정보를 가져오지 못했습니다.")
                 }
-            } else {
-                emitLoginFailed("구글 계정 정보를 가져오지 못했습니다.")
             }
         } catch (e: ApiException) {
             Log.e(TAG, "구글 로그인 API 예외", e)

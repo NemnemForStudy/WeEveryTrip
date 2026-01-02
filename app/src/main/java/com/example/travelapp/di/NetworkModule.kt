@@ -9,6 +9,7 @@ import com.example.travelapp.BuildConfig
 import com.example.travelapp.util.AuthInterceptor
 import com.example.travelapp.data.api.AuthApiService
 import com.example.travelapp.data.api.CommentApiService
+import com.example.travelapp.data.api.InquiryApiService
 import com.example.travelapp.data.api.NaverAuthApiService
 import com.example.travelapp.data.api.PostApiService
 import com.kakao.sdk.auth.AuthApi
@@ -138,21 +139,15 @@ object NetworkModule {
         return retrofit.create(NaverAuthApiService::class.java)
     }
 
-    private fun isWifiConnected(context: Context): Boolean {
-        val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            val network = connectivityManager.activeNetwork ?: return false
-            val capabilities = connectivityManager.getNetworkCapabilities(network) ?: return false
-            return capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
-        } else {
-            val networkInfo = connectivityManager.activeNetworkInfo ?: return false
-            return networkInfo.type == ConnectivityManager.TYPE_WIFI && networkInfo.isConnected
-        }
-    }
-
     @Provides
     @Singleton
     fun provideCommentApiService(@Named("AppRetrofit") retrofit: Retrofit): CommentApiService {
         return retrofit.create(CommentApiService::class.java)
+    }
+
+    @Provides
+    @Singleton
+    fun provideInquiryApiService(@Named("AppRetrofit") retrofit: Retrofit): InquiryApiService {
+        return retrofit.create(InquiryApiService::class.java)
     }
 }

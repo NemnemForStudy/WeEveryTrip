@@ -1,34 +1,85 @@
 package com.example.travelapp.ui.inquiry
 
+import android.util.Log
 import android.widget.Toast
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
-import com.example.travelapp.ui.theme.*
-import com.google.firebase.Timestamp
-import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.firestore.FirebaseFirestore
+import com.example.travelapp.ui.theme.Beige
+import com.example.travelapp.ui.theme.PointRed
+import com.example.travelapp.ui.theme.TextDisabled
+import com.example.travelapp.ui.theme.TextMain
+import com.example.travelapp.ui.theme.Typography
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun InquiryScreen(navController: NavController) {
+fun InquiryScreen(
+    navController: NavController,
+    userEmail: String,
+    viewModel: InquiryViewModel = hiltViewModel()
+) {
     val context = LocalContext.current
-    val db = remember { FirebaseFirestore.getInstance() }
-    val auth = remember { FirebaseAuth.getInstance() }
+//    val db = remember { FirebaseFirestore.getInstance() }
+//    val auth = remember { FirebaseAuth.getInstance() }
 
-    var title by remember { mutableStateOf("") }
-    var content by remember { mutableStateOf("") }
+    val title by viewModel.title.collectAsState()
+    val content by viewModel.content.collectAsState()
+    val uiState by viewModel.uiState.collectAsState()
+
     var isSubmitting by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        Log.d("ㄴ : ", "${userEmail}")
+        viewModel.onEmailChanged(userEmail)
+    }
+    LaunchedEffect(uiState) {
+        when(uiState) {
+            is InquiryUiState.Success -> {
+                Toast.makeText(context, "문의가 성공적으로 전송되었습니다.", Toast.LENGTH_SHORT).show()
+                navController.popBackStack()
+            }
+            is InquiryUiState.Error -> {
+                val message = (uiState as InquiryUiState.Error).message
+                Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+                viewModel.resetState()
+            }
+            else -> {}
+        }
+    }
 
     // ✅ DRY 원칙: 반복되는 TextField 색상 설정을 하나로 묶음
     // TextMain이 검정색(#000000)이므로 모든 텍스트가 아주 진하게 나옵니다.
@@ -76,7 +127,7 @@ fun InquiryScreen(navController: NavController) {
             // 2. 제목 입력란
             OutlinedTextField(
                 value = title,
-                onValueChange = { title = it },
+                onValueChange = { viewModel.onTitleChanged(it) },
                 label = { Text("제목") },
                 placeholder = { Text("제목을 입력해주세요") },
                 modifier = Modifier.fillMaxWidth(),
@@ -88,7 +139,7 @@ fun InquiryScreen(navController: NavController) {
             // 3. 내용 입력란
             OutlinedTextField(
                 value = content,
-                onValueChange = { content = it },
+                onValueChange = { viewModel.onContentChanged(it) },
                 label = { Text("내용") },
                 placeholder = { Text("문의하실 내용을 상세히 적어주시면 큰 도움이 됩니다.") },
                 modifier = Modifier
@@ -101,27 +152,7 @@ fun InquiryScreen(navController: NavController) {
             // 4. 보내기 버튼
             Button(
                 onClick = {
-                    if(title.isNotBlank() && content.isNotBlank()) {
-                        isSubmitting = true
-                        val inquiryData = hashMapOf(
-                            "title" to title,
-                            "content" to content,
-                            "userEmail" to (auth.currentUser?.email ?: "anonymous"),
-                            "userId" to (auth.currentUser?.uid ?: ""),
-                            "timestamp" to Timestamp.now()
-                        )
-
-                        db.collection("inquiries")
-                            .add(inquiryData)
-                            .addOnSuccessListener {
-                                Toast.makeText(context, "문의가 성공적으로 접수되었습니다.", Toast.LENGTH_SHORT).show()
-                                navController.popBackStack()
-                            }
-                            .addOnFailureListener { e ->
-                                isSubmitting = false
-                                Toast.makeText(context, "전송 실패: ${e.message}", Toast.LENGTH_SHORT).show()
-                            }
-                    }
+                    viewModel.sendEmail()
                 },
                 modifier = Modifier
                     .fillMaxWidth()
@@ -133,12 +164,20 @@ fun InquiryScreen(navController: NavController) {
                     disabledContainerColor = TextDisabled // 비활성화 시엔 라이트 그레이
                 ),
             ) {
-                Text(
-                    text = "보내기",
-                    style = Typography.titleMedium,
-                    color = Color.White,
-                    fontWeight = FontWeight.Bold
-                )
+                if(uiState is InquiryUiState.Loading) {
+                    CircularProgressIndicator(
+                        color = Color.White,
+                        modifier = Modifier.size(24.dp),
+                        strokeWidth = 2.dp
+                    )
+                } else {
+                    Text(
+                        text = "보내기",
+                        style = Typography.titleMedium,
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
         }
     }

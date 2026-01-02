@@ -16,6 +16,7 @@
     "express": "^5.1.0",
     "jsonwebtoken": "^9.0.2",
     "multer": "^1.4.5-lts.1",
+    "nodemailer": "^7.0.12",
     "pg": "^8.16.3"
   },
   "devDependencies": {
@@ -24,6 +25,7 @@
     "@types/jsonwebtoken": "^9.0.7",
     "@types/multer": "^1.4.11",
     "@types/node": "^20.10.6",
+    "@types/nodemailer": "^7.0.4",
     "@types/pg": "^8.11.2",
     "@types/sharp": "^0.32.0",
     "@types/supertest": "^6.0.3",

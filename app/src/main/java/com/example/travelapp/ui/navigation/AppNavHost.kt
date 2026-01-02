@@ -28,6 +28,8 @@ import com.example.travelapp.ui.myPage.MyPageScreen
 import com.example.travelapp.ui.viewModel.LoginViewModel
 import com.example.travelapp.ui.write.WriteScreen
 import com.example.travelapp.util.TokenManager
+import com.google.firebase.auth.FirebaseAuth
+import kotlin.math.log
 
 /**
  * 앱의 화면 주소(Route)를 정의하는 sealed class입니다.
@@ -137,7 +139,12 @@ fun AppNavHost(
         }
 
         composable(Screen.Inquiry.route) {
-            InquiryScreen(navController = navController)
+            val currentUser = FirebaseAuth.getInstance().currentUser
+            val loggedEmail = currentUser?.email ?: "adp@adonkw.com"
+            InquiryScreen(
+                navController = navController,
+                userEmail = loggedEmail
+            )
         }
     }
 }
