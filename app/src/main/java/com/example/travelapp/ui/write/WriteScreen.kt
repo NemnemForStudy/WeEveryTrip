@@ -1,5 +1,8 @@
 package com.example.travelapp.ui.write
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -53,6 +56,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
@@ -116,16 +120,30 @@ fun WriteScreen(
         if (uris.isNotEmpty()) viewModel.processSelectedImages(context, uris)
     }
 
+    val locationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            // 권한 허용되면 갤러리 열기
+            galleryLauncher.launch("image/*")
+        } else {
+            // 거부 시 안내 메시지 후 갤러리 열기 (GPS 없이 사진만 추가됨)
+            Toast.makeText(context, "위치 권한이 거부되어 사진의 위치를 자동으로 가져올 수 없습니다.", Toast.LENGTH_LONG).show()
+            galleryLauncher.launch("image/*")
+        }
+    }
+
     // 5. 게시글 등록 결과 처리
     LaunchedEffect(postCreationStatus) {
         when (postCreationStatus) {
             is WriteViewModel.PostCreationStatus.Success -> {
                 val postId = (postCreationStatus as WriteViewModel.PostCreationStatus.Success).postId
+
+                navController.previousBackStackEntry?.savedStateHandle?.set("post_created", true)
+
                 Toast.makeText(context, "게시물이 성공적으로 등록되었습니다!", Toast.LENGTH_SHORT).show()
                 viewModel.resetStatus()
                 navController.navigate("detail/$postId") {
-                    // write라는 경로를 찾아서 그 위까지 다 지움.
-                    // inclusive = true를 주면 write 페이지 자체도 스택에서 지운다.
                     popUpTo("write") { inclusive = true }
                 }
             }
@@ -156,7 +174,23 @@ fun WriteScreen(
             onDateClick = { showDatePicker = true },
             tripDays = tripDays,
             groupedImages = groupedImages,
-            onGalleryClick = { galleryLauncher.launch("image/*") },
+            onGalleryClick = {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    val permissionCheck = ContextCompat.checkSelfPermission(
+                        context,
+                        Manifest.permission.ACCESS_MEDIA_LOCATION
+                    )
+                    if (permissionCheck == PackageManager.PERMISSION_GRANTED) {
+                        galleryLauncher.launch("image/*")
+                    } else {
+                        // 권한 요청
+                        locationPermissionLauncher.launch(Manifest.permission.ACCESS_MEDIA_LOCATION)
+                    }
+                } else {
+                    // 안드로이드 10 미만은 바로 실행
+                    galleryLauncher.launch("image/*")
+                }
+            },
             onSwapImages = viewModel::swapImages,
             onPreviewClick = { day, images ->
                 val locations = images.mapNotNull {

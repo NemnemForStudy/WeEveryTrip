@@ -78,6 +78,12 @@ fun HomeScreen(
     val myPostsError by viewModel.myPostsError.collectAsState()
     var showLoginDialog by remember { mutableStateOf(false) }
 
+    val deleteSignal by navController.currentBackStackEntry?.savedStateHandle
+        ?.getStateFlow("post_deleted", false)!!.collectAsState()
+
+    val createSignal by navController.currentBackStackEntry?.savedStateHandle
+        ?.getStateFlow("post_created", false)!!.collectAsState()
+
     val searchResults by viewModel.searchResults.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
 
@@ -87,12 +93,14 @@ fun HomeScreen(
         ?.getStateFlow("post_deleted", true)
         ?.collectAsState()
 
-    LaunchedEffect(shouldRefresh?.value) {
-        if(shouldRefresh?.value == true) {
+    LaunchedEffect(deleteSignal, createSignal) {
+        if (deleteSignal || createSignal) {
+            Log.d("HomeScreen", "새로고침 신호 감지: 리스트를 다시 불러옵니다.")
             viewModel.fetchMyPosts()
-            navController.currentBackStackEntry
-                ?.savedStateHandle
-                ?.set("post_deleted", false)
+
+            // 신호를 처리했으므로 다시 false로 초기화 (중요)
+            navController.currentBackStackEntry?.savedStateHandle?.set("post_deleted", false)
+            navController.currentBackStackEntry?.savedStateHandle?.set("post_created", false)
         }
     }
 
@@ -223,15 +231,21 @@ fun HomeScreen(
                     }
 
                     else -> {
+                        val displayPosts = if (showSearchBar && searchQuery.isNotBlank()) {
+                            searchResults
+                        } else {
+                            myPosts
+                        }
+
                         LazyColumn(
                             modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
                             verticalArrangement = Arrangement.spacedBy(16.dp),
                             contentPadding = PaddingValues(top = 16.dp, bottom = 80.dp)
                         ) {
-                            items(myPosts.size) { index ->
+                            items(displayPosts.size) { index ->
                                 PostCard(
-                                    post = myPosts[index],
-                                    onClick = { navController.navigate("detail/${myPosts[index].id}") }
+                                    post = displayPosts[index], // displayPosts로 변경
+                                    onClick = { navController.navigate("detail/${displayPosts[index].id}") }
                                 )
                             }
                         }

@@ -25,6 +25,10 @@ import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.asRequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import com.example.travelapp.data.model.RoutePoint
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
@@ -36,6 +40,13 @@ open class PostRepository @Inject constructor(
     private val commentApiService: CommentApiService,
     @ApplicationContext private val context: Context
 ) {
+    private val _refreshTrigger = MutableSharedFlow<Unit>()
+    val refreshTrigger = _refreshTrigger.asSharedFlow()
+
+    suspend fun notifyPostChanged() {
+        _refreshTrigger.emit(Unit)
+    }
+
     suspend fun createPost(
         category: String,
         title: String,

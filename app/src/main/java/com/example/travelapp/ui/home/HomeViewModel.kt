@@ -1,5 +1,6 @@
 package com.example.travelapp.ui.home
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.travelapp.data.model.Post
@@ -8,6 +9,8 @@ import com.example.travelapp.data.repository.PostRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -46,6 +49,13 @@ class HomeViewModel @Inject constructor(
 
     init {
         loadMyPosts()
+
+        postRepository.refreshTrigger
+            .onEach {
+                Log.d("HomeViewModel", "새로고침 신호 수신 - fetchMyPosts 실행")
+                fetchMyPosts() // 또는 loadMyPosts()
+            }
+            .launchIn(viewModelScope)
     }
 
     /**

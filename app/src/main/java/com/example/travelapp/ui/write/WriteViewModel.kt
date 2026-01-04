@@ -1,16 +1,12 @@
 package com.example.travelapp.ui.write
 
 import android.content.Context
-import android.icu.util.Calendar
 import android.net.Uri
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.travelapp.data.api.PostApiService
 import com.example.travelapp.data.model.RoutePoint
-import com.example.travelapp.data.model.RouteRequest
 import com.example.travelapp.data.repository.PostRepository
-import com.example.travelapp.ui.common.ImageSelectionHelper
 import com.example.travelapp.util.DateUtils
 import com.example.travelapp.util.ExifUtils
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -39,12 +35,14 @@ data class ImageLocationMeta(
     // GPS 없는 사진이면 null (서버에 null로 저장)
     val latitude: Double? = null,
     val longitude: Double? = null,
-    val timestamp: Long? = null
+    val timestamp: Long? = null,
+    val timeString: String? = null
 )
 data class PostImage(
     val id: String = UUID.randomUUID().toString(), // 고유 ID
     val uri: Uri,
     val timestamp: Long? = null,
+    val timeString: String? = null,
     val dayNumber: Int,
     val latitude: Double? = null,
     val longitude: Double? = null
@@ -123,57 +121,54 @@ class WriteViewModel @Inject constructor(
      * 사진 선택하면 'Day N' 기준으로 자동 분류
      */
     fun processSelectedImages(context: Context, uris: List<Uri>) {
-        viewModelScope.launch(Dispatchers.IO) { // 1. 무거운 이미지 처리는 IO 스레드에서
+        viewModelScope.launch(Dispatchers.IO) {
             try {
                 Log.d("PhotoDebug", "2. 처리 시작 - 개수: ${uris.size}")
-
                 val currentStartDate = _startDate.value ?: System.currentTimeMillis()
                 val dayInMillis = 24 * 60 * 60 * 1000L
 
-                // 2. 새로운 이미지 객체 생성 및 정보 추출
+                // 1. 정보 추출 및 리스트 생성
                 val newPostImages = uris.map { uri ->
-                    val timestamp = ExifUtils.extractTimestamp(context, uri)
-                    val location = ExifUtils.extractLocation(context, uri)
+                    val metaData = ExifUtils.extractPhotoInfo(context, uri)
+                    val timestamp = metaData?.timestamp
+                    val timeString = metaData?.timeString
 
-                    // 3. 사진의 촬영 날짜를 기반으로 Day 계산 (실무형 로직)
                     val calculatedDay = if (timestamp != null && timestamp >= currentStartDate) {
                         ((timestamp - currentStartDate) / dayInMillis).toInt() + 1
                     } else {
-                        1 // 정보가 없으면 1일차로 할당
+                        1
                     }
 
                     PostImage(
                         uri = uri,
                         timestamp = timestamp,
+                        timeString = timeString,
                         dayNumber = calculatedDay,
-                        latitude = location?.first,
-                        longitude = location?.second
+                        latitude = metaData?.position?.latitude,
+                        longitude = metaData?.position?.longitude
                     )
                 }
+                    // 🔥 [추가] 리스트 전체를 시간(timestamp) 순으로 오름차순 정렬
+                    .sortedBy { it.timestamp ?: Long.MAX_VALUE }
 
-                // 4. 상태 업데이트 (Immutable State)
-                // 기존 맵을 가져와서 새로운 맵을 생성 (Compose UI 갱신을 위함)
                 val updatedMap = _groupedImages.value.toMutableMap()
 
                 newPostImages.forEach { image ->
                     val day = image.dayNumber
                     val existingList = updatedMap[day] ?: emptyList()
 
-                    // 중복 추가 방지 로직 (실무에서는 Uri 중복 체크도 수행)
                     if (existingList.none { it.uri == image.uri }) {
-                        updatedMap[day] = existingList + image
+                        // 추가된 이미지와 기존 이미지를 합치고 다시 시간순 정렬
+                        updatedMap[day] = (existingList + image).sortedBy { it.timestamp ?: Long.MAX_VALUE }
                     }
                 }
 
-                // 5. 메인 스레드에서 UI 상태 반영
                 withContext(Dispatchers.Main) {
                     _groupedImages.value = updatedMap.toMap()
-                    Log.d("PhotoDebug", "3. 상태 업데이트 완료")
+                    Log.d("PhotoDebug", "3. 상태 업데이트 완료 (시간순 정렬 적용)")
                 }
-
             } catch (e: Exception) {
-                Log.e("PhotoDebug", "이미지 처리 중 에러 발생", e)
-                // 실제 서비스라면 여기서 에러 이벤트를 발행하여 UI에 에러 메시지를 띄움
+                Log.e("PhotoDebug", "이미지 처리 에러", e)
             }
         }
     }
@@ -256,6 +251,7 @@ class WriteViewModel @Inject constructor(
                 )
 
                 result.onSuccess {
+                    postRepository.notifyPostChanged()
                     _lastCreatePostId.value = it.id
                     _postCreationStatus.value = PostCreationStatus.Success(it.id)
                 }.onFailure { e ->
@@ -326,7 +322,8 @@ class WriteViewModel @Inject constructor(
                     indexInDay = indexInDay,
                     latitude = img.latitude,
                     longitude = img.longitude,
-                    timestamp = img.timestamp
+                    timestamp = img.timestamp,
+                    timeString = img.timeString
                 )
             }
         }
