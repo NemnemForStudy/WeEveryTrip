@@ -23,7 +23,7 @@ import java.time.format.DateTimeFormatter
 
 // 데이터 클래스는 파일 최상단에 유지
 data class MarkerItemWithIndex(
-    val position: LatLng,
+    val position: LatLng?,
     val imageUrl: String?,
     val index: Int,
     val isStart: Boolean,

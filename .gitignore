@@ -1,3 +1,4 @@
+# ==================== Android Studio ====================
 *.iml
 .gradle
 /local.properties
@@ -13,4 +14,37 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# ==================== Firebase & Google Services ====================
+google-services.json
 app/google-services.json
+
+# ==================== 백엔드 (Node.js) ====================
+travelAppBackend/.env
+travelAppBackend/.env.local
+travelAppBackend/node_modules/
+travelAppBackend/dist/
+travelAppBackend/*.log
+
+# ==================== 민감한 정보 ====================
+*.keystore
+*.jks
+keystore.properties
+*.pem
+*.key
+
+# ==================== IDE ====================
+.vscode/
+*.swp
+*.swo
+*~
+
+# ==================== OS ====================
+Thumbs.db
+.AppleDouble
+.LSOverride
+
+# ==================== 기타 ====================
+.env.local
+.env.*.local
+.env

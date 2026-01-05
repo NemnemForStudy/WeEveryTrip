@@ -157,4 +157,14 @@ object ExifUtils {
             null
         }
     }
+
+    private fun calculateDayNumber(photoTimestamp: Long?, startDate: Long): Int {
+        if (photoTimestamp == null || photoTimestamp < startDate) return 1
+
+        // 💡 시간 성분을 제거하고 날짜 차이만 계산하기 위해 캘린더 사용 권장
+        val diffMillis = photoTimestamp - startDate
+        val diffDays = (diffMillis / (24 * 60 * 60 * 1000L)).toInt()
+
+        return diffDays + 1
+    }
 }

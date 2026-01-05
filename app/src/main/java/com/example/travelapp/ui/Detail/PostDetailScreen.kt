@@ -143,10 +143,19 @@ fun PostDetailContent(
     val currentDayNumber = dayKeys.getOrNull(currentDayIndex)
     val markerItems: List<MarkerItemWithIndex> = remember(post.imageLocations, currentDayNumber) {
         val filtered = post.imageLocations.filter { it.dayNumber == currentDayNumber }
-        filtered.mapIndexedNotNull { index, loc ->
-            val lat = loc.latitude ?: return@mapIndexedNotNull null
-            val lng = loc.longitude ?: return@mapIndexedNotNull null
-            MarkerItemWithIndex(LatLng(lat, lng), loc.imageUrl, index + 1, index == 0, index == filtered.size - 1)
+        filtered.mapIndexed { index, loc ->
+            // lat, lng이 null이어도 객체는 만듭니다.
+            val position = if (loc.latitude != null && loc.longitude != null) {
+                LatLng(loc.latitude!!, loc.longitude!!)
+            } else null
+
+            MarkerItemWithIndex(
+                position = position, // position은 LatLng? 타입이어야 함
+                imageUrl = loc.imageUrl,
+                index = index + 1,
+                isStart = index == 0,
+                isEnd = index == filtered.size - 1
+            )
         }
     }
 
@@ -258,7 +267,7 @@ fun PostMapHeader(
 
     // 1. 초기 셋업: 지도가 켜질 때 전체 경로가 다 보이도록 fitBounds
     LaunchedEffect(markerItems, routeLatLngs) {
-        val allPoints = (markerItems.map { it.position } + routeLatLngs)
+        val allPoints: List<LatLng> = (markerItems.mapNotNull { it.position } + routeLatLngs)
         if (allPoints.isNotEmpty()) {
             if (allPoints.size >= 2) {
                 val bounds = LatLngBounds.Builder().apply { allPoints.forEach { include(it) } }.build()
@@ -279,8 +288,9 @@ fun PostMapHeader(
     // 2. 카드를 넘길 때: 선택된 장소로 카메라 부드럽게 이동
     LaunchedEffect(selectedPageIndex) {
         if (markerItems.isNotEmpty()) {
-            val target = markerItems[selectedPageIndex].position
-            cameraPositionState.animate(CameraUpdate.scrollTo(target))
+            markerItems.getOrNull(selectedPageIndex)?.position?.let { target ->
+                cameraPositionState.animate(CameraUpdate.scrollTo(target))
+            }
         }
     }
 
@@ -292,20 +302,21 @@ fun PostMapHeader(
         ) {
             // [핵심 로직] 선택된 카드의 마커 딱 하나만 렌더링
             markerItems.getOrNull(selectedPageIndex)?.let { selectedItem ->
-                val icon = rememberClusteredPhotoIcon(
-                    imageUrl = selectedItem.imageUrl,
-                    index = selectedItem.index,
-                    count = 1, // 개별 모드이므로 1 고정
-                    sizePx = 200,
-                    isSelected = true
-                )
-
-                Marker(
-                    state = MarkerState(position = selectedItem.position),
-                    icon = icon ?: MarkerIcons.BLUE,
-                    zIndex = 1000,
-                    anchor = androidx.compose.ui.geometry.Offset(0.5f, 0.5f)
-                )
+                selectedItem.position?.let { latLng ->
+                    val icon = rememberClusteredPhotoIcon(
+                        imageUrl = selectedItem.imageUrl,
+                        index = selectedItem.index,
+                        count = 1, // 개별 모드이므로 1 고정
+                        sizePx = 200,
+                        isSelected = true
+                    )
+                    Marker(
+                        state = MarkerState(position = selectedItem.position),
+                        icon = icon ?: MarkerIcons.BLUE,
+                        zIndex = 1000,
+                        anchor = androidx.compose.ui.geometry.Offset(0.5f, 0.5f)
+                    )
+                }
             }
 
             // [경로선] 필터링과 관계없이 항상 전체 경로 노출
