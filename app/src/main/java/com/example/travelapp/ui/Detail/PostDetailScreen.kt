@@ -71,10 +71,9 @@ fun PostDetailScreen(
     val userToken = remember { viewModel.getUserToken() }
     var shareTarget by remember { mutableStateOf<ShareTarget?>(null) }
 
-    LaunchedEffect(postId) {
+    LaunchedEffect(Unit) { // 화면에 진입할 때마다 실행
         viewModel.fetchPostDetail(postId)
         viewModel.loadLikeData(postId)
-        viewModel.loadComments(postId)
     }
 
     Box(modifier = Modifier.fillMaxSize().background(Color.White)) {
@@ -169,7 +168,7 @@ fun PostDetailContent(
             )
         }
     ) { pv ->
-        LazyColumn(modifier = Modifier.fillMaxSize().padding(bottom = pv.calculateBottomPadding())) {
+        LazyColumn(modifier = Modifier.fillMaxSize().padding(pv)) {
             if (hasHeader) {
                 // [지도 헤더]
                 item {
@@ -211,6 +210,8 @@ fun PostDetailContent(
                         }
                     }
                 }
+            } else {
+                item { Spacer(Modifier.height(24.dp)) }
             }
 
             // [게시글 본문]
@@ -221,7 +222,7 @@ fun PostDetailContent(
             item { HorizontalDivider(thickness = 8.dp, color = Color(0xFFF5F7FA)) }
             ... (중략) ...
             */
-            item { Spacer(Modifier.height(20.dp)) }
+            item { Spacer(Modifier.height(40.dp)) }
         }
     }
 

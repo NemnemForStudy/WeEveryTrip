@@ -19,3 +19,4 @@ val TextDisabled = Color(0xFFBDBDBD) // ⚪ 비활성화 문구, 약관 (연한 
 // --- 기타 ---
 val DividerGray = Color(0xFFEEEEEE)  // 경계선용
 
+val StandardBlue = Color(0xFF1976D2)

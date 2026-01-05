@@ -67,6 +67,8 @@ import androidx.navigation.NavHostController
 import com.example.travelapp.ui.components.BottomNavigationBar
 import com.example.travelapp.ui.navigation.Screen
 import com.example.travelapp.ui.theme.TextSub
+import com.example.travelapp.util.MapUtil.toFullUrl
+import com.example.travelapp.util.UtilTime
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -306,6 +308,7 @@ fun CategoryTabs(
  * - 작성자 및 작성 날짜
  * - 태그 목록
  */
+@RequiresApi(Build.VERSION_CODES.O)
 @Composable
 fun PostCard(
     post: Post,
@@ -380,7 +383,7 @@ fun PostCard(
                     )
                     Text(text = " • ", fontSize = 12.sp, color = TextSub)
                     Text(
-                        text = formatRelativeTime(post.created_at), // 📍 아래 정의된 함수 사용
+                        text = UtilTime.formatRelativeTime(post.created_at), // 📍 아래 정의된 함수 사용
                         fontSize = 12.sp,
                         color = TextSub
                     )
@@ -418,37 +421,6 @@ fun ReactionItem(icon: androidx.compose.ui.graphics.vector.ImageVector, count: S
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
         Icon(imageVector = icon, contentDescription = null, modifier = Modifier.size(14.dp), tint = Color.Gray)
         Text(text = count, fontSize = 11.sp, color = Color.Gray)
-    }
-}
-
-@RequiresApi(Build.VERSION_CODES.O)
-fun formatIsoDateTime(isoString: String): String {
-    return try {
-        // 1. ZonedDateTime 객체로 파싱 (끝의 Z는 UTC 기준을 의미하므로 ZonedDateTime 사용)
-        val zonedDateTime = ZonedDateTime.parse(isoString)
-
-        // 원하는 출력 형식 정의
-        val formatter = DateTimeFormatter.ofPattern("yyyy.MM.dd", Locale.getDefault())
-        zonedDateTime.toLocalDateTime().format(formatter)
-    } catch (e: Exception) {
-        "날짜 형식 오류"
-    }
-}
-
-/**
- * ISO 8601 형식 날짜를 현재 시간과의 상대적인 시간으로 포매팅
- */
-fun formatRelativeTime(timeString: String?): String {
-    // 1. null 체크 (String?로 받으면 null이 들어올 수 있어서 안전하게 체크!)
-    if (timeString.isNullOrEmpty()) return "방금 전"
-
-    return try {
-        // 2. 글자 자르기 (이건 API 레벨 상관없이 다 작동해요)
-        // "2023-12-01T10:00:00" -> ["2023-12-01", "10:00:00"] 로 나눠서 앞부분만 가져옴
-        timeString.split("T")[0]
-    } catch (e: Exception) {
-        // 3. 혹시라도 형식이 이상하면 앱이 꺼지지 않게 기본값 반환
-        "방금 전"
     }
 }
 
@@ -552,32 +524,4 @@ fun FeedScreenPreview() {
             }
         }
     }
-}
-
-private fun resolveBaseUrlForDevice(): String {
-    val isEmulator = (Build.FINGERPRINT.startsWith("generic")
-            || Build.FINGERPRINT.startsWith("unknown")
-            || Build.MODEL.contains("google_sdk")
-            || Build.MODEL.contains("Emulator")
-            || Build.MODEL.contains("Android SDK built for x86")
-            || Build.MANUFACTURER.contains("Genymotion")
-            || (Build.BRAND.startsWith("generic") && Build.DEVICE.startsWith("generic")))
-
-    val phoneBaseUrl = runCatching {
-        BuildConfig::class.java.getField("PHONE_BASE_URL").get(null) as String
-    }.getOrNull()
-
-    val raw = if(isEmulator) {
-        BuildConfig.BASE_URL
-    } else {
-        phoneBaseUrl?.takeIf { it.isNotBlank() } ?: BuildConfig.BASE_URL
-    }
-
-    return raw.trimEnd('/') + "/"
-}
-
-private fun toFullUrl(urlOrPath: String?): String? {
-    if(urlOrPath.isNullOrBlank()) return null
-    if(urlOrPath.startsWith("http")) return urlOrPath
-    return resolveBaseUrlForDevice() + urlOrPath.trimStart('/')
 }

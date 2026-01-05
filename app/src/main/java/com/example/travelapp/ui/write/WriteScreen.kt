@@ -62,8 +62,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import com.example.travelapp.data.model.RoutePoint
 import com.example.travelapp.ui.components.PostForm
+import com.example.travelapp.ui.theme.StandardBlue
 import com.example.travelapp.ui.theme.TextSub
 import com.example.travelapp.util.AnimatedPolyline
+import com.example.travelapp.util.DateUtils
 import com.naver.maps.geometry.LatLng
 import com.naver.maps.map.CameraPosition
 import com.naver.maps.map.compose.ExperimentalNaverMapApi
@@ -75,6 +77,7 @@ import com.naver.maps.map.compose.rememberCameraPositionState
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.TimeZone
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalNaverMapApi::class)
 @Composable
@@ -192,6 +195,9 @@ fun WriteScreen(
                 }
             },
             onSwapImages = viewModel::swapImages,
+            onRemoveImage = { day, image ->
+                viewModel.removeImage(day, image)
+            },
             onPreviewClick = { day, images ->
                 val locations = images.mapNotNull {
                     if (it.latitude != null && it.longitude != null) it.latitude to it.longitude else null
@@ -249,10 +255,11 @@ fun WriteScreen(
         // 2. 날짜 선택 다이얼로그
         if (showDatePicker) {
             MaterialTheme(colorScheme = lightColorScheme(
+                primary = StandardBlue,
+                onPrimary = Color.White,
                 surface = Color.White,
                 onSurface = Color.Black,
-                primary = Color(0xFF1976D2),
-                onPrimary = Color.White
+                secondaryContainer = StandardBlue.copy(alpha = 0.1f)
             )) {
                 DatePickerDialog(
                     onDismissRequest = { showDatePicker = false },
@@ -264,55 +271,45 @@ fun WriteScreen(
                             )
                             showDatePicker = false
                         }) {
-                            Text("확인", fontWeight = FontWeight.Black, color = Color.Black)
+                            Text("확인", fontWeight = FontWeight.Bold, color = StandardBlue)
                         }
                     },
                     dismissButton = {
                         TextButton(onClick = { showDatePicker = false }) {
-                            Text("취소", fontWeight = FontWeight.Bold, color = TextSub)
+                            Text("취소", color = Color.Gray)
                         }
                     }
                 ) {
-                    val sdf = SimpleDateFormat("yy년 MM월 dd일", Locale.KOREA)
                     DateRangePicker(
                         state = dateRangePickerState,
                         modifier = Modifier.height(500.dp),
                         title = {
-                            Box(
-                                modifier = Modifier.fillMaxWidth(),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = "여행 기간 선택",
-                                    modifier = Modifier.padding(16.dp),
-                                    fontWeight = FontWeight.Bold,
-                                    textAlign = TextAlign.Center
-                                )
+                            Box(modifier = Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
+                                Text(text = "날짜 선택", style = MaterialTheme.typography.labelLarge)
                             }
                         },
                         headline = {
                             val start = dateRangePickerState.selectedStartDateMillis
                             val end = dateRangePickerState.selectedEndDateMillis
-                            val text = if(start != null && end != null) {
-                                "${sdf.format(Date(start))} - ${sdf.format(Date(end))}"
+
+                            // ✅ 무조건 DateUtils를 통해 UTC 기준으로 포맷팅하여 표시
+                            val headlineText = if (start != null && end != null) {
+                                "${DateUtils.formatToDisplay(start)} - ${DateUtils.formatToDisplay(end)}"
+                            } else if (start != null) {
+                                "${DateUtils.formatToDisplay(start)} - "
                             } else {
-                                "시작일 - 종료일"
+                                "날짜를 선택하세요"
                             }
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 8.dp),
-                                contentAlignment = Alignment.Center // 텍스트를 박스 정중앙에 배치
-                            ) {
+
+                            Box(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
                                 Text(
-                                    text = text,
-                                    fontSize = 18.sp,
+                                    text = headlineText,
                                     style = MaterialTheme.typography.headlineSmall,
-                                    fontWeight = FontWeight.Black,
-                                    textAlign = TextAlign.Center // 텍스트 자체도 중앙 정렬
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 18.sp
                                 )
                             }
-                        },
+                        }
                     )
                 }
             }

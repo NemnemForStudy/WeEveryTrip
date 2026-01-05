@@ -332,4 +332,12 @@ class WriteViewModel @Inject constructor(
         val imageLocationsJson = Json.encodeToString(metaList)
         return Pair(orderedUris, imageLocationsJson)
     }
+
+    fun removeImage(day: Int, image: PostImage) {
+        _groupedImages.value = com.example.travelapp.util.ImageUtil.removeImageFromGrouped(
+            currentMap = _groupedImages.value,
+            day = day,
+            imageToRemove = image
+        )
+    }
 }

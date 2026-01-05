@@ -97,20 +97,20 @@ data class UpdatePostRequest(
 
 data class UpdatePostResponse(
     @SerializedName("post_id") val id: String,
-    val category: String,
-    val title: String,
-    val content: String,
-    val tags: List<String>,
+    val category: String?, // 👈 null 허용으로 변경
+    val title: String?,
+    val content: String?,
+    val tags: List<String>?, // 👈 null 허용으로 변경
     @SerializedName("thumbnail_url")
     val imgUrl: String? = null,
-    @SerializedName("coordinates")
+    @SerializedName("coordinates") // 👈 Post 클래스와 필드명(coordinates) 통일 확인
     val coordinate: GeoJsonPoint? = null,
     @SerializedName("location_name")
     val locationName: String? = null,
     @SerializedName("is_domestic")
-    val isDomestic: Boolean,
+    val isDomestic: Boolean?, // 👈 null 허용으로 변경
     @SerializedName("updated_at")
-    val updateAt: String
+    val updateAt: String? // 👈 null 허용으로 변경
 )
 
 // ✅ 서버에서 post_image 테이블에서 뽑아 내려줄 “사진별 위치 데이터”

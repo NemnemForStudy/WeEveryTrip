@@ -90,6 +90,7 @@ class PostDetailViewModel @Inject constructor(
             try {
                 // 사진이 있는 Day만 추출
                 val fetchPost = postApiService.getPostById(postId)
+                Log.d("DEBUG", "서버에서 온 사진 개수: ${fetchPost.imageLocations.size}")
 
                 val photoDays = fetchPost.imageLocations
                     .mapNotNull { loc ->

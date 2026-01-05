@@ -15,6 +15,7 @@ import com.example.travelapp.data.repository.PostRepository
 import com.example.travelapp.ui.common.ImageSelectionHelper
 import com.example.travelapp.ui.write.PostImage
 import com.example.travelapp.util.DateUtils
+import com.example.travelapp.util.ImageUtil
 import com.example.travelapp.util.TokenManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
@@ -110,12 +111,12 @@ class EditPostViewModel @Inject constructor(
                 _category.value = fetchedPost.category ?: ""
                 _title.value = fetchedPost.title ?: ""
                 _content.value = fetchedPost.content ?: ""
-                _images.value = fetchedPost.images ?: emptyList()
+                _images.value = emptyList()
                 _isDomestic.value = fetchedPost.isDomestic
                 _latitude.value = fetchedPost.latitude
                 _longitude.value = fetchedPost.longitude
-                _startDate.value = fetchedPost.travelStartDate?.let { DateUtils.parseDate(it) }
-                _endDate.value = fetchedPost.travelEndDate?.let { DateUtils.parseDate(it) }
+                _startDate.value = DateUtils.parseDate(fetchedPost.travelStartDate)
+                _endDate.value = DateUtils.parseDate(fetchedPost.travelEndDate)
                 _tags.value = fetchedPost.tags ?: emptyList()
 
                 // BaseURL 결정 (이미지 경로 복원용)
@@ -151,11 +152,13 @@ class EditPostViewModel @Inject constructor(
 
             try {
                 val token = tokenManager.getToken() ?: throw Exception("로그인 정보가 없습니다.")
+                val baseUrl = resolveBaseUrl()
 
                 // 1. 모든 이미지를 하나의 리스트로 평탄화
                 val allImagesInDrawer = _groupedImages.value.entries
                     .sortedBy { it.key }
                     .flatMap { it.value }
+                Log.d("DEBUG", "전송 직전 총 사진 개수: ${allImagesInDrawer.size}")
 
                 // 2. 새로 추가된 로컬 이미지들만 필터링하여 업로드
                 val localImages = allImagesInDrawer.filter { it.uri.scheme == "content" || it.uri.scheme == "file" }
@@ -164,25 +167,20 @@ class EditPostViewModel @Inject constructor(
                     val parts = withContext(Dispatchers.IO) {
                         localImages.map { uriToPart(context, it.uri) }
                     }
-
-                    // 🔥 수정 포인트 1: 첫 번째 인자로 토큰을 전달함
                     val response = postApiService.uploadImages("Bearer $token", parts)
-
-                    if (response.isSuccessful) {
-                        response.body()?.urls ?: emptyList()
-                    } else {
-                        throw Exception("이미지 업로드 실패 (${response.code()})")
-                    }
-                } else {
-                    emptyList()
-                }
+                    if (response.isSuccessful) response.body()?.urls ?: emptyList()
+                    else throw Exception("이미지 업로드 실패")
+                } else emptyList()
 
                 // 3. 업로드된 URL을 원본 위치에 매칭하여 최종 요청 객체 생성
                 var newUrlIndex = 0
                 val finalLocationRequests = allImagesInDrawer.mapIndexed { index, img ->
                     val isRemote = img.uri.scheme == "http" || img.uri.scheme == "https"
-                    val finalUrl = if (isRemote) img.uri.toString()
-                    else newUrls.getOrNull(newUrlIndex++) ?: ""
+                    val finalUrl = if (isRemote) {
+                        img.uri.toString().replace(baseUrl, "")
+                    } else {
+                        newUrls.getOrNull(newUrlIndex++) ?: ""
+                    }
 
                     UpdateImageLocationRequest(
                         imageUrl = finalUrl,
@@ -192,10 +190,12 @@ class EditPostViewModel @Inject constructor(
                         sortIndex = index,
                         timestamp = img.timestamp
                     )
-                }
+                }.distinctBy { it.imageUrl } // 전송 직전 URL 중복 제거
 
                 // 4. 날짜 포맷팅 및 Repository 호출
-                val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+                val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).apply {
+                    timeZone = TimeZone.getTimeZone("UTC")
+                }
                 val startDateStr = _startDate.value?.let { sdf.format(Date(it)) }
                 val endDateStr = _endDate.value?.let { sdf.format(Date(it)) }
 
@@ -210,7 +210,7 @@ class EditPostViewModel @Inject constructor(
                     isDomestic = _isDomestic.value,
                     travelStartDate = startDateStr,
                     travelEndDate = endDateStr,
-                    images = finalLocationRequests.map { it.imageUrl },
+                    images = emptyList(),
                     imageLocations = finalLocationRequests
                 )
 
@@ -276,8 +276,13 @@ class EditPostViewModel @Inject constructor(
             }
 
             val current = _groupedImages.value.toMutableMap()
-            grouped.forEach { (day, images) ->
-                current[day] = (current[day] ?: emptyList()) + images
+            grouped.forEach { (day, newImages) ->
+                val existingImages = current[day] ?: emptyList()
+                // 🔥 이미 있는 URI는 제외하고 추가
+                val filteredNewImages = newImages.filter { newImg ->
+                    existingImages.none { it.uri == newImg.uri }
+                }
+                current[day] = existingImages + filteredNewImages
             }
             _groupedImages.value = current
         }
@@ -311,5 +316,13 @@ class EditPostViewModel @Inject constructor(
             val points = locations.map { RoutePoint(it.first, it.second) }
             _routePoints.value = points
         }
+    }
+
+    fun removeImage(day: Int, image: PostImage) {
+        _groupedImages.value = ImageUtil.removeImageFromGrouped(
+            currentMap = _groupedImages.value,
+            day = day,
+            imageToRemove = image
+        )
     }
 }

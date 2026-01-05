@@ -12,19 +12,26 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import com.example.travelapp.BuildConfig
 import com.example.travelapp.ui.components.PostForm
+import com.example.travelapp.ui.theme.StandardBlue
 import com.example.travelapp.util.AnimatedPolyline
+import com.example.travelapp.util.DateUtils
+import com.example.travelapp.util.MapUtil.toFullUrl
 import com.naver.maps.geometry.LatLng
 import com.naver.maps.map.CameraPosition
 import com.naver.maps.map.compose.*
+import java.text.SimpleDateFormat
 import java.util.*
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalNaverMapApi::class)
@@ -58,10 +65,18 @@ fun EditPostScreen(
     var mapDialogLocations by remember { mutableStateOf<List<Pair<Double, Double>>>(emptyList()) }
     var mapDialogTitle by remember { mutableStateOf("") }
 
-    val dateRangePickerState = rememberDateRangePickerState(
-        initialSelectedStartDateMillis = startDate,
-        initialSelectedEndDateMillis = endDate
-    )
+    val dateRangePickerState = key(startDate, endDate) {
+        rememberDateRangePickerState(
+            initialSelectedStartDateMillis = startDate,
+            initialSelectedEndDateMillis = endDate
+        )
+    }
+
+    LaunchedEffect(startDate, endDate) {
+        if (startDate != null && endDate != null) {
+            dateRangePickerState.setSelection(startDate, endDate)
+        }
+    }
 
     // 3. 게시물 로드 및 결과 처리
     LaunchedEffect(postId) {
@@ -73,9 +88,7 @@ fun EditPostScreen(
             is EditPostViewModel.UpdateStatus.Success -> {
                 Toast.makeText(context, "게시물이 수정되었습니다!", Toast.LENGTH_SHORT).show()
                 viewModel.resetStatus()
-                navController.navigate("detail/$postId") {
-                    popUpTo("edit/$postId") { inclusive = true }
-                }
+                navController.popBackStack()
             }
             is EditPostViewModel.UpdateStatus.Error -> {
                 Toast.makeText(context, (updateStatus as EditPostViewModel.UpdateStatus.Error).message, Toast.LENGTH_LONG).show()
@@ -113,7 +126,7 @@ fun EditPostScreen(
                 onDateClick = { showDatePicker = true },
                 tripDays = tripDays,
                 groupedImages = groupedImages,
-                existingImages = existingImages, // 서버에서 온 이미지 리스트 전달
+                existingImages = emptyList(), // 서버에서 온 이미지 리스트 전달
                 onGalleryClick = { galleryLauncher.launch("image/*") },
                 onSwapImages = viewModel::swapImages,
                 onPreviewClick = { day, images ->
@@ -138,7 +151,10 @@ fun EditPostScreen(
                         Toast.makeText(context, "제목과 내용을 모두 입력해주세요.", Toast.LENGTH_SHORT).show()
                     }
                 },
-                toFullUrl = { url -> toFullUrl(url) ?: "" }
+                toFullUrl = { url -> toFullUrl(url) ?: "" },
+                onRemoveImage = { day, image ->
+                    viewModel.removeImage(day, image)
+                }
             )
         }
 
@@ -149,24 +165,67 @@ fun EditPostScreen(
                 onDismissRequest = { showCategoryDialog = false },
                 title = { Text("여행 유형 선택") },
                 confirmButton = { TextButton(onClick = { viewModel.updateCategory("국내여행"); showCategoryDialog = false }) { Text("국내여행") } },
-                dismissButton = { TextButton(onClick = { viewModel.updateCategory("국외여행"); showCategoryDialog = false }) { Text("국외여행") } }
+//                dismissButton = { TextButton(onClick = { viewModel.updateCategory("국외여행"); showCategoryDialog = false }) { Text("국외여행") } }
             )
         }
 
         if (showDatePicker) {
-            DatePickerDialog(
-                onDismissRequest = { showDatePicker = false },
-                confirmButton = {
-                    TextButton(onClick = {
-                        viewModel.updateDateRange(
-                            dateRangePickerState.selectedStartDateMillis,
-                            dateRangePickerState.selectedEndDateMillis
-                        )
-                        showDatePicker = false
-                    }) { Text("확인") }
+            MaterialTheme(colorScheme = lightColorScheme(
+                primary = StandardBlue,
+                onPrimary = Color.White,
+                surface = Color.White,
+                onSurface = Color.Black,
+                secondaryContainer = StandardBlue.copy(alpha = 0.1f)
+            )) {
+                DatePickerDialog(
+                    onDismissRequest = { showDatePicker = false },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            viewModel.updateDateRange(
+                                dateRangePickerState.selectedStartDateMillis,
+                                dateRangePickerState.selectedEndDateMillis
+                            )
+                            showDatePicker = false
+                        }) {
+                            Text("확인", fontWeight = FontWeight.Bold, color = StandardBlue)
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showDatePicker = false }) {
+                            Text("취소", color = Color.Gray)
+                        }
+                    }
+                ) {
+                    DateRangePicker(
+                        state = dateRangePickerState,
+                        modifier = Modifier.height(500.dp),
+                        title = {
+                            Box(modifier = Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
+                                Text(text = "날짜 선택", style = MaterialTheme.typography.labelLarge)
+                            }
+                        },
+                        headline = {
+                            val start = dateRangePickerState.selectedStartDateMillis
+                            val end = dateRangePickerState.selectedEndDateMillis
+
+                            // ✅ "yy년 MM월 dd일" 형식으로 표시
+                            val headlineText = if (start != null && end != null) {
+                                "${DateUtils.formatToDisplay(start)} - ${DateUtils.formatToDisplay(end)}"
+                            } else {
+                                "시작일 - 종료일"
+                            }
+
+                            Box(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
+                                Text(
+                                    text = headlineText,
+                                    style = MaterialTheme.typography.headlineSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 18.sp
+                                )
+                            }
+                        }
+                    )
                 }
-            ) {
-                DateRangePicker(state = dateRangePickerState, modifier = Modifier.height(500.dp))
             }
         }
 
@@ -201,16 +260,16 @@ fun EditPostScreen(
     }
 }
 
-// URL 헬퍼 함수
-private fun resolveBaseUrlForDevice(): String {
-    val isEmulator = (Build.FINGERPRINT.startsWith("generic") || Build.MODEL.contains("Emulator"))
-    val phoneBaseUrl = runCatching { BuildConfig::class.java.getField("PHONE_BASE_URL").get(null) as String }.getOrNull()
-    val raw = if(isEmulator) BuildConfig.BASE_URL else phoneBaseUrl?.takeIf { it.isNotBlank() } ?: BuildConfig.BASE_URL
-    return raw.trimEnd('/') + "/"
-}
-
-private fun toFullUrl(urlOrPath: String?): String? {
-    if(urlOrPath.isNullOrBlank()) return null
-    if(urlOrPath.startsWith("http")) return urlOrPath
-    return resolveBaseUrlForDevice() + urlOrPath.trimStart('/')
-}
+//// URL 헬퍼 함수
+//private fun resolveBaseUrlForDevice(): String {
+//    val isEmulator = (Build.FINGERPRINT.startsWith("generic") || Build.MODEL.contains("Emulator"))
+//    val phoneBaseUrl = runCatching { BuildConfig::class.java.getField("PHONE_BASE_URL").get(null) as String }.getOrNull()
+//    val raw = if(isEmulator) BuildConfig.BASE_URL else phoneBaseUrl?.takeIf { it.isNotBlank() } ?: BuildConfig.BASE_URL
+//    return raw.trimEnd('/') + "/"
+//}
+//
+//private fun toFullUrl(urlOrPath: String?): String? {
+//    if(urlOrPath.isNullOrBlank()) return null
+//    if(urlOrPath.startsWith("http")) return urlOrPath
+//    return resolveBaseUrlForDevice() + urlOrPath.trimStart('/')
+//}
