@@ -15,6 +15,7 @@ import com.example.travelapp.data.repository.PostRepository
 import com.example.travelapp.ui.common.ImageSelectionHelper
 import com.example.travelapp.ui.write.PostImage
 import com.example.travelapp.util.DateUtils
+import com.example.travelapp.util.ExifUtils
 import com.example.travelapp.util.ImageUtil
 import com.example.travelapp.util.TokenManager
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -130,6 +131,7 @@ class EditPostViewModel @Inject constructor(
                         PostImage(
                             uri = Uri.parse(fullUrl),
                             timestamp = loc.timestamp,
+                            timeString = formatTime(loc.timestamp),
                             dayNumber = loc.dayNumber ?: 1,
                             latitude = loc.latitude,
                             longitude = loc.longitude,
@@ -259,33 +261,39 @@ class EditPostViewModel @Inject constructor(
     }
 
     fun processSelectedImages(context: Context, uris: List<Uri>) {
-        viewModelScope.launch {
-            val existingCoords = _post.value?.imageLocations?.mapNotNull { loc ->
-                if (loc.latitude != null && loc.longitude != null) Pair(
-                    loc.latitude,
-                    loc.longitude
-                ) else null
-            }?.toSet() ?: emptySet()
+        viewModelScope.launch(Dispatchers.IO) {
+            val currentStartDate = _startDate.value ?: System.currentTimeMillis()
+            val dayInMillis = 24 * 60 * 60 * 1000L
 
-            val grouped = ImageSelectionHelper.processUris(
-                context,
-                uris,
-                _tripDays.value,
-                existingCoords
-            ) { lat, lon ->
-                updateLocation(lat, lon)
+            val newPostImages = uris.map { uri ->
+                val metaData = ExifUtils.extractPhotoInfo(context, uri)
+                val timestamp = metaData?.timestamp
+
+                val calculatedDay = if(timestamp != null && timestamp >= currentStartDate) {
+                    ((timestamp - currentStartDate) / dayInMillis).toInt() + 1
+                } else 1
+
+                PostImage(
+                    uri = uri,
+                    timestamp = timestamp,
+                    timeString = metaData?.timeString, // ✅ "오후 07:05" 형태 추출
+                    dayNumber = calculatedDay,
+                    latitude = metaData?.position?.latitude,
+                    longitude = metaData?.position?.longitude
+                )
             }
 
-            val current = _groupedImages.value.toMutableMap()
-            grouped.forEach { (day, newImages) ->
-                val existingImages = current[day] ?: emptyList()
-                // 🔥 이미 있는 URI는 제외하고 추가
-                val filteredNewImages = newImages.filter { newImg ->
-                    existingImages.none { it.uri == newImg.uri }
+            withContext(Dispatchers.Main) {
+                val current = _groupedImages.value.toMutableMap()
+                newPostImages.forEach { newImg ->
+                    val day = newImg.dayNumber
+                    val existingList = current[day] ?: emptyList()
+                    if (existingList.none { it.uri == newImg.uri }) {
+                        current[day] = (existingList + newImg).sortedBy { it.timestamp ?: Long.MAX_VALUE }
+                    }
                 }
-                current[day] = existingImages + filteredNewImages
+                _groupedImages.value = current
             }
-            _groupedImages.value = current
         }
     }
 
@@ -325,5 +333,18 @@ class EditPostViewModel @Inject constructor(
             day = day,
             imageToRemove = image
         )
+    }
+
+    private fun formatTime(timestamp: Long?): String? {
+        if (timestamp == null) return null
+
+        // 1. 서버에서 받은 원본 timestamp(UTC)를 Date 객체로 만듭니다.
+        val date = Date(timestamp)
+
+        // 2. 타임존 설정을 아예 삭제하거나 기본값으로 둡니다.
+        // 그러면 한국 휴대폰에서는 자동으로 +9시간이 적용되어 "오후 10:00"으로 나옵니다.
+        val sdf = SimpleDateFormat("a hh:mm", Locale.KOREAN)
+
+        return sdf.format(date)
     }
 }
