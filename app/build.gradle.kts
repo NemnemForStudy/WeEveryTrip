@@ -23,17 +23,11 @@ android {
 
     buildTypes {
         getByName("debug") {
-            val baseUrl = localProperties.getProperty("BASE_URL") ?: "http://10.0.2.2:3000"
-            val phoneBaseUrl = localProperties.getProperty("PHONE_BASE_URL", baseUrl)
-            buildConfigField("String", "BASE_URL", "\"$baseUrl\"")
-            buildConfigField("String", "PHONE_BASE_URL", "\"$phoneBaseUrl\"")
+            // 코틀린 문법이므로 반드시 괄호()를 써야 합니다.
+            buildConfigField("String", "BASE_URL", "\"https://stethoscopic-revertive-alene.ngrok-free.dev/\"")
         }
         getByName("release") {
-            val baseUrl = localProperties.getProperty("RELEASE_BASE_URL", "https://api.your-domain.com")
-            buildConfigField("String", "BASE_URL", "\"$baseUrl\"")
-
-            isMinifyEnabled = false
-            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            buildConfigField("String", "BASE_URL", "\"http://43.201.67.69:3000/\"")
         }
     }
 
@@ -189,4 +183,9 @@ dependencies {
     implementation("androidx.credentials:credentials:1.2.2")
     implementation("androidx.credentials:credentials-play-services-auth:1.2.2")
     implementation("com.google.android.libraries.identity.googleid:googleid:1.1.1")
+
+    // build.gradle (app) 에 추가
+    implementation("androidx.security:security-crypto:1.1.0-alpha06")
+
+    implementation("dev.shreyaspatil:capturable:2.1.0")
 }

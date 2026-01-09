@@ -147,6 +147,7 @@ class EditPostViewModel @Inject constructor(
 
     // ✅ 핵심 수정: updatePost 로직 재구성
     fun updatePost(postId: String, context: Context) {
+        Log.d("DEBUG_ENTRY", "1. 함수 진입 성공") // 👈 코루틴 밖
         viewModelScope.launch {
             _updateStatus.value = UpdateStatus.Loading
 
@@ -177,7 +178,7 @@ class EditPostViewModel @Inject constructor(
                 val finalLocationRequests = allImagesInDrawer.mapIndexed { index, img ->
                     val isRemote = img.uri.scheme == "http" || img.uri.scheme == "https"
                     val finalUrl = if (isRemote) {
-                        img.uri.toString().replace(baseUrl, "")
+                        img.uri.toString()
                     } else {
                         newUrls.getOrNull(newUrlIndex++) ?: ""
                     }
@@ -190,7 +191,7 @@ class EditPostViewModel @Inject constructor(
                         sortIndex = index,
                         timestamp = img.timestamp
                     )
-                }.distinctBy { it.imageUrl } // 전송 직전 URL 중복 제거
+                }.filter { it.imageUrl.isNotEmpty() } // 전송 직전 URL 중복 제거
 
                 // 4. 날짜 포맷팅 및 Repository 호출
                 val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).apply {

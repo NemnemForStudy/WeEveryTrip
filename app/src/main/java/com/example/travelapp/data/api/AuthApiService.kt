@@ -5,12 +5,14 @@ import com.example.travelapp.data.model.LoginRequest
 import com.example.travelapp.data.model.Setting.NotificationRequest
 import com.example.travelapp.data.model.SocialLoginRequest
 import com.example.travelapp.data.model.SocialLoginResponse
+import com.example.travelapp.data.model.TokenResponse
 import com.example.travelapp.data.model.User
 import com.example.travelapp.data.model.WithdrawResponse
 import com.google.android.gms.fido.u2f.api.common.RegisterRequest
 import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.GET
+import retrofit2.http.Header
 import retrofit2.http.POST
 import retrofit2.http.PUT
 
@@ -37,4 +39,11 @@ interface AuthApiService {
 
     @POST("api/auth/withdraw")
     suspend fun withdraw(): Response<WithdrawResponse>
+
+    // 토큰 갱신 API 추가
+    // Authenticator에서 .execute()로 동기 호출하기 위해 Call 사용.
+    @POST("api/auth/refresh")
+    fun refreshTokens(
+        @Header("Authorization") refreshToken: String
+    ): retrofit2.Call<TokenResponse>
 }

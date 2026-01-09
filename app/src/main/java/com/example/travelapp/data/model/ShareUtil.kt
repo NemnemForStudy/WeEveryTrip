@@ -1,12 +1,20 @@
 package com.example.travelapp.data.model
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
+import android.graphics.drawable.BitmapDrawable
 import android.net.Uri
 import android.os.Build
+import android.util.Log
 import android.widget.Toast
+import androidx.compose.runtime.Composable
 import androidx.core.content.FileProvider
+import coil.ImageLoader
+import coil.request.ImageRequest
+import coil.request.SuccessResult
 import com.example.travelapp.BuildConfig
 import com.example.travelapp.util.RetrofitClient
 import com.kakao.sdk.share.ShareClient
@@ -14,6 +22,9 @@ import com.kakao.sdk.template.model.Button
 import com.kakao.sdk.template.model.Content
 import com.kakao.sdk.template.model.FeedTemplate
 import com.kakao.sdk.template.model.Link
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import okhttp3.Dispatcher
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.asRequestBody
@@ -24,198 +35,189 @@ import java.io.IOException
 
 object ShareUtil {
     /**
-     * 이미지(지도 캡쳐)와 텍스트를 함께 SNS에 공유.
-     * @param context 안드로이드 시스템 기능을 사용하기 위한 맥락 정보
-     * @param bitmap 네이버 지도에서 캡처한 비트맵 이미지 데이터
-     * @param shareText 링크와 닉네임이 포함된 홍보 문구
-     */
-
-    fun sharePost(context: Context, bitmap: Bitmap, shareText: String) {
-        // 메모리에 있는 이미지를 실제 파일로 저장하고 그 주소 가져옴
-        val imageUrl = saveBitmapToCache(context, bitmap)
-        if(imageUrl != null) {
-            // Intent 생성. 인텐트는 다른 앱에게 전송할 메시지 박스
-            val intent = Intent(Intent.ACTION_SEND).apply {
-                // 이미지와 텍스트를 동시에 보낼 때 사용하는 표준 MIME
-                type = "image/*"
-
-                // 공유창에 함께 들어갈 텍스트 담음.
-                putExtra(Intent.EXTRA_TEXT, shareText)
-
-                // 공유할 이미지 파일의 주소 담음.
-                putExtra(Intent.EXTRA_STREAM, imageUrl)
-
-                // 파일을 받는 앱에게 "이 파일을 읽어도 좋다" 는 임시 권한 부여
-                // 이 설정 없으면 상대방 앱에서 보안 에러가 나며 이미지 보이지 않음.
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            }
-
-            // 시스템 공유창 띄움
-            context.startActivity(Intent.createChooser(intent, "ModuTrip 여행 공유"))
-        }
-    }
-
-    /**
      * 비트맵 이미지를 앱 내부 임시 폴더에 저장
      */
     private fun saveBitmapToCache(context: Context, bitmap: Bitmap): Uri? {
         return try {
-            // 앱 전용 캐시 디렉토리에 'shared_images' 라는 폴더 지정
-            val cachePath = File(context.cacheDir, "shared_images")
-            cachePath.mkdirs() // 폴더 없으면 생성
+            val cachePath = File(context.cacheDir, "shared_images").apply { mkdirs() }
+            val file = File(cachePath, "map_snapshot_${System.currentTimeMillis()}.jpg")
+            FileOutputStream(file).use { bitmap.compress(Bitmap.CompressFormat.JPEG, 100, it) }
+            FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+        } catch (e: Exception) { null }
+    }
 
-            // 폴더 안에 파일명 생성
-            // saveBitmapToCache 함수 내부
-            val file = File(cachePath, "temp_share_${System.currentTimeMillis()}.jpg") // 파일명 중복 방지를 위해 시간값 추가
-            val stream = FileOutputStream(file)
+    suspend fun shareToInstagramWithMap(
+        context: Context,
+        mapBitmap: Bitmap,   // 방금 찍은 지도 비트맵
+        imageUrls: List<String> // 서버에 있는 원본 사진들
+    ) {
+        withContext(Dispatchers.Main) {
+            Toast.makeText(context, "인스타그램 연결 중...", Toast.LENGTH_SHORT).show()
+        }
 
-            // 비트맵 데이터 JPEG 형식으로 압축해 파일에 기록
-            bitmap.compress(Bitmap.CompressFormat.JPEG, 90, stream)
-            stream.close()
+        val uris = arrayListOf<Uri>()
 
-            // FileProvider 통해 파일을 가리키는 안전한 Content Uri 생성
-            // 두 번째 인자인 authrities는 메니페스트에 적은 '${applicationId}.fileprovider' 와 정확히 일치해야함.
-            FileProvider.getUriForFile(
-                context,
-                "${context.packageName}.fileprovider",
-                file
-            )
-        } catch (e: IOException) {
-            e.printStackTrace()
-            null
+        // 1. 지도 스냅샷을 먼저 파일로 저장해서 Uri 추가 (0번 장)
+        saveBitmapToCache(context, mapBitmap)?.let { uris.add(it) }
+
+        // 2. 나머지 원본 사진들을 다운로드해서 Uri 추가 (1번 장 ~)
+        withContext(Dispatchers.IO) {
+            imageUrls.forEachIndexed { index, url ->
+                downloadImageToUri(context, url, "share_img_$index")?.let { uris.add(it) }
+            }
+        }
+
+        if (uris.isEmpty()) return
+
+        // 3. 인스타그램 앱으로 다중 전송 (ACTION_SEND_MULTIPLE)
+        val intent = Intent(Intent.ACTION_SEND_MULTIPLE).apply {
+            type = "image/*"
+            putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris)
+            setPackage("com.instagram.android")
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+
+        try {
+            context.startActivity(intent)
+        } catch (e: Exception) {
+            context.startActivity(Intent.createChooser(intent, "공유하기"))
         }
     }
 
     // 카카오톡 전용 버튼 공유
     fun shareToKakao(context: Context, post: Post) {
-        val finalImageUrl = toFullUrl(post.imgUrl) ?: ""
-        android.util.Log.d("KAKAO_SHARE", "전달되는 이미지 URL: $finalImageUrl") // 로그 찍어보기
-        if(ShareClient.instance.isKakaoTalkSharingAvailable(context)) {
-            val feed = FeedTemplate(
-                content = Content(
-                    title = post.title,
-                    description = "${post.nickname}님의 여행기를 확인해보세요!",
-                    imageUrl = finalImageUrl, // 게시글 대표 이미지
-                    link = Link(androidExecutionParams = mapOf("postId" to post.id))
-                ),
-                buttons = listOf(
-                    Button(
-                        "앱에서 보기",
-                        Link(androidExecutionParams = mapOf("postId" to post.id))
-                    )
+        val feedTemplate = FeedTemplate(
+            content = Content(
+                title = post.title,
+                description = "${post.nickname}님의 여행기를 확인해보세요!",
+                imageUrl = post.imgUrl ?: "", // 게시글 대표 이미지
+                link = Link(androidExecutionParams = mapOf("postId" to post.id))
+            ),
+            buttons = listOf(
+                Button(
+                    "여행 경로 보기",
+                    Link(androidExecutionParams = mapOf("postId" to post.id))
                 )
             )
+        )
 
-            ShareClient.instance.shareDefault(context, feed) { sharingResult, error ->
-                if(error != null) {
-                    // 에러 시 일반 공유로 유도
-                    Toast.makeText(context, "카카오 공유 실패, 일반 공유를 이용해주세요.", Toast.LENGTH_SHORT).show()
-                } else if(sharingResult != null) {
-                    context.startActivity(sharingResult.intent)
-                }
+        ShareClient.instance.shareDefault(context, feedTemplate) { sharingResult, error ->
+            if (error != null) {
+                Log.e("KakaoShare", "공유 실패", error)
+            } else if (sharingResult != null) {
+                context.startActivity(sharingResult.intent)
             }
-        } else {
-            // 카카오톡 없으면 웹 공유 등 시도하거나 안내
-            Toast.makeText(context, "카카오톡이 설치되어 있지 않습니다.", Toast.LENGTH_SHORT).show()
         }
     }
 
     // 인스타 스토리로 공유
-    fun shareToInstagramFeed(context: Context, bitmap: Bitmap) {
-        // 비트맵 임시 파일로 저장
-        val imageUri = saveBitmapToCache(context, bitmap) ?: return
+    suspend fun shareToInstagram(context: Context, imageUrls: List<String>) {
+        if (imageUrls.isEmpty()) {
+            withContext(Dispatchers.Main) {
+                Toast.makeText(context, "공유할 사진이 없습니다.", Toast.LENGTH_SHORT).show()
+            }
+            return
+        }
 
-        // 스토리 전용 액션이 아닌 표준 SEND 액션 사용해야 한다.
-        val intent = Intent(Intent.ACTION_SEND).apply {
-            type = "image/*"
-            // 인스타그램에서 파일을 읽을 수 있도록 임시 권한 부여
-            putExtra(Intent.EXTRA_STREAM, imageUri)
+        withContext(Dispatchers.Main) {
+            Toast.makeText(context, "인스타그램으로 연결 중...", Toast.LENGTH_SHORT).show()
+        }
+
+        val uris = arrayListOf<Uri>()
+
+        // 1. 모든 사진을 로컬 캐시로 다운로드 (Uri 리스트 생성)
+        withContext(Dispatchers.IO) {
+            imageUrls.forEachIndexed { index, url ->
+                downloadImageToUri(context, url, "share_img_$index")?.let { uris.add(it) }
+            }
+        }
+
+        if (uris.isEmpty()) return
+
+        // 2. 사진 장수에 따라 Intent 액션 결정
+        val intent = if (uris.size == 1) {
+            Intent(Intent.ACTION_SEND).apply {
+                type = "image/*"
+                putExtra(Intent.EXTRA_STREAM, uris[0])
+            }
+        } else {
+            Intent(Intent.ACTION_SEND_MULTIPLE).apply {
+                type = "image/*"
+                putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris)
+            }
+        }
+        // 3. 인스타그램 앱 패키지 지정 및 권한 부여
+        intent.apply {
             setPackage("com.instagram.android")
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
-        context.grantUriPermission("com.instagram.android", imageUri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+
         try {
             context.startActivity(intent)
         } catch (e: Exception) {
-            // 인스타 앱이 없을 경우 일반 공유창 띄우기
+            // 인스타그램 앱이 없는 경우 시스템 공유창 활용
             val chooser = Intent.createChooser(intent, "공유하기")
             context.startActivity(chooser)
         }
     }
 
-    private fun toFullUrl(urlOrPath: String?): String? {
-        if(urlOrPath.isNullOrBlank()) return null
-        if(urlOrPath.startsWith("http")) return urlOrPath
-        // 현재 사용 중인 ngrok 주소 가져옴
-        val baseUrl = resolveBaseUrlForDevice().trimEnd('/')
-        val purePath = urlOrPath.trimStart('/')
-        val fullUrl = "$baseUrl/$purePath"
-        android.util.Log.d("KAKAO_DEBUG", "최종 변환된 전체 주소: $fullUrl")
-        return fullUrl
+    // 이미지 URL 다운로드 해 URI 반환하는 헬퍼 함수
+    private suspend fun downloadImageToUri(context: Context, url: String, fileName: String): Uri? {
+        return try {
+            val loader = ImageLoader(context)
+            val request = ImageRequest.Builder(context).data(url).allowHardware(false).build()
+            val result = (loader.execute(request) as? SuccessResult)?.drawable
+            val bitmap = (result as? BitmapDrawable)?.bitmap ?: return null
+
+            val cachePath = File(context.cacheDir, "shared_images").apply { mkdirs() }
+            val file = File(cachePath, "$fileName.jpg")
+            FileOutputStream(file).use { bitmap.compress(Bitmap.CompressFormat.JPEG, 100, it) }
+            FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+        } catch (e: Exception) { null }
     }
 
-    private fun resolveBaseUrlForDevice(): String {
-        val isEmulator = (Build.FINGERPRINT.startsWith("generic")
-                || Build.FINGERPRINT.startsWith("unknown")
-                || Build.MODEL.contains("google_sdk")
-                || Build.MODEL.contains("Emulator")
-                || Build.MODEL.contains("Android SDK built for x86")
-                || Build.MANUFACTURER.contains("Genymotion")
-                || (Build.BRAND.startsWith("generic") && Build.DEVICE.startsWith("generic")))
-
-        val phoneBaseUrl = runCatching {
-            BuildConfig::class.java.getField("PHONE_BASE_URL").get(null) as String
-        }.getOrNull()
-
-        val raw = if(isEmulator) {
-            BuildConfig.BASE_URL
-        } else {
-            phoneBaseUrl?.takeIf { it.isNotBlank() } ?: BuildConfig.BASE_URL
+    suspend fun shareToInstagramWithMap(
+        context: Context,
+        mapBitmap: Bitmap,   // 전체 마커가 찍힌 지도 비트맵
+        imageUrls: List<String>,
+        postId: String
+    ) {
+        val shareText = "ModuTrip에서 이 여행기를 확인해보세요!\nhttps://modutrip.com/post/$postId"
+        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        val clip = ClipData.newPlainText("ModuTrip Post", shareText)
+        clipboard.setPrimaryClip(clip)
+        withContext(Dispatchers.Main) {
+            Toast.makeText(context, "본문 내용이 복사되었습니다. 인스타에서 붙여넣기 해주세요!", Toast.LENGTH_LONG).show()
         }
 
-        return raw.trimEnd('/') + "/"
-    }
+        val uris = arrayListOf<Uri>()
 
-    suspend fun uploadMapCapture(context: Context, bitmap: Bitmap, token: String): String? {
-        return try {
-            // 비트맵 임시 파일로 저장
-            val file = File(context.cacheDir, "share_map_temp.jpg")
-            val stream = FileOutputStream(file)
-            val isCompressed = bitmap.compress(Bitmap.CompressFormat.JPEG, 90, stream)
-            stream.close()
+        // 1. 지도 스냅샷 캐시 저장 (0번 장)
+        saveBitmapToCache(context, mapBitmap)?.let { uris.add(it) }
 
-            if (!isCompressed) {
-                android.util.Log.e("UPLOAD_DEBUG", "비트맵 압축 실패")
-                return null
+        // 2. 원본 사진들 다운로드 및 캐시 저장 (1번 장 ~)
+        withContext(Dispatchers.IO) {
+            imageUrls.forEachIndexed { index, url ->
+                downloadImageToUri(context, url, "share_img_$index")?.let { uris.add(it) }
             }
+        }
 
-            val requestFile = file.asRequestBody("image/jpeg".toMediaTypeOrNull())
-            val body = MultipartBody.Part.createFormData("images", file.name,requestFile)
-            val imageList = listOf(body)
-            val response = RetrofitClient.postApiService.uploadImages("Bearer $token", imageList)
+        if (uris.isEmpty()) return
 
-            if (response.isSuccessful) {
-                val responseBody = response.body()
-                // 서버 응답 DTO에서 urls를 제대로 가져오는지 확인
-                val uploadedUrl = responseBody?.urls?.firstOrNull()
+        // 4. 인스타그램 다중 전송 인텐트 구성
+        val intent = Intent(Intent.ACTION_SEND_MULTIPLE).apply {
+            type = "image/*"
+            putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
 
-                if (uploadedUrl == null) {
-                    // HTTP 200은 왔지만, JSON 파싱 결과가 null인 경우 (Key값 불일치 가능성)
-                    android.util.Log.e("UPLOAD_DEBUG", "서버 응답 성공했으나 URL이 비어있음. JSON 구조 확인 필요: $responseBody")
-                } else {
-                    android.util.Log.d("UPLOAD_DEBUG", "최종 업로드 성공 주소: $uploadedUrl")
-                }
-                uploadedUrl
-            } else {
-                // [STEP 4] 서버 에러 발생 (4xx, 5xx)
-                val errorCode = response.code()
-                val errorMessage = response.errorBody()?.string()
-                android.util.Log.e("UPLOAD_DEBUG", "서버 에러 발생! 코드: $errorCode, 메시지: $errorMessage")
-                null
-            }
+        try {
+            val chooser = Intent.createChooser(intent, "인스타그램 공유 선택")
+            context.startActivity(intent)
         } catch (e: Exception) {
-            e.printStackTrace()
-            null
+            // 인스타 미설치 시 시스템 공유창
+            val chooser = Intent.createChooser(intent, "ModuTrip 공유하기")
+            context.startActivity(chooser)
         }
     }
 }

@@ -1,6 +1,8 @@
 package com.example.travelapp.ui.Detail
 
+import android.graphics.Bitmap
 import android.os.Build
+import android.util.Log
 import androidx.annotation.RequiresApi
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -27,7 +29,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.zIndex
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
@@ -36,18 +37,17 @@ import com.example.travelapp.R
 import com.example.travelapp.data.model.Post
 import com.example.travelapp.data.model.RoutePoint
 import com.example.travelapp.data.model.ShareUtil
-import com.example.travelapp.data.model.ShareUtil.uploadMapCapture
-import com.example.travelapp.data.model.comment.Comment
-import com.example.travelapp.ui.navigation.Screen
+import com.example.travelapp.ui.Detail.components.InstagramShareCard
+import com.example.travelapp.ui.Detail.components.InstagramStorySticker
 import com.example.travelapp.util.*
 import com.naver.maps.geometry.LatLng
 import com.naver.maps.geometry.LatLngBounds
 import com.naver.maps.map.CameraUpdate
 import com.naver.maps.map.compose.*
 import com.naver.maps.map.util.MarkerIcons
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-
 enum class ShareTarget { KAKAO, INSTAGRAM }
 
 val PrimaryBlue = Color(0xFF4A90E2)
@@ -86,8 +86,17 @@ fun PostDetailScreen(
 
                 LaunchedEffect(post!!.id, routePointsByDay, currentDayIndex) {
                     val dayKeys = routePointsByDay.keys.sorted()
-                    val selectedPoints = dayKeys.getOrNull(currentDayIndex)?.let { routePointsByDay[it] } ?: emptyList()
-                    if (selectedPoints.size >= 2) viewModel.fetchRoute(selectedPoints) else viewModel.clearRoute()
+                    val currentDayNum = dayKeys.getOrNull(currentDayIndex)
+
+                    val pointsToRoute = post!!.imageLocations
+                        .filter { it.dayNumber == currentDayNum && it.latitude != null && it.longitude != null }
+                        .map { RoutePoint(latitude = it.latitude!!, longitude = it.longitude!!) }
+
+                    if (pointsToRoute.size >= 2) {
+                        viewModel.fetchRoute(pointsToRoute)
+                    } else {
+                        viewModel.clearRoute()
+                    }
                 }
 
                 PostDetailContent(
@@ -134,6 +143,7 @@ fun PostDetailContent(
     onSnapshotDone: () -> Unit,
     userToken: String?
 ) {
+    val context = LocalContext.current
     var showShareSheet by remember { mutableStateOf(false) }
     val hasHeader = post.images?.isNotEmpty() == true || post.imageLocations.isNotEmpty()
     val coroutineScope = rememberCoroutineScope()
@@ -162,6 +172,11 @@ fun PostDetailContent(
     // 2. 하단 리스트 상태 (PagerState)
     val pagerState = rememberPagerState(pageCount = { markerItems.size })
 
+    LaunchedEffect(currentDayIndex) {
+        if(markerItems.isNotEmpty()) {
+            pagerState.animateScrollToPage(0) // 부드럽게 넘어가게
+        }
+    }
     Scaffold(
         containerColor = Color.White,
         topBar = {
@@ -191,7 +206,26 @@ fun PostDetailContent(
                         },
                         shareTarget = shareTarget,
                         onSnapshotDone = onSnapshotDone,
-                        token = userToken
+                        token = userToken,
+                        onMapSnapshotCaptured = { mapBitmap ->
+                            coroutineScope.launch {
+                                try {
+                                    val originalImages = post.images ?: emptyList()
+
+                                    // 이제 에러 없이 호출됩니다.
+                                    ShareUtil.shareToInstagramWithMap(
+                                        context = context,
+                                        mapBitmap = mapBitmap,
+                                        imageUrls = originalImages,
+                                        postId = post.id // 딥링크 생성을 위한 ID
+                                    )
+                                } catch (e: Exception) {
+                                    Log.e("ShareError", "공유 중 오류 발생", e)
+                                } finally {
+                                    onSnapshotDone() // 성공하든 실패하든 공유 상태 초기화
+                                }
+                            }
+                        }
                     )
                 }
 
@@ -236,10 +270,17 @@ fun PostDetailContent(
     }
 
     if (showShareSheet) {
-        ModalBottomSheet(onDismissRequest = { showShareSheet = false }, containerColor = Color.White) {
+        ModalBottomSheet(onDismissRequest = { showShareSheet = false }) {
             Row(Modifier.fillMaxWidth().padding(bottom = 40.dp), Arrangement.SpaceEvenly) {
-                ShareOptionItem("카카오톡", R.drawable.kakao_icon, Color(0xFFFFEB3B)) { showShareSheet = false; onSharedClick(ShareTarget.KAKAO) }
-                ShareOptionItem("인스타그램", R.drawable.instagram_icon, Color.Transparent) { showShareSheet = false; onSharedClick(ShareTarget.INSTAGRAM) }
+                ShareOptionItem("카카오톡", R.drawable.kakao_icon, Color(0xFFFFEB3B)) {
+                    showShareSheet = false
+                    onSharedClick(ShareTarget.KAKAO)
+                }
+                // ✅ 인스타그램 하나로 통합
+                ShareOptionItem("인스타그램", R.drawable.instagram_icon, Color.White) {
+                    showShareSheet = false
+                    onSharedClick(ShareTarget.INSTAGRAM)
+                }
             }
         }
     }
@@ -255,16 +296,21 @@ fun PostMapHeader(
     onMarkerClick: (Int) -> Unit,
     shareTarget: ShareTarget?,
     onSnapshotDone: () -> Unit,
-    token: String?
+    token: String?,
+    onMapSnapshotCaptured: (Bitmap) -> Unit
 ) {
     val scope = rememberCoroutineScope()
     val cameraPositionState = rememberCameraPositionState()
     val routeLatLngs = remember(routePoints) { routePoints.map { LatLng(it.latitude, it.longitude) } }
 
-    // 경로 애니메이션용 (전체 좌표를 다 보여주기 위해 take 사용 안 함)
-    var animatedProgress by remember(markerItems, routeLatLngs) { mutableStateOf(0) }
-    val visibleCoords = remember(routeLatLngs, animatedProgress) { routeLatLngs.take(animatedProgress) }
+    val isSharingMode = shareTarget == ShareTarget.INSTAGRAM
 
+    var animatedProgress by remember(markerItems, routeLatLngs) { mutableStateOf(0) }
+
+    // 노출할 경로 좌표 계산 (공유 시에는 애니메이션 무시하고 전체 노출)
+    val visibleCoords = remember(routeLatLngs, animatedProgress, isSharingMode) {
+        if (isSharingMode) routeLatLngs else routeLatLngs.take(animatedProgress)
+    }
     // 1. 초기 셋업: 지도가 켜질 때 전체 경로가 다 보이도록 fitBounds
     LaunchedEffect(markerItems, routeLatLngs) {
         val allPoints: List<LatLng> = (markerItems.mapNotNull { it.position } + routeLatLngs)
@@ -272,14 +318,15 @@ fun PostMapHeader(
             if (allPoints.size >= 2) {
                 val bounds = LatLngBounds.Builder().apply { allPoints.forEach { include(it) } }.build()
                 cameraPositionState.animate(CameraUpdate.fitBounds(bounds, 150))
-            } else {
-                cameraPositionState.animate(CameraUpdate.scrollAndZoomTo(allPoints.first(), 15.0))
             }
 
             // 경로 애니메이션 실행
-            if (routeLatLngs.size >= 2) {
+            if (!isSharingMode && routeLatLngs.size >= 2) {
                 animatedProgress = 0
-                for (i in 1..50) { animatedProgress = (routeLatLngs.size * (i / 50f)).toInt(); delay(16) }
+                for (i in 1..50) {
+                    animatedProgress = (routeLatLngs.size * (i / 50f)).toInt();
+                    delay(16)
+                }
                 animatedProgress = routeLatLngs.size
             }
         }
@@ -287,7 +334,7 @@ fun PostMapHeader(
 
     // 2. 카드를 넘길 때: 선택된 장소로 카메라 부드럽게 이동
     LaunchedEffect(selectedPageIndex) {
-        if (markerItems.isNotEmpty()) {
+        if (!isSharingMode && markerItems.isNotEmpty()) {
             markerItems.getOrNull(selectedPageIndex)?.position?.let { target ->
                 cameraPositionState.animate(CameraUpdate.scrollTo(target))
             }
@@ -300,44 +347,54 @@ fun PostMapHeader(
             cameraPositionState = cameraPositionState,
             uiSettings = MapUiSettings(isZoomControlEnabled = true, isLocationButtonEnabled = false, isLogoClickEnabled = false)
         ) {
-            // [핵심 로직] 선택된 카드의 마커 딱 하나만 렌더링
-            markerItems.getOrNull(selectedPageIndex)?.let { selectedItem ->
-                selectedItem.position?.let { latLng ->
+            // 마커 렌더링
+            markerItems.forEachIndexed { index, item ->
+                // ✅ 공유 중이면 전체 마커를, 평소엔 선택된 마커만 그림
+                if (isSharingMode || index == selectedPageIndex) {
                     val icon = rememberClusteredPhotoIcon(
-                        imageUrl = selectedItem.imageUrl,
-                        index = selectedItem.index,
-                        count = 1, // 개별 모드이므로 1 고정
-                        sizePx = 200,
-                        isSelected = true
+                        imageUrl = item.imageUrl,
+                        index = item.index,
+                        count = 1,
+                        sizePx = 100,
+                        isSelected = index == selectedPageIndex
                     )
-                    Marker(
-                        state = MarkerState(position = selectedItem.position),
-                        icon = icon ?: MarkerIcons.BLUE,
-                        zIndex = 1000,
-                        anchor = androidx.compose.ui.geometry.Offset(0.5f, 0.5f)
-                    )
+                    item.position?.let { pos ->
+                        Marker(
+                            state = MarkerState(position = pos),
+                            icon = icon ?: MarkerIcons.BLUE,
+                            anchor = androidx.compose.ui.geometry.Offset(0.5f, 0.5f),
+                            zIndex = if (index == selectedPageIndex) 100 else 0,
+                            onClick = {
+                                onMarkerClick(index)
+                                true
+                            }
+                        )
+                    }
                 }
             }
 
-            // [경로선] 필터링과 관계없이 항상 전체 경로 노출
             if (visibleCoords.size >= 2) {
                 PolylineOverlay(
                     coords = visibleCoords,
                     color = Color(0xFF21B6FF),
                     width = 6.dp,
-                    capType = LineCap.Round,
-                    joinType = LineJoin.Round
                 )
             }
 
-            // 스냅샷 처리...
+            if (visibleCoords.size >= 2) {
+                PolylineOverlay(
+                    coords = visibleCoords,
+                    color = Color(0xFF21B6FF),
+                    width = 6.dp
+                )
+            }
+
+            // PostMapHeader 내부 MapEffect 부분
             MapEffect(key1 = shareTarget) { map ->
-                if (shareTarget != null) map.takeSnapshot { bitmap ->
-                    scope.launch {
-                        try {
-                            if (shareTarget == ShareTarget.INSTAGRAM) ShareUtil.shareToInstagramFeed(map.context, bitmap)
-                            else if (token != null) uploadMapCapture(map.context, bitmap, token)?.let { ShareUtil.shareToKakao(map.context, post.copy(imgUrl = it)) }
-                        } finally { onSnapshotDone() }
+                if (isSharingMode) {
+                    delay(400) // 전체 마커와 경로가 그려질 시간을 넉넉히 줌
+                    map.takeSnapshot { bitmap ->
+                        onMapSnapshotCaptured(bitmap)
                     }
                 }
             }

@@ -74,17 +74,23 @@ open class PostRepository @Inject constructor(
             val imageLocationsBody = imageLocationsJson
                 ?.toRequestBody("application/json".toMediaTypeOrNull())
 
-            val coordinatesBody = if(latitude != null && longitude != null) {
-                val geoPoint = GeoJsonPoint(
-                    type = "Point",
-                    coordinates = listOf(longitude, latitude)
-                )
-                val jsonString = Json.encodeToString(geoPoint)
-                jsonString.toRequestBody("application/json".toMediaTypeOrNull())
-            } else {
-                null
+            val parsedList = try {
+                imageLocationsJson?.let {
+                    Json.decodeFromString<List<RoutePoint>>(it)
+                } ?: emptyList()
+            } catch (e: Exception) {
+                emptyList()
             }
+            val finalLat = latitude ?: parsedList.firstOrNull { it.latitude != 0.0 }?.latitude ?: 0.0
+            val finalLng = longitude ?: parsedList.firstOrNull { it.longitude != 0.0 }?.longitude ?: 0.0
 
+            val geoPoint = GeoJsonPoint(
+                type = "Point",
+                coordinates = listOf(finalLng, finalLat) // [경도, 위도] 순서
+            )
+
+            val coordinatesBody = Json.encodeToString(geoPoint)
+                .toRequestBody("application/json".toMediaTypeOrNull())
             //  이미지 압축 및 변환 로직
             // null 이 반환되면 항목은 리스트에서 제외함. 성공한 이미지만 모아서 리스트로 만듦.
             val imageParts = imageUris.mapNotNull { uri ->

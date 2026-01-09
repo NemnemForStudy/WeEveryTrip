@@ -18,8 +18,8 @@ import com.naver.maps.map.overlay.OverlayImage
 fun rememberClusteredPhotoIcon(
     imageUrl: String?,
     index: Int,         // 방문 순서 추가
-    count: Int,         // 해당 지점 사진 수
-    sizePx: Int,
+    count: Int = 1,         // 해당 지점 사진 수
+    sizePx: Int = 100,
     isSelected: Boolean
 ): OverlayImage? {
     val context = LocalContext.current

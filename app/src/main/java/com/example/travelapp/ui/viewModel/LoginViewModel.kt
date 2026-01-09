@@ -5,6 +5,7 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.travelapp.BuildConfig
+import com.example.travelapp.data.api.SessionManager
 import com.example.travelapp.data.repository.AuthRepository
 import com.example.travelapp.util.TokenManager
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount
@@ -42,7 +43,8 @@ sealed class LoginEvent {
 @HiltViewModel
 class LoginViewModel @Inject constructor(
     private val authRepository: AuthRepository,
-    private val tokenManager: TokenManager
+    private val tokenManager: TokenManager,
+    private val sessionManager: SessionManager
     // NaverAuthApiService는 이제 필요 없습니다. (앱에서 프로필 조회 안 함)
 ) : ViewModel() {
 
@@ -271,7 +273,15 @@ class LoginViewModel @Inject constructor(
                     profileImage = profileImage
                 )
 
-                result.onSuccess {
+                result.onSuccess { response ->
+                    tokenManager.saveAccessToken(response.accessToken)
+                    tokenManager.saveRefreshToken(response.refreshToken)
+                    tokenManager.saveToken(response.accessToken)
+
+                    // 세션 매니저를 통해 '로그인 됨' 상태로 변경함.
+                    // 이렇게 해야 MainActivity의 LaunchEffect가 감지하고 홈으로 보냄.
+                    sessionManager.resetSession()
+
                     _loginUiState.value = LoginUiState(isLoading = false)
                     _loginEvent.emit(LoginEvent.LoginSuccess)
                 }.onFailure { e ->

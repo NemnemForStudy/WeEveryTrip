@@ -1,18 +1,15 @@
 package com.example.travelapp.di
 
 import android.content.Context
-import android.net.ConnectivityManager
-import android.net.NetworkCapabilities
 import android.os.Build
-import android.util.Log
 import com.example.travelapp.BuildConfig
-import com.example.travelapp.util.AuthInterceptor
 import com.example.travelapp.data.api.AuthApiService
+import com.example.travelapp.data.api.AuthAuthenticator
+import com.example.travelapp.data.api.AuthInterceptor
 import com.example.travelapp.data.api.CommentApiService
 import com.example.travelapp.data.api.InquiryApiService
 import com.example.travelapp.data.api.NaverAuthApiService
 import com.example.travelapp.data.api.PostApiService
-import com.kakao.sdk.auth.AuthApi
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -58,12 +55,12 @@ object NetworkModule {
     @Singleton
     @Named("AuthOkHttpClient")
     fun provideAuthOkHttpClient(
-        loggingInterceptor: HttpLoggingInterceptor,
-        authInterceptor: AuthInterceptor
+        authInterceptor: AuthInterceptor,
+        authAuthenticator: AuthAuthenticator
     ): OkHttpClient {
         return OkHttpClient.Builder()
-            .addInterceptor(loggingInterceptor)
             .addInterceptor(authInterceptor)
+            .authenticator(authAuthenticator)
             .build()
     }
 

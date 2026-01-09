@@ -12,6 +12,9 @@ data class SocialLoginRequest(
     @SerializedName("email")
     val email: String,
 
+    @SerializedName("token")
+    val token: String,
+
     @SerializedName("social_provider")
     val socialProvider: String,
 
@@ -35,8 +38,11 @@ data class SocialLoginResponse(
     @SerializedName("message")
     val message: String,
 
-    @SerializedName("token")
-    val token: String,
+    @SerializedName("token") // 백엔드에서 "token"으로 보내면 그대로 둡니다.
+    val accessToken: String,
+
+    @SerializedName("refreshToken")
+    val refreshToken: String,
 
     @SerializedName("user")
     val user: User

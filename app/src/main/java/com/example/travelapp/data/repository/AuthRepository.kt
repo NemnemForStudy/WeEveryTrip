@@ -20,10 +20,18 @@ class AuthRepository @Inject constructor(
     // ViewModel에서 함수 호출하게 됨.
     // 파라미터로 받은 SocialLoginRequest 객체를 ApiService에 그대로 전달
     // Request(요청서)를 서버로 보내고 Response에 담에서 그대로 되돌려줌.
-    suspend fun socialLogin(provider: String, token: String, email: String, socialId: String, nickname: String?, profileImage: String?): Result<Boolean> {
+    suspend fun socialLogin(
+        provider: String,
+        token: String,
+        email: String,
+        socialId: String,
+        nickname: String?,
+        profileImage: String?
+    ): Result<SocialLoginResponse> {
         return try {
             val request = SocialLoginRequest(
                 email = email,
+                token = token,
                 socialProvider = provider,
                 socialId = socialId,
                 nickname = nickname,
@@ -32,9 +40,7 @@ class AuthRepository @Inject constructor(
             val response = authApiService.socialLogin(request)
 
             if(response.isSuccessful && response.body() != null) {
-                val tokenString = response.body()!!.token
-                tokenManager.saveToken(tokenString)
-                Result.success(true)
+                Result.success(response.body()!!)
             } else {
                 Result.failure(RuntimeException("소셜 로그인 실패: ${response.code()}"))
             }
@@ -45,28 +51,6 @@ class AuthRepository @Inject constructor(
 
     suspend fun getUserId(): Result<String> {
         return getMyProfile().map { user -> user.id.toString() }
-    }
-
-    // 일반 로그인
-    suspend fun login(email: String, pass: String): Result<Boolean> {
-        return try {
-            val request = SocialLoginRequest(
-                email = email,
-                socialProvider = "EMAIL",  // 또는 적절한 provider 값
-                socialId = email  // 이메일 로그인의 경우 email을 socialId로 사용
-            )
-            val response = authApiService.socialLogin(request)
-
-            if(response.isSuccessful && response.body() != null) {
-                val tokenString = response.body()!!.token
-                tokenManager.saveToken(tokenString)
-                Result.success(true)
-            } else {
-                Result.failure(RuntimeException("일반 로그인 실패"))
-            }
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
     }
 
     suspend fun getMyProfile(): Result<User> {
