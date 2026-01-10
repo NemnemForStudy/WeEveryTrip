@@ -5,6 +5,7 @@ import com.example.travelapp.data.api.AuthApiService
 import com.example.travelapp.data.model.Setting.NotificationRequest
 import com.example.travelapp.data.model.SocialLoginRequest
 import com.example.travelapp.data.model.SocialLoginResponse
+import com.example.travelapp.data.model.UpdateProfileRequest
 import com.example.travelapp.data.model.User
 import com.example.travelapp.util.TokenManager
 import retrofit2.Response
@@ -106,6 +107,26 @@ class AuthRepository @Inject constructor(
                 Result.success(Unit)
             } else {
                 Result.failure(kotlin.RuntimeException("회원 탈퇴 실패: ${response.message()}"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun updateProfile(nickname: String, profileImageUrl: String?): Result<Unit> {
+        return try {
+            val token = tokenManager.getToken() ?: return Result.failure(Exception("토큰 없음"))
+            val response = authApiService.updateProfile(
+                token = "Bearer $token",
+                request = UpdateProfileRequest(nickname, profileImageUrl)
+            )
+
+            if (response.isSuccessful) { // ✅ Response 객체이므로 isSuccessful 확인
+                val body = response.body()
+                if (body?.success == true) Result.success(Unit)
+                else Result.failure(Exception(body?.message ?: "수정 실패"))
+            } else {
+                Result.failure(Exception("서버 에러: ${response.code()}"))
             }
         } catch (e: Exception) {
             Result.failure(e)

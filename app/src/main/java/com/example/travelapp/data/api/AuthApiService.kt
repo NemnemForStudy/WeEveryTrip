@@ -6,9 +6,9 @@ import com.example.travelapp.data.model.Setting.NotificationRequest
 import com.example.travelapp.data.model.SocialLoginRequest
 import com.example.travelapp.data.model.SocialLoginResponse
 import com.example.travelapp.data.model.TokenResponse
+import com.example.travelapp.data.model.UpdateProfileRequest
 import com.example.travelapp.data.model.User
 import com.example.travelapp.data.model.WithdrawResponse
-import com.google.android.gms.fido.u2f.api.common.RegisterRequest
 import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.GET
@@ -46,4 +46,10 @@ interface AuthApiService {
     fun refreshTokens(
         @Header("Authorization") refreshToken: String
     ): retrofit2.Call<TokenResponse>
+
+    @POST("api/auth/updateProfile")
+    suspend fun updateProfile(
+        @Header("Authorization") token: String,
+        @Body request: UpdateProfileRequest
+    ): Response<ApiResponse<Unit>>
 }

@@ -1,5 +1,8 @@
 package com.example.travelapp.ui.home
 
+import android.util.Log
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.travelapp.data.model.Post
@@ -62,14 +65,16 @@ open class FeedViewModel @Inject constructor(
      * 5. 로딩 상태를 false로 설정
      */
     fun loadPosts(forceRefresh: Boolean = false) {
-        if(_post.value.isNotEmpty() && !forceRefresh) {
+        Log.d("FeedViewModel", "📥 loadPosts 호출됨 (forceRefresh: $forceRefresh, 현재 게시물 수: ${_post.value.size})")
+
+        if (!forceRefresh && _post.value.isNotEmpty()) {
             return
         }
 
         viewModelScope.launch {
             _isLoading.value = true
             _errorMsg.value = null
-
+            Log.d("FeedViewModel", "🌐 서버에 데이터 요청 중...")
             try {
                 val result = postRepository.getAllPosts()
 
@@ -93,7 +98,7 @@ open class FeedViewModel @Inject constructor(
     fun selectCategory(category: String) {
         _selectedCategory.value = category
         _currentPage.value = 1 // 카테고리 변경 시 페이지 초기화
-        loadPosts()
+        loadPosts(forceRefresh = true)
     }
 
     /**

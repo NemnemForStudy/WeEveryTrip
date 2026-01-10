@@ -23,6 +23,11 @@ class AuthAuthenticator @Inject constructor(
     override fun authenticate(route: Route?, response: Response): Request? {
         Log.d("ModuTrip_Auth", "★★★ Authenticator 진입: 401 에러 감지 ★★★")
 
+        if(response.request.url.encodedPath.contains("/api/auth/refresh")) {
+            Log.e("ModuTrip_Auth", "리프레시 토큰 요청 자체가 실패했습니다. 무한 루프 방지를 위해 중단합니다.")
+            sessionManager.logout()
+            return null
+        }
         // 1. 무한 루프 방지 (재시도 횟수가 3번 이상이면 포기)
         if (response.count() >= 3) {
             Log.e("ModuTrip_Auth", "재시도 횟수 초과로 로그아웃 처리합니다.")
@@ -43,6 +48,7 @@ class AuthAuthenticator @Inject constructor(
         val refreshCall = authApiProvider.get().refreshTokens("Bearer $refreshToken")
 
         return try {
+            val refreshCall = authApiProvider.get().refreshTokens("Bearer $refreshToken")
             val refreshResponse = refreshCall.execute()
 
             if (refreshResponse.isSuccessful) {

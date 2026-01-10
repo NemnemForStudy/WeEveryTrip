@@ -1,6 +1,7 @@
 package com.example.travelapp.ui.edit
 
 import android.os.Build
+import android.util.Log
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -55,7 +56,7 @@ fun EditPostScreen(
     val tripDays by viewModel.tripDays.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
     val updateStatus by viewModel.updateStatus.collectAsStateWithLifecycle()
-    val routePoints by viewModel.routePoints.collectAsStateWithLifecycle()
+    val routePoints by viewModel.routePoints.collectAsState()
 
     // 2. 로컬 UI 상태
     var tagsInput by remember { mutableStateOf("") } // 태그는 필요 시 VM 연동
@@ -80,7 +81,9 @@ fun EditPostScreen(
 
     // 3. 게시물 로드 및 결과 처리
     LaunchedEffect(postId) {
-        viewModel.loadPost(postId)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            viewModel.loadPost(postId)
+        }
     }
 
     LaunchedEffect(updateStatus) {
@@ -88,6 +91,15 @@ fun EditPostScreen(
             is EditPostViewModel.UpdateStatus.Success -> {
                 Toast.makeText(context, "게시물이 수정되었습니다!", Toast.LENGTH_SHORT).show()
                 viewModel.resetStatus()
+
+                Log.d("EditPostScreen", "✅ 수정 완료 - 신호 전달 시도")
+
+                navController.previousBackStackEntry?.savedStateHandle?.set("should_refresh", true)
+
+                val signalSet = navController.previousBackStackEntry?.savedStateHandle?.get<Boolean>("should_refresh")
+                Log.d("EditPostScreen", "신호 설정 확인: $signalSet")
+
+
                 navController.popBackStack()
             }
             is EditPostViewModel.UpdateStatus.Error -> {
@@ -133,11 +145,17 @@ fun EditPostScreen(
                     val locations = images.mapNotNull {
                         if (it.latitude != null && it.longitude != null) it.latitude to it.longitude else null
                     }
-                    if (locations.isNotEmpty()) {
+
+                    if (locations.size >= 2) { // 좌표가 2개 이상일 때만 경로 계산
                         mapDialogLocations = locations
                         mapDialogTitle = "Day $day 위치 미리보기"
                         showMapDialog = true
                         viewModel.fetchRoute(locations)
+                    } else if (locations.size == 1) { // 좌표가 1개라면 지도만 띄우고 선은 지움
+                        mapDialogLocations = locations
+                        mapDialogTitle = "Day $day 위치 미리보기"
+                        showMapDialog = true
+                        viewModel.fetchRoute(emptyList())
                     } else {
                         Toast.makeText(context, "위치 정보가 포함된 사진이 없습니다.", Toast.LENGTH_SHORT).show()
                     }
@@ -250,7 +268,9 @@ fun EditPostScreen(
                                     Marker(state = MarkerState(position = LatLng(loc.first, loc.second)), captionText = "사진 ${i + 1}")
                                 }
                                 val polyCoords = routePoints.map { LatLng(it.latitude, it.longitude) }
-                                if (polyCoords.isNotEmpty()) AnimatedPolyline(coords = polyCoords)
+                                if (polyCoords.size >= 2) {
+                                    AnimatedPolyline(coords = polyCoords)
+                                }
                             }
                         }
                     }
@@ -259,17 +279,3 @@ fun EditPostScreen(
         }
     }
 }
-
-//// URL 헬퍼 함수
-//private fun resolveBaseUrlForDevice(): String {
-//    val isEmulator = (Build.FINGERPRINT.startsWith("generic") || Build.MODEL.contains("Emulator"))
-//    val phoneBaseUrl = runCatching { BuildConfig::class.java.getField("PHONE_BASE_URL").get(null) as String }.getOrNull()
-//    val raw = if(isEmulator) BuildConfig.BASE_URL else phoneBaseUrl?.takeIf { it.isNotBlank() } ?: BuildConfig.BASE_URL
-//    return raw.trimEnd('/') + "/"
-//}
-//
-//private fun toFullUrl(urlOrPath: String?): String? {
-//    if(urlOrPath.isNullOrBlank()) return null
-//    if(urlOrPath.startsWith("http")) return urlOrPath
-//    return resolveBaseUrlForDevice() + urlOrPath.trimStart('/')
-//}

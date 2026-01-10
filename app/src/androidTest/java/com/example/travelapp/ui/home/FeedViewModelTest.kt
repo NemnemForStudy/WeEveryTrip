@@ -26,6 +26,9 @@ class FeedViewModel @Inject constructor(
     private val _feedUiState = MutableStateFlow<FeedUiState>(FeedUiState.Loading)
     val feedUiState: StateFlow<FeedUiState> = _feedUiState.asStateFlow()
 
+    private val _posts = MutableStateFlow<List<Post>>(emptyList())
+    val posts: StateFlow<List<Post>> = _posts.asStateFlow()
+
     init {
         // 화면 진입 시 자동으로 데이터 로드
         loadPosts()
@@ -40,6 +43,7 @@ class FeedViewModel @Inject constructor(
             postRepository.getAllPosts()
                 .onSuccess { posts ->
                     _feedUiState.value = FeedUiState.Success(posts)
+                    _posts.value = loadPosts
                 }
                 .onFailure { exception ->
                     _feedUiState.value = FeedUiState.Error(exception.message ?: "알 수 없는 오류")

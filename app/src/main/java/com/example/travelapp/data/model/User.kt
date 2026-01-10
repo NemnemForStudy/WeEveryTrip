@@ -8,7 +8,7 @@ data class User(
     val email: String,
     val nickname: String,
     @SerializedName("profile_image")
-    val profileImage: String? = null,
+    val profileImageUrl: String? = null,
     @SerializedName("created_at")
     val createdAt: String? = null,
     @SerializedName("post_count")

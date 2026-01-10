@@ -1,12 +1,14 @@
 package com.example.travelapp.ui.myPage
 
-import android.content.Intent
 import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -15,16 +17,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.outlined.Article
 import androidx.compose.material.icons.outlined.Help
 import androidx.compose.material.icons.outlined.Logout
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.State
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -35,6 +34,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
@@ -44,10 +44,10 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.rememberNavController
+import coil.compose.AsyncImage
 import com.example.travelapp.ui.components.BottomNavigationBar
-import com.example.travelapp.ui.theme.Beige
-import com.example.travelapp.data.model.User
 import com.example.travelapp.ui.navigation.Screen
+import com.example.travelapp.ui.theme.Beige
 import com.example.travelapp.ui.theme.TextSub
 
 // 1. [로직 담당] ViewModel 연결하고 데이터 준비하는 곳
@@ -57,9 +57,18 @@ fun MyPageScreen(
     viewModel: MyPageViewModel = hiltViewModel()
 ) {
     val userState by viewModel.userState.collectAsState()
-
     var showDeleteDialog by remember { mutableStateOf(false) }
 
+    // 닉네임 수정 다이얼로그 상태
+    var showEditNicknameDialog by remember { mutableStateOf(false) }
+    var tempNickname by remember { mutableStateOf("") }
+
+    val context = LocalContext.current
+    val photoPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri: Uri? ->
+        uri?.let { viewModel.updateProfile(context, null, it) } // 이미지 변경 시 바로 업로드.
+    }
     LaunchedEffect(Unit) {
         viewModel.fetchUserInfo()
     }
@@ -77,7 +86,41 @@ fun MyPageScreen(
     // 이벤트 함수 준비
     val onEditProfileClick = { /* viewModel.onEditProfile() */ }
     val onLogoutClick = { viewModel.logout(navController) }
+    val profileUrl = currentUser?.profileImageUrl
+    val localUri by viewModel.localImageUri.collectAsState()
+    val imageVersion by viewModel.imageVersion.collectAsState()
 
+    if(showEditNicknameDialog) {
+        AlertDialog(
+            onDismissRequest = { showEditNicknameDialog = false },
+            title = { Text("닉네임 변경") },
+            text = {
+                OutlinedTextField(
+                    value = tempNickname,
+                    onValueChange = { tempNickname = it },
+                    label = { Text("새 닉네임") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.updateProfile(context, tempNickname, null)
+                        showEditNicknameDialog = false
+                    },
+                    // ✅ 현재 닉네임과 똑같거나 비어있으면 클릭 방지
+                    enabled = tempNickname.isNotBlank() && tempNickname != nickname
+                ) {
+                    Text("변경")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showEditNicknameDialog = false }) { Text("취소") }
+            }
+        )
+
+    }
     if(showDeleteDialog) {
         AlertDialog(
             onDismissRequest = { showDeleteDialog = false },
@@ -107,6 +150,9 @@ fun MyPageScreen(
         navController = navController,
         nickname = nickname,
         email = email,
+        profileUrl = profileUrl,
+        localUri = localUri,
+        imageVersion = imageVersion,
         postCount = postCount,
         likeCount = likeCount,
         commentCount = commentCount,
@@ -123,7 +169,16 @@ fun MyPageScreen(
 
         onEditProfileClick = onEditProfileClick,
         onLogoutClick = { viewModel.logout(navController) },
-        onDeleteAccountClick = { showDeleteDialog = true } // 버튼 클릭시 팝업 창
+        onDeleteAccountClick = { showDeleteDialog = true }, // 버튼 클릭시 팝업 창
+        onEditNicknameClick = {
+            tempNickname = nickname
+            showEditNicknameDialog = true
+        },
+        onEditImageClick = {
+            photoPickerLauncher.launch(
+                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+            )
+        }
     )
 }
 
@@ -133,6 +188,9 @@ fun MyPageContent(
     navController: NavController,
     nickname: String,
     email: String,
+    profileUrl: String?,
+    localUri: Uri?,
+    imageVersion: Long,
     postCount: Int,
     likeCount: Int,
     commentCount: Int,
@@ -142,7 +200,9 @@ fun MyPageContent(
     pushMarketing: Boolean = false,
     onActivityChange: (Boolean) -> Unit = {},
     onMarketingChange: (Boolean) -> Unit = {},
-    onDeleteAccountClick: () -> Unit = {}
+    onDeleteAccountClick: () -> Unit = {},
+    onEditNicknameClick: () -> Unit,
+    onEditImageClick: () -> Unit
 ) {
     Scaffold(
         bottomBar = {
@@ -165,7 +225,11 @@ fun MyPageContent(
             ProfileSection(
                 nickname = nickname,
                 email = email,
-                onEditClick = onEditProfileClick
+                profileUrl = profileUrl,
+                localUri = localUri,
+                imageVersion = imageVersion,
+                onEditNicknameClick = onEditNicknameClick,
+                onEditImageClick = onEditImageClick
             )
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -201,69 +265,112 @@ fun MyPageContent(
 private fun ProfileSection(
     nickname: String,
     email: String,
-    onEditClick: () -> Unit
+    profileUrl: String?,
+    localUri: Uri?,
+    imageVersion: Long,
+    onEditNicknameClick: () -> Unit,
+    onEditImageClick: () -> Unit
 ) {
-    Card(
+
+    val imageModel = remember(profileUrl, localUri, imageVersion) {
+        if(localUri != null) {
+            localUri // 사용자가 방금 고른 사진 (즉시 반영)
+        } else if(!profileUrl.isNullOrEmpty()) {
+            "$profileUrl?v=$imageVersion" // 서버 사진 (성공 시에만 주소 변경)
+        } else {
+            null
+        }
+    }
+    // 배경을 흰색으로 하고 하단에만 살짝 그림자를 줍니다.
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(16.dp),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            .background(Color.White)
+            .padding(vertical = 40.dp),
+        horizontalAlignment = Alignment.CenterHorizontally // 중앙 정렬
     ) {
-        Row(
+        // 1. 프로필 이미지와 카메라 버튼
+        Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(20.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .size(110.dp) // 크기를 더 키워 시원하게 보이게 함
+                .clickable { onEditImageClick() },
+            contentAlignment = Alignment.BottomEnd
         ) {
-            Box(
-                modifier = Modifier
-                    .size(72.dp)
-                    .clip(CircleShape)
-                    .background(Color(0xFFE3F2FD))
-                    .border(2.dp, Color(0xFF1976D2), CircleShape),
-                contentAlignment = Alignment.Center
+            if (!profileUrl.isNullOrEmpty()) {
+                AsyncImage(
+                    model = imageModel,
+                    contentDescription = "프로필 이미지",
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clip(CircleShape)
+                        .border(1.dp, Color(0xFFEEEEEE), CircleShape),
+                    contentScale = ContentScale.Crop
+                )
+            } else {
+                // 이미지가 없을 때의 배경
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color(0xFFF8F9FA), CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Person,
+                        contentDescription = null,
+                        modifier = Modifier.size(50.dp),
+                        tint = Color(0xFFDEE2E6)
+                    )
+                }
+            }
+
+            // 📷 카메라 아이콘 배지
+            Surface(
+                modifier = Modifier.size(28.dp),
+                shape = CircleShape,
+                color = Color(0xFF1976D2),
+                border = BorderStroke(2.dp, Color.White) // 흰색 테두리로 구분감 생성
             ) {
                 Icon(
-                    imageVector = Icons.Default.Person,
-                    contentDescription = "프로필",
-                    modifier = Modifier.size(40.dp),
-                    tint = Color(0xFF1976D2)
+                    imageVector = Icons.Default.Edit,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.padding(6.dp)
                 )
             }
-
-            Spacer(modifier = Modifier.width(16.dp))
-
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = nickname,
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color(0xFF333333)
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = email,
-                    fontSize = 14.sp,
-                    color = Color(0xFF616161)
-                )
-            }
-
-//            IconButton(
-//                onClick = onEditClick,
-//                modifier = Modifier
-//                    .size(40.dp)
-//                    .background(Color(0xFFF5F5F5), CircleShape)
-//            ) {
-//                Icon(
-//                    imageVector = Icons.Default.Edit,
-//                    contentDescription = "프로필 수정",
-//                    tint = Color(0xFF666666),
-//                    modifier = Modifier.size(20.dp)
-//                )
-//            }
         }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // 2. 닉네임 섹션
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(start = 32.dp) // 아이콘 때문에 생기는 불균형 해소
+        ) {
+            Text(
+                text = nickname,
+                fontSize = 22.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFF212529)
+            )
+            IconButton(
+                onClick = onEditNicknameClick,
+                modifier = Modifier.size(32.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Edit,
+                    contentDescription = "수정",
+                    modifier = Modifier.size(18.dp),
+                    tint = Color(0xFFADB5BD)
+                )
+            }
+        }
+
+        // 3. 이메일 텍스트
+        Text(
+            text = email,
+            fontSize = 14.sp,
+            color = Color(0xFF6C757D)
+        )
     }
 }
 
@@ -351,13 +458,13 @@ private fun MenuSection(
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column {
-            Text(
-                text = "내 활동",
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color(0xFF616161),
-                modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 8.dp)
-            )
+//            Text(
+//                text = "내 활동",
+//                fontSize = 12.sp,
+//                fontWeight = FontWeight.Bold,
+//                color = Color(0xFF616161),
+//                modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 8.dp)
+//            )
 
 //            MenuItem(Icons.Outlined.Article, "내가 쓴 글", onClick = onMyPostsClick)
 //            MenuItem(Icons.Default.Favorite, "좋아요한 글", Color(0xFFE91E63), onClick = onLikedPostsClick)
@@ -375,12 +482,12 @@ private fun MenuSection(
                 modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 8.dp)
             )
 
-            NotificationSwitch(
-                title = "활동 알림",
-                subtitle = "댓글, 좋아요 반응 알림",
-                checked = pushActivity,
-                onCheckedChange = onActivityChange
-            )
+//            NotificationSwitch(
+//                title = "활동 알림",
+//                subtitle = "댓글, 좋아요 반응 알림",
+//                checked = pushActivity,
+//                onCheckedChange = onActivityChange
+//            )
 
             NotificationSwitch(
                 title = "혜택 알림",
@@ -516,20 +623,4 @@ fun NotificationSwitch(
             )
         )
     }
-}
-
-// 4. [프리뷰] MyPageContent(껍데기)를 보여줌 -> Hilt 에러 없음!
-@Preview(showBackground = true, heightDp = 800)
-@Composable
-fun MyPageScreenPreview() {
-    MyPageContent(
-        navController = rememberNavController(),
-        nickname = "프리뷰 유저",
-        email = "preview@test.com",
-        postCount = 10,
-        likeCount = 20,
-        commentCount = 5,
-        onEditProfileClick = {},
-        onLogoutClick = {}
-    )
 }

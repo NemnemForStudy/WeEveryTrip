@@ -2,45 +2,24 @@ package com.example.travelapp.ui.home
 
 import android.os.Build
 import android.util.Log
+import android.widget.Toast
+import androidx.annotation.RequiresApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items // ✅ items(post)를 쓰기 위한 필수 임포트
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextField
-import androidx.compose.material3.TextFieldDefaults
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.outlined.ChatBubbleOutline
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -52,36 +31,19 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
-import coil.compose.AsyncImage
-import coil.request.ImageRequest
-import com.example.travelapp.BuildConfig
-import com.example.travelapp.data.model.Post
-import com.example.travelapp.ui.theme.Beige
-import android.text.format.DateUtils // DateUtils에 필요
-import androidx.annotation.RequiresApi
-import androidx.compose.material.icons.filled.FavoriteBorder
-import androidx.compose.material.icons.outlined.ChatBubbleOutline
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.navigation.NavHostController
+import androidx.navigation.compose.currentBackStackEntryAsState
+import coil.compose.AsyncImage
+import coil.request.CachePolicy
+import coil.request.ImageRequest
+import com.example.travelapp.data.model.Post
 import com.example.travelapp.ui.components.BottomNavigationBar
 import com.example.travelapp.ui.navigation.Screen
+import com.example.travelapp.ui.theme.Beige
 import com.example.travelapp.ui.theme.TextSub
 import com.example.travelapp.util.MapUtil.toFullUrl
 import com.example.travelapp.util.UtilTime
-import java.time.ZonedDateTime
-import java.time.format.DateTimeFormatter
-import java.util.Locale
-import java.time.Instant
 
-/**
- * 게시판(피드) 화면 Composable
- *
- * 구성 요소:
- * - 검색 바
- * - 카테고리 탭
- * - 게시물 목록 (LazyColumn으로 무한 스크롤 구현)
- */
 @RequiresApi(Build.VERSION_CODES.O)
 @Composable
 fun FeedScreen(
@@ -94,108 +56,85 @@ fun FeedScreen(
     val isLoading by viewModel.isLoading.collectAsState()
     val errorMsg by viewModel.errorMsg.collectAsState()
 
-    // 🔥 1. Scaffold로 감싸기
+    // 1. 현재 화면의 백스택 관찰
+    val navBackStackEntry by navController.currentBackStackEntryAsState()
+
+    // 2. 신호 받기 (observeAsState 대신 getStateFlow 사용으로 에러 방지)
+    val shouldRefresh by navBackStackEntry?.savedStateHandle
+        ?.getStateFlow("should_refresh", false)
+        ?.collectAsState() ?: remember { mutableStateOf(false) }
+
+    // 3. 신호 감지 시 "강제" 새로고침 실행
+    LaunchedEffect(shouldRefresh) {
+        Log.d("FeedScreen", "🔔 shouldRefresh 값 변경됨: $shouldRefresh") // ✅ 추가
+
+        if (shouldRefresh == true) {
+            Log.d("FeedScreen", "수정 성공 감지: 강제 새로고침 실행")
+            // ✅ ViewModel의 loadPosts에 forceRefresh = true를 줘서 데이터를 다시 가져옵니다.
+            viewModel.loadPosts(forceRefresh = true)
+
+            // 처리 완료 후 신호를 false로 초기화
+            navBackStackEntry?.savedStateHandle?.set("should_refresh", false)
+        }
+    }
+
     Scaffold(
         bottomBar = {
-            // 🔥 2. 하단 바 추가
-            // navController가 NavHostController 타입일 때만 표시 (프리뷰 등에서의 에러 방지)
             if (navController is NavHostController) {
-                BottomNavigationBar(
-                    navController = navController,
-                    currentRoute = Screen.Feed.route
-                )
+                BottomNavigationBar(navController = navController, currentRoute = Screen.Feed.route)
             }
         }
-    ) { paddingValues -> // 🔥 3. Scaffold가 주는 여백값 받기
-
+    ) { paddingValues ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Beige)
-                .padding(paddingValues) // 🔥 4. 여기서 패딩을 적용해야 하단 바에 내용이 안 가려짐!
+                .padding(paddingValues)
         ) {
-            // 상단 검색 바
-            CustomSearchBar(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp)
-            )
-            // 카테고리 탭
+            CustomSearchBar(modifier = Modifier.fillMaxWidth().padding(16.dp))
+
             CategoryTabs(
                 categories = viewModel.categories,
                 selectedCategory = selectedCategory,
                 onCategorySelected = { viewModel.selectCategory(it) },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp)
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
             )
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // 게시물 목록
             when {
                 isLoading && post.isEmpty() -> {
-                    // 로딩 상태
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         CircularProgressIndicator()
                     }
                 }
                 errorMsg != null -> {
-                    // 에러 상태
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = errorMsg ?: "오류가 발생했습니다.",
-                            color = Color.Red,
-                            fontSize = 14.sp
-                        )
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text(text = errorMsg ?: "오류 발생", color = Color.Red)
                     }
                 }
                 post.isEmpty() -> {
-                    // 빈 상태
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "게시물이 없습니다.",
-                            color = Color(0xFF616161),
-                            fontSize = 16.sp
-                        )
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text(text = "게시물이 없습니다.")
                     }
                 }
                 else -> {
-                    // 게시물 목록
                     LazyColumn(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(horizontal = 16.dp),
+                        modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                         contentPadding = PaddingValues(bottom = 16.dp)
                     ) {
-                        items(post.size) { index ->
-                            val currentPost = post[index]
-                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                                PostCard(
-                                    post = currentPost,
-                                    onClick = {
-                                        navController.navigate("detail/${currentPost.id}")
-                                    }
-                                )
-                            }
+                        // ✅ index 대신 items(post)를 사용하여 에러 방지
+                        items(post) { currentPost ->
+                            PostCard(
+                                post = currentPost,
+                                onClick = { navController.navigate("detail/${currentPost.id}") }
+                            )
                         }
 
-                        // 무한 스크롤 트리거
-                        if (post.isNotEmpty()) {
-                            item {
-                                LaunchedEffect(Unit) {
-                                    viewModel.loadMorePosts()
-                                }
+                        item {
+                            LaunchedEffect(Unit) {
+                                viewModel.loadMorePosts()
                             }
                         }
                     }
@@ -205,20 +144,9 @@ fun FeedScreen(
     }
 }
 
-/**
- * 검색 바 Composable
- *
- * 기능:
- * - 검색어 입력
- * - 검색 아이콘 클릭
- *
- * Material3의 SearchBar와 충돌을 피하기 위해 CustomSearchBar로 명명
- */
 @Composable
 fun CustomSearchBar(modifier: Modifier = Modifier) {
-    // 이 변수의 값이 바뀌면 화면(UI)도 알아서 다시 그려라!
     var searchText by remember { mutableStateOf("") }
-
     Row(
         modifier = modifier
             .height(48.dp)
@@ -231,36 +159,21 @@ fun CustomSearchBar(modifier: Modifier = Modifier) {
             value = searchText,
             onValueChange = { searchText = it },
             placeholder = { Text("게시물 검색...", fontSize = 14.sp, color = Color(0xFF616161)) },
-            modifier = Modifier
-                .weight(1f)
-                .background(Color.White),
+            modifier = Modifier.weight(1f),
             singleLine = true,
             colors = TextFieldDefaults.colors(
-                focusedContainerColor = Color.White,
-                unfocusedContainerColor = Color.White,
+                focusedContainerColor = Color.Transparent,
+                unfocusedContainerColor = Color.Transparent,
                 focusedIndicatorColor = Color.Transparent,
                 unfocusedIndicatorColor = Color.Transparent
             )
         )
-
-        IconButton(onClick = { /* 검색 로직 */ }) {
-            Icon(
-                imageVector = Icons.Default.Search,
-                contentDescription = "검색",
-                tint = Color(0xFF1976D2)
-            )
+        IconButton(onClick = { }) {
+            Icon(Icons.Default.Search, null, tint = Color(0xFF1976D2))
         }
     }
 }
 
-/**
- * 카테고리 탭 Composable
- *
- * 기능:
- * - 카테고리 목록 표시
- * - 선택된 카테고리 강조 표시
- * - 카테고리 선택 시 필터링
- */
 @Composable
 fun CategoryTabs(
     categories: List<String>,
@@ -270,13 +183,11 @@ fun CategoryTabs(
 ) {
     LazyRow(
         modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        contentPadding = PaddingValues(0.dp)
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         items(categories.size) { index ->
             val category = categories[index]
             val isSelected = category == selectedCategory
-
             Button(
                 onClick = { onCategorySelected(category) },
                 modifier = Modifier.height(36.dp),
@@ -285,125 +196,63 @@ fun CategoryTabs(
                     contentColor = if (isSelected) Color.White else Color(0xFF616161)
                 ),
                 shape = RoundedCornerShape(20.dp),
-                border = if (!isSelected) {
-                    androidx.compose.foundation.BorderStroke(1.dp, Color.LightGray)
-                } else null
+                border = if (!isSelected) androidx.compose.foundation.BorderStroke(1.dp, Color.LightGray) else null
             ) {
-                Text(
-                    text = category,
-                    fontSize = 12.sp,
-                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                )
+                Text(text = category, fontSize = 12.sp)
             }
         }
     }
 }
 
-/**
- * 게시물 카드 Composable
- *
- * 구성:
- * - 썸네일 이미지 (또는 기본 배경)
- * - 제목
- * - 작성자 및 작성 날짜
- * - 태그 목록
- */
 @RequiresApi(Build.VERSION_CODES.O)
 @Composable
-fun PostCard(
-    post: Post,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
+fun PostCard(post: Post, onClick: () -> Unit) {
     Card(
-        modifier = modifier
-            .fillMaxWidth()
-            .clickable { onClick() },
+        modifier = Modifier.fillMaxWidth().clickable { onClick() },
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(110.dp)
-                .padding(12.dp),
+            modifier = Modifier.fillMaxWidth().height(110.dp).padding(12.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // 1. 왼쪽 썸네일 이미지 영역
             Box(
-                modifier = Modifier
-                    .size(86.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(Color(0xFFF5F5F5)),
+                modifier = Modifier.size(86.dp).clip(RoundedCornerShape(8.dp)).background(Color(0xFFF5F5F5)),
                 contentAlignment = Alignment.Center
             ) {
                 if (!post.imgUrl.isNullOrEmpty()) {
+                    val imageUrlWithCacheBuster = remember(post.imgUrl) {
+                        "${toFullUrl(post.imgUrl)}?t=${System.currentTimeMillis()}"
+                    }
                     AsyncImage(
                         model = ImageRequest.Builder(LocalContext.current)
-                            .data(toFullUrl(post.imgUrl)) // 📍 아래 정의된 함수 사용
+                            .data(imageUrlWithCacheBuster)
                             .crossfade(true)
+                            .memoryCachePolicy(CachePolicy.DISABLED)
+                            .diskCachePolicy(CachePolicy.DISABLED)
                             .build(),
                         contentDescription = "썸네일",
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize()
                     )
                 } else {
-                    Icon(
-                        imageVector = Icons.Default.Image,
-                        contentDescription = null,
-                        tint = Color.LightGray
-                    )
+                    Icon(Icons.Default.Image, null, tint = Color.LightGray)
                 }
             }
 
-            // 2. 오른쪽 게시물 정보 영역
-            Column(
-                modifier = Modifier.weight(1f).fillMaxHeight(),
-                verticalArrangement = Arrangement.SpaceBetween
-            ) {
-                // 제목
-                Text(
-                    text = post.title,
-                    style = MaterialTheme.typography.titleMedium.copy(
-                        color = Color(0xFF111111),
-                        fontWeight = FontWeight.Bold
-                    ),
-                    maxLines = 1, // 한 줄로 깔끔하게 처리
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                // 닉네임 및 시간
+            Column(modifier = Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.SpaceBetween) {
+                Text(text = post.title, fontWeight = FontWeight.Bold, maxLines = 1)
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = post.nickname,
-                        fontSize = 12.sp,
-                        color = Color(0xFF444444),
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Text(text = " • ", fontSize = 12.sp, color = TextSub)
-                    Text(
-                        text = UtilTime.formatRelativeTime(post.created_at), // 📍 아래 정의된 함수 사용
-                        fontSize = 12.sp,
-                        color = TextSub
-                    )
+                    Text(text = post.nickname, fontSize = 12.sp, color = Color(0xFF444444))
+                    Text(text = " • ", color = TextSub)
+                    Text(text = UtilTime.formatRelativeTime(post.created_at), fontSize = 12.sp, color = TextSub)
                 }
-
-                // 태그 및 하단 아이콘 (좋아요, 댓글)
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    // 태그 (최대 2개)
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        post.tags?.take(2)?.forEach { tag ->
-                            Text(text = "#$tag", fontSize = 11.sp, color = Color(0xFF1976D2))
-                        }
+                        post.tags?.take(2)?.forEach { tag -> Text(text = "#$tag", fontSize = 11.sp, color = Color(0xFF1976D2)) }
                     }
-
-                    // 반응 (좋아요, 댓글)
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         ReactionItem(Icons.Default.FavoriteBorder, post.likeCount.toString())
                         ReactionItem(Icons.Outlined.ChatBubbleOutline, post.commentCount.toString())
                     }
@@ -413,115 +262,23 @@ fun PostCard(
     }
 }
 
-/**
- * [DRY 원칙] 좋아요/댓글 아이콘 세트 함수화
- */
 @Composable
 fun ReactionItem(icon: androidx.compose.ui.graphics.vector.ImageVector, count: String) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-        Icon(imageVector = icon, contentDescription = null, modifier = Modifier.size(14.dp), tint = Color.Gray)
+        Icon(icon, null, modifier = Modifier.size(14.dp), tint = Color.Gray)
         Text(text = count, fontSize = 11.sp, color = Color.Gray)
     }
 }
 
-/**
- * Preview: 게시판 화면 미리보기
- *
- * 이 함수는 Android Studio의 Preview 기능으로
- * 실제 앱을 실행하지 않고도 UI를 확인할 수 있습니다.
- *
- * Preview에서는 hiltViewModel()을 사용할 수 없으므로,
- * 더미 데이터를 직접 전달하여 UI만 미리보기합니다.
- */
 @RequiresApi(Build.VERSION_CODES.O)
 @Composable
-@androidx.compose.ui.tooling.preview.Preview(showBackground = true, heightDp = 800)
+@androidx.compose.ui.tooling.preview.Preview(showBackground = true)
 fun FeedScreenPreview() {
-    // Preview용 더미 게시물 데이터
-    val dummyPosts = listOf(
-        Post(
-            id = "1",
-            category = "여행 후기",
-            title = "서울 3일 여행 코스 추천",
-            content = "서울의 명소를 효율적으로 돌아보는 방법을 소개합니다.",
-            nickname = "여행러",
-            created_at = "2024-11-28",
-            tags = listOf("서울", "3일", "추천"),
-            imgUrl = null
-        ),
-        Post(
-            id = "2",
-            category = "여행 팁",
-            title = "비행기 탈 때 짐 싸는 팁",
-            content = "효율적인 짐 싸기 방법을 알려드립니다.",
-            nickname = "팩킹마스터",
-            created_at = "2024-11-27",
-            tags = listOf("팁", "짐", "여행"),
-            imgUrl = null
-        ),
-        Post(
-            id = "3",
-            category = "추천 장소",
-            title = "제주도 숨은 카페 5곳",
-            content = "관광객이 잘 모르는 제주도의 멋진 카페들을 소개합니다.",
-            nickname = "카페러버",
-            created_at = "2024-11-26",
-            tags = listOf("제주도", "카페", "숨은명소"),
-            imgUrl = null
-        )
-    )
-    
-    // Preview용 간단한 Column으로 UI 표시
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color(0xFFF5F5F5))
-    ) {
-        // 검색 바
-        CustomSearchBar(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp)
-        )
-        
-        // 카테고리 탭 (Preview용 간단한 버전)
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp)
-                .horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            listOf("전체", "여행 후기", "여행 팁", "질문", "추천 장소").forEach { category ->
-                Button(
-                    onClick = { },
-                    modifier = Modifier.height(36.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = if (category == "전체") Color(0xFF1976D2) else Color.White
-                    ),
-                    shape = RoundedCornerShape(20.dp)
-                ) {
-                    Text(text = category, fontSize = 12.sp)
-                }
-            }
-        }
-        
-        Spacer(modifier = Modifier.height(12.dp))
-        
-        // 게시물 목록
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-            contentPadding = PaddingValues(bottom = 16.dp)
-        ) {
-            items(dummyPosts.size) { index ->
-                PostCard(
-                    post = dummyPosts[index],
-                    onClick = { }
-                )
-            }
+    val dummyPosts = listOf(Post(id="1", category="후기", title="테스트", content="..", nickname="테스터", created_at="2024-01-01", imgUrl=null))
+    Column(modifier = Modifier.fillMaxSize().background(Color(0xFFF5F5F5))) {
+        LazyColumn(modifier = Modifier.padding(16.dp)) {
+            // ✅ Preview 에러 방지: dummyPosts 사용
+            items(dummyPosts) { PostCard(it, {}) }
         }
     }
 }

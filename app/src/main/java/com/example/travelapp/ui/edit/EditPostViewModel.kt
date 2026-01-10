@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import android.os.Build
 import android.util.Log
+import androidx.annotation.RequiresApi
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.travelapp.BuildConfig
@@ -20,6 +21,7 @@ import com.example.travelapp.util.ImageUtil
 import com.example.travelapp.util.TokenManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -27,6 +29,9 @@ import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.text.SimpleDateFormat
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import java.util.*
 import javax.inject.Inject
 
@@ -85,6 +90,9 @@ class EditPostViewModel @Inject constructor(
     private val _routePoints = MutableStateFlow<List<RoutePoint>>(emptyList())
     val routePoints: StateFlow<List<RoutePoint>> = _routePoints.asStateFlow()
 
+    // 경로 업데이트 작업을 관리할 Job 변수 추가
+    private var routeUpdateJob: Job? = null
+
     init {
         _startDate.combine(_endDate) { start, end ->
             if(start != null && end != null) DateUtils.generateDaysBetween(start, end)
@@ -92,6 +100,42 @@ class EditPostViewModel @Inject constructor(
         }.onEach { days ->
             _tripDays.value = days
         }.launchIn(viewModelScope)
+
+//        // 이미지 변경 감지 및 Polyline 자동 갱신
+//        _groupedImages
+//            .onEach { imagesMap ->
+//                updateRoutePoints(imagesMap)
+//            }.launchIn(viewModelScope)
+    }
+
+    // 현재 배치된 사진들의 좌표를 추출해 Polyline 데이터 갱신
+    private fun updateRoutePoints(imagesMap: Map<Int, List<PostImage>>) {
+        routeUpdateJob?.cancel()
+
+        val allLocations = imagesMap.values.flatten()
+            .mapNotNull { img ->
+                if (img.latitude != null && img.longitude != null) {
+                    RoutePoint(img.latitude, img.longitude)
+                } else null
+            }
+
+        if(allLocations.size < 2) {
+            _routePoints.value = emptyList()
+            return // 코루틴 시작 필요 없음.
+        }
+
+        routeUpdateJob = viewModelScope.launch {
+            try {
+                Log.d("RouteDebug", "경로 요청 시작: ${allLocations.size}개 포인트")
+                val actualRoute = postRepository.getRouteForDay(allLocations)
+
+                // 만약 서버에서 오는 사이에 Job이 취소되었다면 아래 코드는 실행되지 않습니다.
+                _routePoints.value = actualRoute ?: emptyList()
+            } catch (e: Exception) {
+                Log.e("RouteDebug", "경로 조회 실패: ${e.message}")
+                _routePoints.value = emptyList()
+            }
+        }
     }
 
     sealed class UpdateStatus {
@@ -101,6 +145,7 @@ class EditPostViewModel @Inject constructor(
         data class Error(val message: String) : UpdateStatus()
     }
 
+    @RequiresApi(Build.VERSION_CODES.O)
     fun loadPost(postId: String) {
         viewModelScope.launch {
             _isLoading.value = true
@@ -155,12 +200,10 @@ class EditPostViewModel @Inject constructor(
 
             try {
                 val token = tokenManager.getToken() ?: throw Exception("로그인 정보가 없습니다.")
-                val baseUrl = resolveBaseUrl()
 
-                // 1. 모든 이미지를 하나의 리스트로 평탄화
-                val allImagesInDrawer = _groupedImages.value.entries
-                    .sortedBy { it.key }
-                    .flatMap { it.value }
+                // 리스트 첫 번째 사진이 무조건 가장 빠른 시간의 사진
+                val allImagesInDrawer = _groupedImages.value.values.flatten()
+                    .sortedBy { it.timestamp ?: Long.MAX_VALUE }
                 Log.d("DEBUG", "전송 직전 총 사진 개수: ${allImagesInDrawer.size}")
 
                 // 2. 새로 추가된 로컬 이미지들만 필터링하여 업로드
@@ -201,7 +244,7 @@ class EditPostViewModel @Inject constructor(
                 }
                 val startDateStr = _startDate.value?.let { sdf.format(Date(it)) }
                 val endDateStr = _endDate.value?.let { sdf.format(Date(it)) }
-
+                val firstImageUrl = finalLocationRequests.firstOrNull()?.imageUrl ?: ""
                 val result = postRepository.updatePost(
                     postId = postId,
                     category = _category.value,
@@ -213,7 +256,7 @@ class EditPostViewModel @Inject constructor(
                     isDomestic = _isDomestic.value,
                     travelStartDate = startDateStr,
                     travelEndDate = endDateStr,
-                    images = emptyList(),
+                    images = listOf(firstImageUrl),
                     imageLocations = finalLocationRequests
                 )
 
@@ -265,9 +308,15 @@ class EditPostViewModel @Inject constructor(
             val currentStartDate = _startDate.value ?: System.currentTimeMillis()
             val dayInMillis = 24 * 60 * 60 * 1000L
 
-            val newPostImages = uris.map { uri ->
+            val allExistingUris = _groupedImages.value.values.flatten().map { it.uri }.toSet()
+            var duplicateCount = 0
+            val newPostImages = uris.mapNotNull { uri ->
+                if(allExistingUris.contains(uri)) {
+                    duplicateCount++;
+                    return@mapNotNull null
+                }
                 val metaData = ExifUtils.extractPhotoInfo(context, uri)
-                val timestamp = metaData?.timestamp
+                val timestamp = metaData?.timestamp ?: System.currentTimeMillis()
 
                 val calculatedDay = if(timestamp != null && timestamp >= currentStartDate) {
                     ((timestamp - currentStartDate) / dayInMillis).toInt() + 1
@@ -321,9 +370,21 @@ class EditPostViewModel @Inject constructor(
     }
 
     fun fetchRoute(locations: List<Pair<Double, Double>>) {
-        viewModelScope.launch {
-            val points = locations.map { RoutePoint(it.first, it.second) }
-            _routePoints.value = points
+        routeUpdateJob?.cancel()
+
+        if(locations.size < 2) {
+            _routePoints.value = emptyList()
+            return
+        }
+
+        routeUpdateJob = viewModelScope.launch {
+            try {
+                val points = locations.map { RoutePoint(it.first, it.second) }
+                val actualRoute = postRepository.getRouteForDay(points)
+                _routePoints.value = actualRoute ?: emptyList()
+            } catch (e: Exception) {
+                _routePoints.value = emptyList()
+            }
         }
     }
 
@@ -335,16 +396,24 @@ class EditPostViewModel @Inject constructor(
         )
     }
 
+    @RequiresApi(Build.VERSION_CODES.O)
     private fun formatTime(timestamp: Long?): String? {
         if (timestamp == null) return null
 
-        // 1. 서버에서 받은 원본 timestamp(UTC)를 Date 객체로 만듭니다.
-        val date = Date(timestamp)
+        return try {
+            // 1. 밀리초 단위의 Long 값을 Instant로 변환
+            val instant = Instant.ofEpochMilli(timestamp)
 
-        // 2. 타임존 설정을 아예 삭제하거나 기본값으로 둡니다.
-        // 그러면 한국 휴대폰에서는 자동으로 +9시간이 적용되어 "오후 10:00"으로 나옵니다.
-        val sdf = SimpleDateFormat("a hh:mm", Locale.KOREAN)
+            // 2. 이 시간을 한국 시간대(Asia/Seoul)로 고정하여 변환
+            val zonedDateTime = instant.atZone(ZoneId.of("Asia/Seoul"))
 
-        return sdf.format(date)
+            // 3. 포맷 지정 (오전/오후 10:30 형태)
+            val formatter = DateTimeFormatter.ofPattern("a hh:mm", Locale.KOREAN)
+
+            zonedDateTime.format(formatter)
+        } catch (e: Exception) {
+            Log.e("TimeError", "시간 변환 실패: ${e.message}")
+            null
+        }
     }
 }
