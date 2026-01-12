@@ -251,10 +251,9 @@ class WriteViewModel @Inject constructor(
                     endDateMillis = _endDate.value
                 )
 
-                result.onSuccess {
-                    postRepository.notifyPostChanged()
-                    _lastCreatePostId.value = it.id
-                    _postCreationStatus.value = PostCreationStatus.Success(it.id)
+                result.onSuccess { response ->
+                    _lastCreatePostId.value = response.id
+                    _postCreationStatus.value = PostCreationStatus.Success(response.id)
                 }.onFailure { e ->
                     _postCreationStatus.value = PostCreationStatus.Error(e.message ?: "등록 실패")
                 }

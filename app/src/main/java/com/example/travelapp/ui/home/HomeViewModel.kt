@@ -50,10 +50,15 @@ class HomeViewModel @Inject constructor(
     init {
         loadMyPosts()
 
-        postRepository.refreshTrigger
-            .onEach {
-                Log.d("HomeViewModel", "새로고침 신호 수신 - fetchMyPosts 실행")
-                fetchMyPosts() // 또는 loadMyPosts()
+        postRepository.shouldRefreshAll
+            .onEach { timestamp ->
+                // 초기값(0L)이 아닐 때(즉, 수정/삭제/생성 발생 시)만 새로고침 실행
+                if (timestamp > 0L) {
+                    Log.d("HomeViewModel", "🔄 전역 새로고침 신호 수신 ($timestamp) - 데이터 갱신 시작")
+                    // ✅ 캐시를 무시하고 서버에서 새로 가져오도록 forceRefresh = true 전달 가능
+                    // (Repository에서 이미 invalidateCache()를 호출하므로 일반 호출도 작동하지만, 명시적인 게 좋음)
+                    loadMyPosts(forceRefresh = true)
+                }
             }
             .launchIn(viewModelScope)
     }
@@ -117,7 +122,7 @@ class HomeViewModel @Inject constructor(
         }
     }
 
-    fun loadMyPosts() {
+    fun loadMyPosts(forceRefresh: Boolean = false) {
         viewModelScope.launch {
             _myPostsLoading.value = true
             _myPostsError.value = null
@@ -135,7 +140,7 @@ class HomeViewModel @Inject constructor(
                     return@launch
                 }
 
-                val postsResult = postRepository.getAllPosts()
+                val postsResult = postRepository.getAllPosts(forceRefresh = forceRefresh)
                 // 내 아이디와 일치하는 게시물만 화면에 보여주려고 하는거임.
                 // posts.filter -> 필터링이고, it.userId == myId는 내 id랑 일치하는지 확인함.
                 postsResult.onSuccess { posts ->

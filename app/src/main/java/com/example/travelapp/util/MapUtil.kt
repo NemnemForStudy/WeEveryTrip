@@ -37,22 +37,28 @@ data class ClusterGroup(
 )
 
 object MapUtil {
-
     // 1. URL 처리 관련 (여기 resolveBaseUrlForDevice가 있습니다)
     fun toFullUrl(urlOrPath: String?): String? {
-        if (urlOrPath.isNullOrBlank()) return null
-        if (urlOrPath.startsWith("http")) return urlOrPath
-        return resolveBaseUrlForDevice() + urlOrPath.trimStart('/')
+        if (urlOrPath.isNullOrEmpty()) return ""
+
+        if (urlOrPath.startsWith("http")) {
+            return urlOrPath.replace("/storage/v1/render/", "/storage/v1/object/")
+        }
+
+        // /object/public/ 경로가 무료 플랜에서 이미지를 가져오는 기본 경로입니다.
+        val supabaseBaseUrl = "${BuildConfig.SUPABASE_URL}/storage/v1/object/public/ModuTripPosts/"
+
+        return "${supabaseBaseUrl.trimEnd('/')}/${urlOrPath.trimStart('/')}"
     }
 
-    private fun resolveBaseUrlForDevice(): String {
-        val isEmulator = Build.FINGERPRINT.startsWith("generic") || Build.MODEL.contains("google_sdk")
-        val phoneBaseUrl = runCatching {
-            BuildConfig::class.java.getField("PHONE_BASE_URL").get(null) as String
-        }.getOrNull()
-        val raw = if (isEmulator) BuildConfig.BASE_URL else (phoneBaseUrl ?: BuildConfig.BASE_URL)
-        return raw.trimEnd('/') + "/"
-    }
+//    private fun resolveBaseUrlForDevice(): String {
+//        val isEmulator = Build.FINGERPRINT.startsWith("generic") || Build.MODEL.contains("google_sdk")
+//        val phoneBaseUrl = runCatching {
+//            BuildConfig::class.java.getField("PHONE_BASE_URL").get(null) as String
+//        }.getOrNull()
+//        val raw = if (isEmulator) BuildConfig.BASE_URL else (phoneBaseUrl ?: BuildConfig.BASE_URL)
+//        return raw.trimEnd('/') + "/"
+//    }
 
     // 2. [추가] 방향 계산 (Polyline 화살표용)
     fun bearingDeg(a: LatLng, b: LatLng): Float {

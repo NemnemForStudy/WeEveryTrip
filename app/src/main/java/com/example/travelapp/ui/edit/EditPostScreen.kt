@@ -3,6 +3,7 @@ package com.example.travelapp.ui.edit
 import android.os.Build
 import android.util.Log
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
@@ -86,20 +87,16 @@ fun EditPostScreen(
         }
     }
 
+    BackHandler {
+        navController.previousBackStackEntry?.savedStateHandle?.set("should_refresh", true)
+        navController.popBackStack()
+    }
+
     LaunchedEffect(updateStatus) {
         when (updateStatus) {
             is EditPostViewModel.UpdateStatus.Success -> {
                 Toast.makeText(context, "게시물이 수정되었습니다!", Toast.LENGTH_SHORT).show()
                 viewModel.resetStatus()
-
-                Log.d("EditPostScreen", "✅ 수정 완료 - 신호 전달 시도")
-
-                navController.previousBackStackEntry?.savedStateHandle?.set("should_refresh", true)
-
-                val signalSet = navController.previousBackStackEntry?.savedStateHandle?.get<Boolean>("should_refresh")
-                Log.d("EditPostScreen", "신호 설정 확인: $signalSet")
-
-
                 navController.popBackStack()
             }
             is EditPostViewModel.UpdateStatus.Error -> {
@@ -274,6 +271,36 @@ fun EditPostScreen(
                             }
                         }
                     }
+                }
+            }
+        }
+    }
+
+    if(updateStatus is EditPostViewModel.UpdateStatus.Loading) {
+        Dialog(onDismissRequest = { }) { // 수정중일 때는 밖을 눌러도 안 닫히게 설정
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth(0.7f)
+                    .height(150.dp),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White)
+            ) {
+                Column(
+                    modifier = Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.Center,
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    CircularProgressIndicator(
+                        color = StandardBlue,
+                        modifier = Modifier.size(48.dp)
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        text = "수정 중입니다...",
+                        fontWeight = FontWeight.Bold,
+                        color = Color.Black,
+                        fontSize = 16.sp
+                    )
                 }
             }
         }

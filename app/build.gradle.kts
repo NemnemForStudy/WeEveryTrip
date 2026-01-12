@@ -21,6 +21,12 @@ android {
     namespace = "com.example.travelapp"
     compileSdk = 36
 
+    val localProperties = Properties()
+    val localPropertiesFile = rootProject.file("local.properties")
+    if(localPropertiesFile.exists()) {
+        localProperties.load(localPropertiesFile.inputStream())
+    }
+
     buildTypes {
         getByName("debug") {
             // 코틀린 문법이므로 반드시 괄호()를 써야 합니다.
@@ -67,6 +73,9 @@ android {
         val kakaoNativeAppKey = properties.getProperty("kakao.native.app.key") ?: ""
         buildConfigField("String","KAKAO_NATIVE_APP_KEY", "\"$kakaoNativeAppKey\"")
         manifestPlaceholders["KAKAO_NATIVE_APP_KEY"] = kakaoNativeAppKey
+
+        val supabaseUrl = localProperties.getProperty("SUPABASE_URL") ?: "\"\""
+        buildConfigField("String", "SUPABASE_URL", supabaseUrl)
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11

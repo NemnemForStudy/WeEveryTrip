@@ -30,6 +30,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.navigation.NavController
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -64,18 +67,24 @@ fun FeedScreen(
         ?.getStateFlow("should_refresh", false)
         ?.collectAsState() ?: remember { mutableStateOf(false) }
 
-    // 3. 신호 감지 시 "강제" 새로고침 실행
-    LaunchedEffect(shouldRefresh) {
-        Log.d("FeedScreen", "🔔 shouldRefresh 값 변경됨: $shouldRefresh") // ✅ 추가
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val lifecycleState by lifecycleOwner.lifecycle.currentStateFlow.collectAsState()
 
-        if (shouldRefresh == true) {
-            Log.d("FeedScreen", "수정 성공 감지: 강제 새로고침 실행")
-            // ✅ ViewModel의 loadPosts에 forceRefresh = true를 줘서 데이터를 다시 가져옵니다.
-            viewModel.loadPosts(forceRefresh = true)
-
-            // 처리 완료 후 신호를 false로 초기화
-            navBackStackEntry?.savedStateHandle?.set("should_refresh", false)
+    // DisposableEffect 쓰는 이유. 리스너 등록, 해제처럼 정리가 꼭 필요한 작업을 할 때 사용.
+    // onDispose - 필수라 에러를 잡아줌.
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if(event == Lifecycle.Event.ON_RESUME) {
+                val refreshNeeded = navBackStackEntry?.savedStateHandle?.get<Boolean>("should_refresh") ?: false
+                if(refreshNeeded) {
+                    viewModel.loadPosts(forceRefresh = true)
+                    navBackStackEntry?.savedStateHandle?.remove<Boolean>("should_refresh")
+                }
+            }
         }
+        // 옵저버 추가.
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     Scaffold(
@@ -125,16 +134,19 @@ fun FeedScreen(
                         contentPadding = PaddingValues(bottom = 16.dp)
                     ) {
                         // ✅ index 대신 items(post)를 사용하여 에러 방지
-                        items(post) { currentPost ->
+                        items(
+                            items = post,
+                            key = { it.id + (it.imgUrl ?: "") }
+                        ) { currentPost ->
                             PostCard(
                                 post = currentPost,
                                 onClick = { navController.navigate("detail/${currentPost.id}") }
                             )
                         }
 
-                        item {
-                            LaunchedEffect(Unit) {
-                                viewModel.loadMorePosts()
+                        if (post.isNotEmpty()) {
+                            item {
+                                LaunchedEffect(Unit) { viewModel.loadMorePosts() }
                             }
                         }
                     }
@@ -223,14 +235,15 @@ fun PostCard(post: Post, onClick: () -> Unit) {
             ) {
                 if (!post.imgUrl.isNullOrEmpty()) {
                     val imageUrlWithCacheBuster = remember(post.imgUrl) {
-                        "${toFullUrl(post.imgUrl)}?t=${System.currentTimeMillis()}"
+                        if (post.imgUrl != null) "${toFullUrl(post.imgUrl)}?t=${System.currentTimeMillis()}" else null
                     }
                     AsyncImage(
                         model = ImageRequest.Builder(LocalContext.current)
                             .data(imageUrlWithCacheBuster)
                             .crossfade(true)
-                            .memoryCachePolicy(CachePolicy.DISABLED)
-                            .diskCachePolicy(CachePolicy.DISABLED)
+                            .size(300, 300) // 서버 대신 앱에서 메모리/디스크 크기에 맞춰 리사이징
+                            .memoryCachePolicy(CachePolicy.ENABLED)
+                            .diskCachePolicy(CachePolicy.ENABLED)
                             .build(),
                         contentDescription = "썸네일",
                         contentScale = ContentScale.Crop,

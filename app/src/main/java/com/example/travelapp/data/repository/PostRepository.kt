@@ -25,26 +25,46 @@ import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.asRequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import com.example.travelapp.data.model.RoutePoint
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
 import java.util.UUID
 import javax.inject.Inject
+import javax.inject.Singleton
 
+@Singleton // ✅ 싱글톤으로 변경 (앱 전체에서 하나의 인스턴스만 사용)
 open class PostRepository @Inject constructor(
     private val postApiService: PostApiService,
     private val commentApiService: CommentApiService,
     @ApplicationContext private val context: Context
 ) {
-    private val _refreshTrigger = MutableSharedFlow<Unit>()
-    val refreshTrigger = _refreshTrigger.asSharedFlow()
+    // ✅ 전역 새로고침 트리거 추가
+    private val _shouldRefreshAll = MutableStateFlow(0L)
+    val shouldRefreshAll: StateFlow<Long> = _shouldRefreshAll.asStateFlow()
 
-    suspend fun notifyPostChanged() {
-        _refreshTrigger.emit(Unit)
+    // ✅ 게시물 캐시
+    private var cachedPosts: List<Post>? = null
+    private var cacheTimestamp: Long = 0
+    private val CACHE_VALIDITY = 5 * 60 * 1000L // 5분
+
+    /**
+     * 전역 새로고침 트리거 발동
+     */
+    private fun triggerGlobalRefresh() {
+        Log.d("PostRepository", "🔔 전역 새로고침 트리거 발동")
+        _shouldRefreshAll.value = System.currentTimeMillis()
+    }
+
+    /**
+     * 캐시 무효화
+     */
+    private fun invalidateCache() {
+        Log.d("PostRepository", "🗑️ 캐시 무효화")
+        cachedPosts = null
+        cacheTimestamp = 0
     }
 
     suspend fun createPost(
@@ -53,8 +73,6 @@ open class PostRepository @Inject constructor(
         content: String,
         tags: List<String>,
         imageUris: List<Uri>,
-        // 사진별 GPS/Day/정렬 정보를 서버(post_image)에 저장하기 위한 JSON payload
-        // - WriteViewModel에서 "업로드 이미지 순서"와 동일한 순서로 만들어서 넘겨줘야 함
         imageLocationsJson: String? = null,
         latitude: Double? = null,
         longitude: Double? = null,
@@ -62,7 +80,6 @@ open class PostRepository @Inject constructor(
         startDateMillis: Long? = null,
         endDateMillis: Long? = null
     ): Result<CreatePostResponse> = withContext(Dispatchers.IO) {
-        // 🔥 [핵심 1] withContext(Dispatchers.IO)로 감싸서 백그라운드에서 실행 (앱 안 멈춤)
         return@withContext try {
             val categoryBody = category.toRequestBody("text/plain".toMediaTypeOrNull())
             val titleBody = title.toRequestBody("text/plain".toMediaTypeOrNull())
@@ -70,7 +87,6 @@ open class PostRepository @Inject constructor(
             val tagsBody = tags.joinToString(",").toRequestBody("text/plain".toMediaTypeOrNull())
             val isDomesticBody = isDomestic.toString().toRequestBody("text/plain".toMediaTypeOrNull())
 
-            // 서버에서 req.body.imageLocations 로 받으므로 Part 이름은 반드시 "imageLocations"
             val imageLocationsBody = imageLocationsJson
                 ?.toRequestBody("application/json".toMediaTypeOrNull())
 
@@ -86,49 +102,38 @@ open class PostRepository @Inject constructor(
 
             val geoPoint = GeoJsonPoint(
                 type = "Point",
-                coordinates = listOf(finalLng, finalLat) // [경도, 위도] 순서
+                coordinates = listOf(finalLng, finalLat)
             )
 
             val coordinatesBody = Json.encodeToString(geoPoint)
                 .toRequestBody("application/json".toMediaTypeOrNull())
-            //  이미지 압축 및 변환 로직
-            // null 이 반환되면 항목은 리스트에서 제외함. 성공한 이미지만 모아서 리스트로 만듦.
+
             val imageParts = imageUris.mapNotNull { uri ->
                 try {
-                    // 비트맵으로 읽어오기 (메모리 절약을 위해 사이즈 확인)
                     val inputStream = context.contentResolver.openInputStream(uri) ?: return@mapNotNull null
-
-                    // 옵션 설정: 너무 큰 이미지는 줄여서 읽기
                     val options = BitmapFactory.Options()
-                    // 메모리 절약을 위한 사이즈 확인 (inJustDecodeBounds)
-                    // 비트맵 객체를 생성하지 않고 메타데이터만 읽음.
                     options.inJustDecodeBounds = true
                     BitmapFactory.decodeStream(inputStream, null, options)
                     inputStream.close()
 
-                    // 적절한 샘플 사이즈 계산 (예: 1024px 정도로 리사이징)
                     val scale = calculateInSampleSize(options, 1024, 1024)
-
-                    // 실제 로딩
                     val options2 = BitmapFactory.Options()
-                    // 실제 이미지 메모리에 로딩하는데, 아까 계산한 비율만큼 축소해서 로딩함. 메모리 훨 작게 씀.
                     options2.inSampleSize = scale
                     val realInputStream = context.contentResolver.openInputStream(uri)
                     val bitmap = BitmapFactory.decodeStream(realInputStream, null, options2)
                     realInputStream?.close()
 
                     if (bitmap != null) {
-                        // 2. EXIF orientation 읽어서 회전 적용
                         val rotatedBitmap = try {
                             val exifStream = context.contentResolver.openInputStream(uri)
                             val exif = exifStream?.let { ExifInterface(it) }
                             exifStream?.close()
-                            
+
                             val orientation = exif?.getAttributeInt(
                                 ExifInterface.TAG_ORIENTATION,
                                 ExifInterface.ORIENTATION_NORMAL
                             ) ?: ExifInterface.ORIENTATION_NORMAL
-                            
+
                             val matrix = Matrix()
                             when (orientation) {
                                 ExifInterface.ORIENTATION_ROTATE_90 -> matrix.postRotate(90f)
@@ -145,8 +150,8 @@ open class PostRepository @Inject constructor(
                                     matrix.preScale(-1f, 1f)
                                 }
                             }
-                            
-                            if (orientation != ExifInterface.ORIENTATION_NORMAL && 
+
+                            if (orientation != ExifInterface.ORIENTATION_NORMAL &&
                                 orientation != ExifInterface.ORIENTATION_UNDEFINED) {
                                 Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
                             } else {
@@ -156,21 +161,17 @@ open class PostRepository @Inject constructor(
                             Log.w("PostRepository", "EXIF 읽기 실패, 원본 사용: ${e.message}")
                             bitmap
                         }
-                        
-                        // 3. 압축해서 임시 파일로 저장 (Quality 70%)
+
                         val file = File(context.cacheDir, "resized_${UUID.randomUUID()}.jpg")
                         val outputStream = FileOutputStream(file)
-                        // 압축 및 임시 파일 저장 - compress, 품질 70%
                         rotatedBitmap.compress(Bitmap.CompressFormat.JPEG, 70, outputStream)
                         outputStream.flush()
                         outputStream.close()
-                        
-                        // 메모리 해제 (원본과 회전본이 다른 경우만)
+
                         if (rotatedBitmap !== bitmap) {
                             bitmap.recycle()
                         }
 
-                        // 3. Multipart 변환
                         val requestFile = file.asRequestBody("image/jpeg".toMediaTypeOrNull())
                         MultipartBody.Part.createFormData("images", file.name, requestFile)
                     } else {
@@ -195,7 +196,6 @@ open class PostRepository @Inject constructor(
                 images = imageParts,
                 coordinates = coordinatesBody,
                 isDomestic = isDomesticBody,
-                // 사진별 좌표 메타(없으면 null로 보내서 서버에서 그냥 빈 배열로 처리)
                 imageLocations = imageLocationsBody,
                 startDate = startDateBody,
                 endDate = endDateBody
@@ -204,6 +204,9 @@ open class PostRepository @Inject constructor(
             if (response.isSuccessful) {
                 response.body()?.let { apiResponse ->
                     if (apiResponse.success && apiResponse.data != null) {
+                        // ✅ 게시물 생성 성공 시 캐시 무효화 및 전역 새로고침
+                        invalidateCache()
+                        triggerGlobalRefresh()
                         Result.success(apiResponse.data)
                     } else {
                         Result.failure(IllegalStateException("게시물 생성 실패"))
@@ -219,7 +222,7 @@ open class PostRepository @Inject constructor(
     }
 
     suspend fun updatePost(
-        postId: String, // 어떤 게시물 수정할지 Id 필요
+        postId: String,
         category: String? = null,
         title: String? = null,
         content: String? = null,
@@ -234,7 +237,6 @@ open class PostRepository @Inject constructor(
         imageLocations: List<UpdateImageLocationRequest>? = null
     ): Result<Post> = withContext(Dispatchers.IO) {
         try {
-            // 좌표 정보 생성
             val coordinate = if(longitude != null && latitude != null) {
                 GeoJsonPoint(
                     type = "Point",
@@ -244,7 +246,6 @@ open class PostRepository @Inject constructor(
                 null
             }
 
-            // 서버에 보낼 Request
             val request = UpdatePostRequest(
                 category = category,
                 title = title,
@@ -264,6 +265,9 @@ open class PostRepository @Inject constructor(
             if(response.isSuccessful) {
                 val body = response.body()
                 if(body != null && body.success) {
+                    // ✅ 수정 성공 시 캐시 무효화 및 전역 새로고침
+                    invalidateCache()
+                    triggerGlobalRefresh()
                     Result.success(body.data!!)
                 } else {
                     Result.failure(Exception(body?.message ?: "게시물 수정 실패"))
@@ -280,6 +284,9 @@ open class PostRepository @Inject constructor(
         try {
             val response = postApiService.deletePost(postId)
             if(response.isSuccessful) {
+                // ✅ 삭제 성공 시 캐시 무효화 및 전역 새로고침
+                invalidateCache()
+                triggerGlobalRefresh()
                 Result.success(Unit)
             } else {
                 Result.failure(RuntimeException("삭제 실패: ${response.code()}"))
@@ -304,7 +311,6 @@ open class PostRepository @Inject constructor(
         return inSampleSize
     }
 
-    // 여기에 open을 해야 mocking이 된다
     open suspend fun searchPostsByTitle(query: String): Result<List<Post>> {
         println("🔍 Repository - 검색 시작: query=$query")
         if (query.isBlank()) {
@@ -335,50 +341,49 @@ open class PostRepository @Inject constructor(
             Result.failure(e)
         }
     }
-    suspend fun getAllPosts(): Result<List<Post>> {
-        println("📋 전체 게시물 조회 시작")
+
+    suspend fun getAllPosts(forceRefresh: Boolean = false): Result<List<Post>> {
+        // ✅ 캐시 로직 추가
+        if (!forceRefresh && cachedPosts != null &&
+            System.currentTimeMillis() - cacheTimestamp < CACHE_VALIDITY) {
+            Log.d("PostRepository", "📦 캐시된 데이터 반환 (${cachedPosts!!.size}개)")
+            return Result.success(cachedPosts!!)
+        }
+
+        Log.d("PostRepository", "🌐 서버에서 게시물 조회")
         return try {
             val response = postApiService.getAllPosts()
-            
+
             if (!response.isSuccessful) {
                 val errorMsg = "게시물 목록을 가져오는데 실패했습니다. (${response.code()}: ${response.message()})"
-                println("❌ $errorMsg")
+                Log.e("PostRepository", errorMsg)
                 return Result.failure(IOException(errorMsg))
             }
-            
+
             response.body()?.let { posts ->
-                println("✅ ${posts.size}개의 게시물을 불러왔습니다.")
+                Log.d("PostRepository", "✅ ${posts.size}개의 게시물을 불러왔습니다.")
+                // ✅ 캐시에 저장
+                cachedPosts = posts
+                cacheTimestamp = System.currentTimeMillis()
                 Result.success(posts)
             } ?: run {
-                println("⚠️ 게시물이 없거나 응답 형식이 올바르지 않습니다.")
+                Log.w("PostRepository", "⚠️ 게시물이 없거나 응답 형식이 올바르지 않습니다.")
                 Result.success(emptyList())
             }
         } catch (e: Exception) {
             val errorMsg = "게시물 목록을 불러오는 중 오류가 발생했습니다: ${e.message}"
-            println("❌ $errorMsg")
+            Log.e("PostRepository", errorMsg)
             e.printStackTrace()
             Result.failure(e)
         }
     }
 
-    /**
-     * 길찾기 API 함수 호출
-     * @param locations: 그날 방문한 사진들의 좌표 목록
-     * @return: 실제 도로 경로를 구성하는 좌표 목록 (실패 시 null)
-     */
-
     open suspend fun getRouteForDay(locations: List<RoutePoint>): List<RoutePoint>? {
         return try {
-            // 1. 요청 객체 생성 (DTO로 감싸기)
             val request = RouteRequest(locations)
-
-            // 2. Retrofit으로 API 호출
-            // (AuthInterceptor가 연결되어 있다면 토큰도 알아서 붙어서 나갑니다 👍)
             val response = postApiService.getRouteForDay(request)
 
-            // 3. 응답 처리
             if (response.isSuccessful) {
-                // 성공 시: 응답 본문(body)에서 route 리스트를 꺼내 반환
                 val body = response.body()
                 Log.d("PostRepository", "route success body=${body}")
                 body?.route
@@ -393,26 +398,16 @@ open class PostRepository @Inject constructor(
         }
     }
 
-    /**
-     * 게시물 좋아요 요청
-     * @param postId 게시물 ID
-     * @return Result<Unit> 성공하면 Unit, 실패하면 Exception 포함
-     */
     suspend fun likePost(postId: String): Result<Unit> {
         return try {
-            // Retrofit API 호출(IO 스레드 처리는 내부적으로 해줌)
             val response = postApiService.likePost(postId)
 
-            // 상태 코드 확인
             if(response.isSuccessful) {
-                // 성공 시 백엔드에서 준 body 확인
-                // body가 null 일 수도 있으니 body()?.let { ... } 처리
                 val body = response.body()
 
-                if(body != null && body.success) { //body.success는 ApiResponse의 필드라고 가정
+                if(body != null && body.success) {
                     Result.success(Unit)
                 } else {
-                    // HTTP는 200인데 로직상 실패인 경우.
                     Result.failure(Exception(body?.message ?: "알 수 없는 서버"))
                 }
             } else {
@@ -431,8 +426,6 @@ open class PostRepository @Inject constructor(
                 val body = response.body()
 
                 if(body != null && body.success) {
-                    // val data: T? <- 이렇게 되어있음
-                    // 그래서 Result.success(Int) 이게 아니라 body에서 int를 꺼내줘야함
                     Result.success(body.data ?: 0)
                 } else {
                     Result.failure(Exception(body?.message ?: "알 수 없는 서버"))
@@ -452,18 +445,13 @@ open class PostRepository @Inject constructor(
             if(response.isSuccessful) {
                 val body = response.body()
 
-                // Body가 null이거나 (Content-Length: 0), 비즈니스 로직이 실패했을 때
                 if(body == null) {
-                    // HTTP 204 No Content처럼 Body 없이 성공했으나, 명시적 처리가 필요한 경우
-                    // 여기서는 API 응답 계약상 Body가 필수라고 가정하고 실패로 처리합니다.
                     return Result.failure(IllegalStateException("서버 응답 본문이 비어있습니다."))
                 }
 
                 if(body.success) {
-                    // 비즈니스 로직 성공
                     return Result.success(Unit)
                 } else {
-                    // Http 200 인데 로직상 실패
                     Result.failure(Exception(body?.message ?: "알 수 없는 서버"))
                 }
             } else {
@@ -496,10 +484,8 @@ open class PostRepository @Inject constructor(
 
     suspend fun toggleLike(postId: String, isCurrentlyLiked: Boolean): Result<Unit> {
         return if(isCurrentlyLiked) {
-            // 현재 좋아요 상태(true) -> false
             unLikePost(postId)
         } else {
-            // 현재 좋아요 상태가 아님(false) -> 좋아요 API 호출
             likePost(postId)
         }
     }
