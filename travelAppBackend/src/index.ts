@@ -20,7 +20,7 @@ dotenv.config();
 console.log("🚀 sendMail 라우터 파일이 로드되었습니다!");
 
 const app: Express = express();
-const port = Number(process.env.PORT) || 3000;
+const port = Number(process.env.PORT) || 10000;
 
 // CORS 설정
 const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || ['http://localhost:3000'];
