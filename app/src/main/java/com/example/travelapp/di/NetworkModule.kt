@@ -56,10 +56,12 @@ object NetworkModule {
     @Named("AuthOkHttpClient")
     fun provideAuthOkHttpClient(
         authInterceptor: AuthInterceptor,
-        authAuthenticator: AuthAuthenticator
+        authAuthenticator: AuthAuthenticator,
+        loggingInterceptor: HttpLoggingInterceptor
     ): OkHttpClient {
         return OkHttpClient.Builder()
             .addInterceptor(authInterceptor)
+            .addInterceptor(loggingInterceptor)
             .authenticator(authAuthenticator)
             .build()
     }
@@ -73,23 +75,8 @@ object NetworkModule {
         @Named("AuthOkHttpClient") okHttpClient: OkHttpClient,
         @ApplicationContext context: Context
     ): Retrofit {
-        val isEmulator = (Build.FINGERPRINT.startsWith("generic")
-                || Build.FINGERPRINT.startsWith("unknown")
-                || Build.MODEL.contains("google_sdk")
-                || Build.MODEL.contains("Emulator")
-                || Build.MODEL.contains("Android SDK built for x86")
-                || Build.MANUFACTURER.contains("Genymotion")
-                || (Build.BRAND.startsWith("generic") && Build.DEVICE.startsWith("generic")))
-
-        val phoneBaseUrl = runCatching {
-            BuildConfig::class.java.getField("PHONE_BASE_URL").get(null) as String
-        }.getOrNull()
-
-        val baseUrl = if (isEmulator) {
-            BuildConfig.BASE_URL
-        } else {
-            phoneBaseUrl?.takeIf { it.isNotBlank() } ?: BuildConfig.BASE_URL
-        }
+        // 빌드 설정에 따라 자동으로 주소가 바뀜
+        val baseUrl = BuildConfig.BASE_URL
 
         return Retrofit.Builder()
             .baseUrl(baseUrl)

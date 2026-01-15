@@ -30,10 +30,10 @@ android {
     buildTypes {
         getByName("debug") {
             // 코틀린 문법이므로 반드시 괄호()를 써야 합니다.
-            buildConfigField("String", "BASE_URL", "\"https://stethoscopic-revertive-alene.ngrok-free.dev/\"")
+            buildConfigField("String", "BASE_URL", "\"https://modutrip.onrender.com/\"")
         }
         getByName("release") {
-            buildConfigField("String", "BASE_URL", "\"http://43.201.67.69:3000/\"")
+            buildConfigField("String", "BASE_URL", "\"https://modutrip.onrender.com/\"")
         }
     }
 
