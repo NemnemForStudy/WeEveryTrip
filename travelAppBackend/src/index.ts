@@ -56,7 +56,7 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // 정적 파일 제공 설정
-app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+// app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
 // 기본 경로 (Root Endpoint)
 app.get('/', (req: Request, res: Response) => {

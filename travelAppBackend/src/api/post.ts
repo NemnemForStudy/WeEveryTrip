@@ -33,15 +33,7 @@ interface DecodedToken {
 
 // Multer 설정 (임시 저장소)
 // 여기서 저장된 파일은 잠시 후 sharp로 가공되고 삭제될 예정임
-const storage = multer.diskStorage({
-    destination: function (req, file, cb) {
-        cb(null, 'uploads/');
-    },
-    filename: function (req, file, cb) {
-        cb(null, file.fieldname + '-' + Date.now() + path.extname(file.originalname));
-    }
-});
-
+const storage = multer.memoryStorage();
 const upload = multer({ storage: storage });
 
 // ==========================================
@@ -95,24 +87,21 @@ router.post('/', upload.any(), async (req: Request, res: Response) => {
         if(files && files.length > 0) {
             // Promise.all로 병렬 처리
             const processedImages = files.map(async (file) => {
-                const originalPath = file.path;
-                const fileName = `resized-${Date.now()}-${file.filename}`;
-                const resizedPath = path.join(path.dirname(originalPath), fileName);
+                const fileName = `resized-${Date.now()}-${file.originalname}`;
                 
                 try {
                     // Sharp로 리사이징 및
-                    await sharp(originalPath)
+                    const resizeBuffer = await sharp(file.buffer)
                         .rotate()
-                        .resize({ width: 1024, withoutEnlargement: true }) // 1024보다 작으면 확대 안함.
-                        .withMetadata() // 사진 회전 정보 유지
+                        .resize({ width: 1024, withoutEnlargement: true })
+                        .withMetadata()
                         .jpeg({ quality: 80 })
-                        .toFile(resizedPath)
+                        .toBuffer(); // 파일로 저장하지 않고 다시 버퍼로 받음
 
                     // Supabase Storage 업로드
-                    const fileBuffer = await fs.readFile(resizedPath);
                     const { data, error } = await supabase.storage
                         .from('ModuTripPosts')
-                        .upload(fileName, fileBuffer, {
+                        .upload(fileName, resizeBuffer, {
                             contentType: 'image/jpeg',
                             upsert: true
                         });
@@ -124,10 +113,6 @@ router.post('/', upload.any(), async (req: Request, res: Response) => {
                         .from('ModuTripPosts')
                         .getPublicUrl(fileName);
 
-                    // 임시 파일 삭제
-                    await fs.unlink(resizedPath);
-                    await fs.unlink(originalPath);
-
                     return publicUrl;
                 } catch(imgErr) {
                     console.error(`이미지 변환 실패 (${file.originalname}):`, imgErr);
@@ -136,8 +121,8 @@ router.post('/', upload.any(), async (req: Request, res: Response) => {
                 }
             });
 
-            // 모든 이미지 처리 끝날때까지 대기
-            finalImageUrls = await Promise.all(processedImages);
+            // 모든 이미지 처리 끝날 때까지 대기하고 실패한 결과(null)는 걸러냄
+            finalImageUrls = (await Promise.all(processedImages)).filter(url => url !== null) as string[];
         }
 
         // 썸네일은 첫 번째 가공된 이미지 사용
@@ -562,39 +547,46 @@ router.post('/upload-images', authMiddleware, upload.any(), async (req: Request,
         // multer가 처리한 파일들
         const files = (req.files as Express.Multer.File[]) ?? [];
 
-        if(files.length === 0) {
+        if (files.length === 0) {
             return res.status(400).json({ success: false, message: '업로드할 파일이 없습니다.' });
         }
 
         // create에서 쓰는 방식대로 "서버에서 접근 가능한 URL을 만들어야한다."
         // ex) /uploads/xxx.jpg
         const processed = files.map(async (file) => {
-          const originalPath = file.path;
-          const fileName = `resized-${Date.now()}-${file.filename}`;
-          const resizedPath = path.join(path.dirname(originalPath), fileName);
+            // 메모리 방식이므로 file.path 대신 file.originalname 등을 활용해 파일명 생성
+            const fileName = `resized-${Date.now()}-${file.originalname}`;
 
-          try {
-            await sharp(originalPath)
-                .rotate()
-                .resize({ width: 1024, withoutEnlargement: true })
-                .withMetadata()
-                .jpeg({ quality: 80 })
-                .toFile(resizedPath);
+            try {
+                // 1. Sharp로 메모리 버퍼(file.buffer)를 바로 가공
+                const resizedBuffer = await sharp(file.buffer)
+                    .rotate()
+                    .resize({ width: 1024, withoutEnlargement: true })
+                    .withMetadata()
+                    .jpeg({ quality: 80 })
+                    .toBuffer(); // ✅ 파일로 저장하지 않고 버퍼로 반환
 
-            const fileBuffer = await fs.readFile(resizedPath);
-            await supabase.storage.from('ModuTripPosts').upload(fileName, fileBuffer, {
-                contentType: 'image/jpeg'
-            });
+                // 2. 가공된 버퍼를 Supabase에 바로 업로드
+                const { data, error } = await supabase.storage
+                    .from('ModuTripPosts')
+                    .upload(fileName, resizedBuffer, {
+                        contentType: 'image/jpeg',
+                        upsert: true
+                    });
 
-            const { data: { publicUrl} }  = supabase.storage.from('ModuTripPosts').getPublicUrl(fileName);
-            await fs.unlink(originalPath);
-            await fs.unlink(resizedPath);
+                if (error) throw error;
 
-            return publicUrl;
-          } catch(e) {
-            console.error(`이미지 변환 실패: `, e);
-            return null;
-          }
+                // 3. 공개 URL 생성
+                const { data: { publicUrl } } = supabase.storage
+                    .from('ModuTripPosts')
+                    .getPublicUrl(fileName);
+
+                // ✅ fs.unlink 코드가 필요 없어졌습니다!
+                return publicUrl;
+            } catch (e) {
+                console.error(`이미지 변환/업로드 실패: `, e);
+                return null;
+            }
         });
 
         const urls = (await Promise.all(processed)).filter(url => url !== null);
@@ -604,7 +596,8 @@ router.post('/upload-images', authMiddleware, upload.any(), async (req: Request,
             message: "이미지 업로드 성공",
             urls
         });
-    } catch(e) {
+    } catch (e) {
+        console.error('🚨 이미지 업로드 라우터 에러:', e);
         return res.status(500).json({ success: false, message: '서버 오류' });
     }
 })
