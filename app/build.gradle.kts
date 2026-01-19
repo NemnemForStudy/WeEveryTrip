@@ -18,7 +18,7 @@ if(localPropertiesFile.exists()) {
 }
 
 android {
-    namespace = "com.example.travelapp"
+    namespace = "com.nemnem.travelapp"
     compileSdk = 36
 
     val localProperties = Properties()
@@ -38,7 +38,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.example.travelapp"
+        applicationId = "com.nemnem.travelapp"
         minSdk = 24
         targetSdk = 36
         versionCode = 1

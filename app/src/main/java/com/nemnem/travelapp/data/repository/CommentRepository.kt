@@ -1,0 +1,92 @@
+package com.nemnem.travelapp.data.repository
+
+import com.nemnem.travelapp.data.api.CommentApiService
+import com.nemnem.travelapp.data.model.comment.Comment
+import com.nemnem.travelapp.data.model.comment.CreateCommentRequest
+import com.nemnem.travelapp.data.model.comment.UpdateCommentRequest
+import javax.inject.Inject
+
+open class CommentRepository @Inject constructor(
+    private val commentApiService: CommentApiService,
+) {
+    /**
+     * 댓글 작성 함수
+     * ViewModel에서는 이 함수만 호출하면 됩니다.
+     */
+    suspend fun createComment(postId: String, content: String): Result<Comment> {
+        return try{
+            // viewModel에서 받은 텍스트를 DTO에 포장
+            val request = CreateCommentRequest(content)
+
+            // api 호출
+            val response = commentApiService.createComment(postId, request)
+
+            // 응답 처리
+            if(response.isSuccessful) {
+                val body = response.body()
+                if(body != null && body.success && body.data != null) {
+                    Result.success(body.data)
+                } else {
+                    Result.failure(Exception(body?.message ?: "알 수 없는 오류"))
+                }
+            } else {
+                Result.failure(Exception("서버 오류: ${response.code()}"))
+            }
+        } catch (e: Exception) {
+            // 네트워크 끊김, 타임아웃 등 예외 발생
+            Result.failure(e)
+        }
+    }
+
+    suspend fun getComments(postId: String): Result<List<Comment>> {
+        return try {
+            val response = commentApiService.getComments(postId)
+
+            if(response.isSuccessful) {
+                val body = response.body()
+                if(body != null && body.success && body.data != null) {
+                    Result.success(body.data)
+                } else {
+                    Result.failure(Exception(body?.message))
+                }
+            } else {
+                Result.failure(Exception("Error: ${response.code()}"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun updateComment(commentId: String, content: String): Result<String> {
+        return try {
+            val response = commentApiService.updateComment(
+                commentId, UpdateCommentRequest(content))
+            if(response.isSuccessful) {
+                val body = response.body()
+                if (body != null && body.success) {
+                    Result.success(content)
+                } else {
+                    Result.failure(Exception(content))
+                }
+            } else {
+                Result.failure(Exception("서버 오류: ${response.code()}"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun deleteComment(commentId: String): Result<String> {
+        return try {
+            val response = commentApiService.deleteComment(commentId)
+            if(response.isSuccessful) {
+                Result.success("삭제 성공")
+            } else {
+                Result.failure(Exception("삭제 실패"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+
+    }
+}
