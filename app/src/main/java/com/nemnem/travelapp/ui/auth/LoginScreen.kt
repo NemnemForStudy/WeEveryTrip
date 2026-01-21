@@ -1,6 +1,7 @@
 package com.nemnem.travelapp.ui.auth
 
 import android.app.Activity
+import android.util.Log
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -56,6 +57,7 @@ fun LoginScreen(navController: NavController) {
             .requestEmail()
             .build()
     }
+    Log.d("AuthDebug", "GOOGLE_WEB_CLIENT_ID : ${BuildConfig.GOOGLE_WEB_CLIENT_ID}")
     val googleSignInClient = remember { GoogleSignIn.getClient(context, gso) }
 
     // 구글 로그인 결과 처리 런처
