@@ -32,14 +32,16 @@ router.post('/send/email', async(req: Request, res: Response) => {
     const transporter = nodemailer.createTransport({
         host: 'smtp.gmail.com',
         port: 587, // SSL 보안 포트
-        secure: true, // 465 포트를 사용할 때는 true로 설정
+        secure: false,
+        requireTLS: true,
         auth: {
             user: ADMIN_EMAIL,
             pass: ADMIN_PASSWORD // 🚨 구글 계정 비번이 아닌 '16자리 앱 비밀번호'여야 합니다!
         },
         // 연결 시도를 위해 조금 더 기다려주도록 설정 추가
-        connectionTimeout: 15000, 
-        greetingTimeout: 15000,
+        connectionTimeout: 20000, 
+        greetingTimeout: 20000,
+        socketTimeout: 20000,
     });
 
     const mailOptions = {
