@@ -113,9 +113,9 @@ class AuthRepository @Inject constructor(
 
     suspend fun updateProfile(nickname: String, profileImageUrl: String?): Result<Unit> {
         return try {
-            val token = tokenManager.getToken() ?: return Result.failure(Exception("토큰 없음"))
+//            val token = tokenManager.getToken() ?: return Result.failure(Exception("토큰 없음"))
             val response = authApiService.updateProfile(
-                token = "Bearer $token",
+//                token = "Bearer $token",
                 request = UpdateProfileRequest(nickname, profileImageUrl)
             )
 

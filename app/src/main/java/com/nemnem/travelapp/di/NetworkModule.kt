@@ -18,6 +18,7 @@ import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
+import java.util.concurrent.TimeUnit
 import javax.inject.Named
 import javax.inject.Singleton
 
@@ -44,6 +45,9 @@ object NetworkModule {
         loggingInterceptor: HttpLoggingInterceptor
     ): OkHttpClient {
         return OkHttpClient.Builder()
+            .connectTimeout(30, TimeUnit.SECONDS) // 연결 대기 시간 30초
+            .readTimeout(30, TimeUnit.SECONDS)    // 응답 읽기 시간 30초
+            .writeTimeout(30, TimeUnit.SECONDS)   // 요청 쓰기 시간 30초
             .addInterceptor(loggingInterceptor)
             .build()
     }
@@ -59,6 +63,9 @@ object NetworkModule {
         loggingInterceptor: HttpLoggingInterceptor
     ): OkHttpClient {
         return OkHttpClient.Builder()
+            .connectTimeout(60, TimeUnit.SECONDS) // 문의하기 메일 발송을 고려해 60초 추천
+            .readTimeout(60, TimeUnit.SECONDS)
+            .writeTimeout(60, TimeUnit.SECONDS)
             .addInterceptor(authInterceptor)
             .addInterceptor(loggingInterceptor)
             .authenticator(authAuthenticator)

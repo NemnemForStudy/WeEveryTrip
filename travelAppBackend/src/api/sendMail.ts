@@ -8,7 +8,7 @@ const ADMIN_EMAIL = process.env.ADMIN_EMAIL;
 const ADMIN_PASSWORD = process.env.EMAIL_PASS;
 
 router.post('/send/email', async(req: Request, res: Response) => {
-    console.log('👉 [POST] 문의 메일 발송 요청 도착');
+    console.log('[POST] 문의 메일 발송 요청 도착');
     const { title, content, email } = req.body;
     console.log(email)
 
@@ -31,20 +31,21 @@ router.post('/send/email', async(req: Request, res: Response) => {
     });
 
     const mailOptions = {
-        from: `ModuTriip APP <${ADMIN_EMAIL}>`,
+        from: `ModuTrip APP <${ADMIN_EMAIL}>`,
         to: ADMIN_EMAIL,
         subject: `[문의사항] ${title}`,
         text: `발신자: ${email}\n\n내용:\n${content}`,
     };
 
-    try {
-        await transporter.sendMail(mailOptions);
-        console.log(`✅ 메일 전송 완료: ${title}`);
-        return res.status(200).json({ success: true });
-    } catch (error) {
-        console.error('🚨 메일 전송 에러:', error);
-        return res.status(500).json({ success: false, message: '전송 실패' });
-    }
+    // promise chain으로 비동기 처리
+    transporter.sendMail(mailOptions)
+        .then(() => {
+            console.log(`✅ [Background] 메일 전송 완료: ${title}`);
+        })
+        .catch((error) => {
+            console.error('🚨 [Background] 메일 전송 실패:', error);
+            // 여기서 DB에 '발송 실패' 로그를 남기거나 개발자에게 따로 알림을 줄 수도 있습니다.
+        }); 
 })
 
 export default router;

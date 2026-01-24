@@ -49,7 +49,6 @@ interface AuthApiService {
 
     @POST("api/auth/updateProfile")
     suspend fun updateProfile(
-        @Header("Authorization") token: String,
         @Body request: UpdateProfileRequest
     ): Response<ApiResponse<Unit>>
 }
