@@ -295,4 +295,58 @@ router.post("/withdraw", authMiddleware, async(req: Request, res: Response) => {
     }
 });
 
+router.post('/updateProfile', authMiddleware, async (req: Request, res: Response) => {
+    const userId = (req as any).user.id;
+    const { nickname, profileImageUrl } = req.body;
+
+    if (!nickname && !profileImageUrl) {
+        return res.status(400).json({ 
+            success: false, 
+            message: '수정할 닉네임 또는 이미지 URL이 필요합니다.' 
+        });
+    }
+
+    const client = await db.getClient();
+    try {
+        await client.query('BEGIN');
+
+        /**
+         * COALSCE($1, nickname) : $1(전달값)이 null이면 기존 nickname 유지.
+         * 
+         */
+        const updateQuery = `
+            UPDATE "user"
+            SET
+                nickname = COALESCE($1, nickname), 
+                profile_image = COALESCE($2, profile_image),
+                updated_at = NOW()
+            WHERE user_id = $3 AND deleted_at IS NULL
+            RETURNING user_id, nickname, profile_image;
+        `;
+
+        const result = await client.query(updateQuery, [
+            nickname || null,
+            profileImageUrl || null,
+            userId
+        ]);
+
+        if(result.rowCount === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({
+                success: false,
+                message: '사용자를 찾을 수 없습니다.'
+            });
+        }
+        await client.query('COMMIT');
+
+        res.status(200).json({
+            success: true,
+            message: '프로필이 성공적으로 업데이트되었습니다.',
+            user: result.rows[0]
+        });
+    } catch (error) {
+        await client.query('ROLLBACK');
+        console.error('프로필 업데이트 중 오류 발생:', error);
+    }
+});
 export default router;

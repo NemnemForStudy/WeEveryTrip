@@ -21,10 +21,10 @@ interface AuthApiService {
     // 반환 타입을 SocialLoginResponse로 변경 (TokenResponse 없음)
     @POST("api/auth/social-login")
     suspend fun socialLogin(@Body request: SocialLoginRequest): Response<SocialLoginResponse>
-
-    // 일반 로그인도 SocialLoginResponse 구조를 공유한다고 가정 (서버 응답 형태 확인 필요)
-    @POST("api/auth/login")
-    suspend fun login(@Body request: LoginRequest): Response<SocialLoginResponse>
+//
+//    // 일반 로그인도 SocialLoginResponse 구조를 공유한다고 가정 (서버 응답 형태 확인 필요)
+//    @POST("api/auth/login")
+//    suspend fun login(@Body request: LoginRequest): Response<SocialLoginResponse>
 
     @GET("api/auth/mypage")
     suspend fun getMyProfile(): Response<User>

@@ -9,6 +9,7 @@ plugins {
     alias(libs.plugins.hilt.android)
     id("com.google.android.libraries.mapsplatform.secrets-gradle-plugin") version "2.0.1" apply false
     id("org.jetbrains.kotlin.plugin.serialization") version "1.9.0"
+    id("com.google.firebase.crashlytics")
 }
 
 val localProperties = Properties()
@@ -21,10 +22,13 @@ android {
     namespace = "com.nemnem.travelapp"
     compileSdk = 36
 
-    val localProperties = Properties()
-    val localPropertiesFile = rootProject.file("local.properties")
-    if(localPropertiesFile.exists()) {
-        localProperties.load(localPropertiesFile.inputStream())
+    signingConfigs {
+        create("release") {
+            storeFile = file("ModuTrip.jks")
+            storePassword = localProperties.getProperty("RELEASE_STORE_PASSWORD")
+            keyAlias = localProperties.getProperty("RELEASE_KEY_ALIAS")
+            keyPassword = localProperties.getProperty("RELEASE_KEY_PASSWORD")
+        }
     }
 
     buildTypes {
@@ -33,6 +37,11 @@ android {
             buildConfigField("String", "BASE_URL", "\"https://modutrip.onrender.com/\"")
         }
         getByName("release") {
+            signingConfig = signingConfigs.getByName("release")
+
+            isMinifyEnabled = false
+            // ""를 "proguard-rules.pro"로 수정하세요.
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             buildConfigField("String", "BASE_URL", "\"https://modutrip.onrender.com/\"")
         }
     }
@@ -51,32 +60,32 @@ android {
             properties.load(project.rootProject.file("local.properties").inputStream())
         }
 
-        val kakaoKey = properties.getProperty("kakao.native.app.key") ?: ""
+        val kakaoKey = localProperties.getProperty("kakao.native.app.key") ?: ""
         buildConfigField("String", "KAKAO_NATIVE_APP_KEY", "\"$kakaoKey\"")
+        manifestPlaceholders["kakao_app_key"] = "kakao${kakaoKey}"
+        manifestPlaceholders["KAKAO_NATIVE_APP_KEY"] = kakaoKey
 
-        val naverClientId = properties.getProperty("naver.client.id") ?: ""
+        // Naver Key
+        val naverClientId = localProperties.getProperty("naver.client.id") ?: ""
         buildConfigField("String", "NAVER_CLIENT_ID", "\"$naverClientId\"")
 
-        val naverClientSecret = properties.getProperty("naver.client.secret") ?: ""
+        val naverClientSecret = localProperties.getProperty("naver.client.secret") ?: ""
         buildConfigField("String", "NAVER_CLIENT_SECRET", "\"$naverClientSecret\"")
 
-        val googleWebClientId = properties.getProperty("google.web.client.id") ?: ""
-        buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"$googleWebClientId\"")
-
-        manifestPlaceholders["kakao_app_key"] = "kakao${kakaoKey}"
-
-        val naverMapClientId = properties.getProperty("naver.map.client.id") ?: ""
+        // Naver Map Key
+        val naverMapClientId = localProperties.getProperty("naver.map.client.id") ?: ""
         buildConfigField("String", "NAVER_MAP_CLIENT_ID", "\"$naverMapClientId\"")
-        // 메니페스트(XML)용 변수 연결
         manifestPlaceholders["NAVER_MAP_CLIENT_ID"] = naverMapClientId
 
-        val kakaoNativeAppKey = properties.getProperty("kakao.native.app.key") ?: ""
-        buildConfigField("String","KAKAO_NATIVE_APP_KEY", "\"$kakaoNativeAppKey\"")
-        manifestPlaceholders["KAKAO_NATIVE_APP_KEY"] = kakaoNativeAppKey
+        // Google Web Client ID
+        val googleWebClientId = localProperties.getProperty("google.web.client.id") ?: ""
+        buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"$googleWebClientId\"")
 
+        // Supabase
         val supabaseUrl = localProperties.getProperty("SUPABASE_URL") ?: "\"\""
         buildConfigField("String", "SUPABASE_URL", supabaseUrl)
     }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
@@ -183,6 +192,8 @@ dependencies {
     // 2. 나머지 라이브러리 (버전 생략 가능)
     implementation("com.google.firebase:firebase-auth")
     implementation("com.google.firebase:firebase-firestore")
+    implementation("com.google.firebase:firebase-analytics")
+    implementation("com.google.firebase:firebase-crashlytics")
     implementation("com.google.firebase:firebase-analytics")
 
     // ... 기존에 있던 hilt, navigation, google-auth 등 라이브러리들 ...

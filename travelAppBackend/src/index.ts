@@ -64,10 +64,10 @@ app.get('/', (req: Request, res: Response) => {
 });
 
 // API 라우터를 등록합니다.
-app.use('/api', mailRouter);
-app.use('/api/posts', postsRouter);
 app.use('/api/auth', authRouter);
+app.use('/api/posts', postsRouter);
 app.use('/api/routes', routeRouter);
+app.use('/api', mailRouter);
 
 app.use((err: any, req: Request, res: Response, next: NextFunction) => {
     if (err instanceof multer.MulterError) {

@@ -70,7 +70,7 @@
         <meta-data
             android:name="com.naver.maps.map.NCP_KEY_ID"
             android:value="${NAVER_MAP_CLIENT_ID}" />
-        
+
         <!-- 네이버 로그인 (최신 SDK에서는 자동으로 처리됨) -->
     </application>
 
