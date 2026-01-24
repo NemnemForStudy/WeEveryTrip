@@ -52,6 +52,9 @@ router.post('/send/email', async (req: Request, res: Response) => {
         // 4. Nodemailer 설정 (성공했던 설정 그대로 적용)
         const transporter = nodemailer.createTransport({
             service: 'gmail',
+            host: 'smtp.gmail.com', // 명시적 호스트 지정
+            port: 465,              // 🚨 587 대신 465 사용 (SSL)
+            secure: true,           // 🚨 465 포트는 true여야 함
             auth: {
                 type: 'OAuth2',
                 user: ADMIN_EMAIL, // kotlinstudyga@gmail.com
@@ -60,6 +63,9 @@ router.post('/send/email', async (req: Request, res: Response) => {
                 refreshToken: REFRESH_TOKEN,
                 accessToken: accessToken as string, // 갱신된 토큰 사용
             },
+            family: 4,              // IPv6 끄고 IPv4만 사용 (Render에서 필수)
+            connectionTimeout: 10000, // 연결 시도 10초 제한
+            greetingTimeout: 5000,
         } as SMTPTransport.Options);
 
         // 5. 메일 옵션 설정
