@@ -5,84 +5,103 @@ import { google } from 'googleapis';
 
 const router = express.Router();
 
+// 전역 transporter 캐싱 (연결 재사용)
+let cachedTransporter: nodemailer.Transporter | null = null;
+
+async function getTransporter() {
+    if (cachedTransporter) {
+        return cachedTransporter;
+    }
+
+    const CLIENT_ID = process.env.OAUTH_CLIENT_ID;
+    const CLIENT_SECRET = process.env.OAUTH_CLIENT_SECRET;
+    const REFRESH_TOKEN = process.env.OAUTH_REFRESH_TOKEN;
+    const ADMIN_EMAIL = process.env.ADMIN_EMAIL;
+
+    const OAuth2 = google.auth.OAuth2;
+    const oauth2Client = new OAuth2(
+        CLIENT_ID,
+        CLIENT_SECRET,
+        "https://developers.google.com/oauthplayground"
+    );
+
+    oauth2Client.setCredentials({
+        refresh_token: REFRESH_TOKEN
+    });
+
+    const accessTokenResponse = await oauth2Client.getAccessToken();
+    const accessToken = accessTokenResponse.token;
+
+    if (!accessToken) {
+        throw new Error("엑세스 토큰 갱신 실패");
+    }
+
+    cachedTransporter = nodemailer.createTransport({
+        service: 'gmail',
+        auth: {
+            type: 'OAuth2',
+            user: ADMIN_EMAIL,
+            clientId: CLIENT_ID,
+            clientSecret: CLIENT_SECRET,
+            refreshToken: REFRESH_TOKEN,
+            accessToken: accessToken,
+        },
+        // Render 환경 설정
+        pool: {
+            maxConnections: 1,
+            maxMessages: Infinity,
+            rateDelta: 20000,
+            rateLimit: 5,
+        },
+        connectionUrl: 'smtps://smtp.gmail.com',
+    } as SMTPTransport.Options);
+
+    return cachedTransporter;
+}
+
 router.post('/send/email', async (req: Request, res: Response) => {
     console.log('[POST] 문의 메일 발송 요청 도착');
     const { title, content, email } = req.body;
 
-    // 환경변수 가져오기
     const ADMIN_EMAIL = process.env.ADMIN_EMAIL;
     const CLIENT_ID = process.env.OAUTH_CLIENT_ID;
     const CLIENT_SECRET = process.env.OAUTH_CLIENT_SECRET;
     const REFRESH_TOKEN = process.env.OAUTH_REFRESH_TOKEN;
 
-    // 1. 필수 값 검증
+    // 필수 값 검증
     if (!title || !content) {
         return res.status(400).json({ success: false, message: '필수 항목 누락' });
     }
 
     if (!ADMIN_EMAIL || !CLIENT_ID || !CLIENT_SECRET || !REFRESH_TOKEN) {
-        console.error('🚨 서버 설정 에러: .env에 OAuth 관련 설정이 부족합니다.');
+        console.error('🚨 서버 설정 에러: .env 설정 부족');
         return res.status(500).json({ success: false, message: '서버 설정 오류' });
     }
 
-    // 2. 앱에 먼저 응답 (사용자 경험 개선)
+    // 먼저 응답 (202 Accepted)
     res.status(202).json({ success: true, message: '접수 중입니다.' });
 
     try {
-        // 3. OAuth2 클라이언트 설정 및 엑세스 토큰 갱신
-        const OAuth2 = google.auth.OAuth2;
-        const oauth2Client = new OAuth2(
-            CLIENT_ID,
-            CLIENT_SECRET,
-            "https://developers.google.com/oauthplayground"
-        );
+        const transporter = await getTransporter();
 
-        oauth2Client.setCredentials({
-            refresh_token: REFRESH_TOKEN
-        });
-
-        // ⚡️ 여기서 실시간으로 새 토큰을 받아옵니다!
-        const accessTokenResponse = await oauth2Client.getAccessToken();
-        const accessToken = accessTokenResponse.token;
-
-        if (!accessToken) {
-            throw new Error("엑세스 토큰 갱신 실패");
-        }
-
-        // 4. Nodemailer 설정 (성공했던 설정 그대로 적용)
-        const transporter = nodemailer.createTransport({
-            service: 'gmail',
-            host: 'smtp.gmail.com', // 명시적 호스트 지정
-            port: 465,              // 🚨 587 대신 465 사용 (SSL)
-            secure: true,           // 🚨 465 포트는 true여야 함
-            auth: {
-                type: 'OAuth2',
-                user: ADMIN_EMAIL, // kotlinstudyga@gmail.com
-                clientId: CLIENT_ID,
-                clientSecret: CLIENT_SECRET,
-                refreshToken: REFRESH_TOKEN,
-                accessToken: accessToken as string, // 갱신된 토큰 사용
-            },
-            family: 4,              // IPv6 끄고 IPv4만 사용 (Render에서 필수)
-            connectionTimeout: 10000, // 연결 시도 10초 제한
-            greetingTimeout: 5000,
-        } as SMTPTransport.Options);
-
-        // 5. 메일 옵션 설정
         const mailOptions = {
-            from: `MoyeoLog <${ADMIN_EMAIL}>`, // 오타 수정: ? -> >
+            from: `MoyeoLog <${ADMIN_EMAIL}>`,
             to: ADMIN_EMAIL,
             subject: `[문의사항] ${title}`,
-            text: `발신자: ${email || '익명'}\n\n내용:\n${content}`,
+            html: `
+                <p><strong>발신자:</strong> ${email || '익명'}</p>
+                <hr />
+                <p><strong>내용:</strong></p>
+                <p>${content.replace(/\n/g, '<br>')}</p>
+            `,
         };
 
-        // 6. 전송
-        await transporter.sendMail(mailOptions);
-        console.log('✅ 메일 전송 성공');
+        const result = await transporter.sendMail(mailOptions);
+        console.log('✅ 메일 전송 성공:', result.messageId);
 
-    } catch (e) {
-        console.error('❌ 메일 전송 실패:', e);
-        // 이미 202 응답을 보냈으므로 추가 응답은 하지 않습니다.
+    } catch (error) {
+        console.error('❌ 메일 전송 실패:', error);
+        // 이미 응답했으므로 추가 응답 없음
     }
 });
 
