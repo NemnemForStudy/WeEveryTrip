@@ -1,6 +1,8 @@
 import express, { Request, Response } from 'express';
 import nodemailer from 'nodemailer';
 import SMTPTransport from 'nodemailer/lib/smtp-transport';
+import { google } from 'googleapis';
+import { oauth2 } from 'googleapis/build/src/apis/oauth2';
 
 const router = express.Router();
 
@@ -33,34 +35,45 @@ router.post('/send/email', async(req: Request, res: Response) => {
     // 🔥 [핵심] 앱에 먼저 성공 응답을 보냅니다. (앱의 뱅글뱅글 멈춤 해결)
     res.status(202).json({ success: true, message: '접수 중입니다.' });
 
-    const transporter = nodemailer.createTransport({
-        host: 'smtp.gmail.com',
-        port: 465,
-        secure: true,
-        family: 4, 
-        auth: {
-            user: ADMIN_EMAIL,
-            pass: ADMIN_PASSWORD 
-        },
-        connectionTimeout: 30000,
-    } as SMTPTransport.Options);
+    try {
+        const Oauth2 = google.auth.OAuth2;
+        const oauth2Client = new Oauth2(
+            process.env.OAUTH_CLIENT_ID,
+            process.env.OAUTH_CLIENT_SECRET,
+            "https://developers.google.com/oauthplayground"
+        );
 
-    const mailOptions = {
-        from: `ModuTrip APP <${ADMIN_EMAIL}>`,
-        to: ADMIN_EMAIL,
-        subject: `[문의사항] ${title}`,
-        text: `발신자: ${email}\n\n내용:\n${content}`,
-    };
-
-    // promise chain으로 비동기 처리
-    transporter.sendMail(mailOptions)
-        .then(() => {
-            console.log(`✅ [Background] 메일 전송 완료: ${title}`);
-        })
-        .catch((error) => {
-            console.error('🚨 [Background] 메일 전송 실패:', error);
-            // 여기서 DB에 '발송 실패' 로그를 남기거나 개발자에게 따로 알림을 줄 수도 있습니다.
+        oauth2Client.setCredentials({
+            refresh_token: process.env.OAUTH_REFRESH_TOKEN
         });
+
+        const transporter = nodemailer.createTransport({
+            service: 'gmail',
+            host: 'smtp.google.com',
+            port: 587,
+            secure: true,
+            auth: {
+                type: 'OAuth2',
+                user: ADMIN_EMAIL,
+                clientId: process.env.OAUTH_CLIENT_ID,
+                clientSecret: process.env.OAUTH_CLIENT_SECRET,
+                refreshToken: process.env.OAUTH_REFRESH_TOKEN,
+                accessToken: process.env.OAUTH_ACCESS_TOKEN,
+            },
+        } as SMTPTransport.Options);
+
+        const mailOptions = {
+            from: `ModuTrip <${ADMIN_EMAIL}?`,
+            to: ADMIN_EMAIL,
+            subject: `[문의사항] ${title} `,
+            text: `발신자: ${req.body.email}\n\n내용:\n${req.body.content}`,
+        };
+
+        await transporter.sendMail(mailOptions);
+        console.log('✅ 메일 전송 성공');
+    } catch (e) {
+        console.error('❌ 메일 전송 실패 원인:', e);
+    }
 })
 
 export default router;
