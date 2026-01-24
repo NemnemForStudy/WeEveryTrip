@@ -7,6 +7,13 @@ const router = express.Router();
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL;
 const ADMIN_PASSWORD = process.env.EMAIL_PASS;
 
+console.log('--- 환경 변수 체크 ---');
+console.log('ADMIN_EMAIL:', process.env.ADMIN_EMAIL);
+console.log('EMAIL_PASS 존재 여부:', !!process.env.EMAIL_PASS);
+console.log('EMAIL_PASS 길이:', process.env.EMAIL_PASS?.length);
+console.log('EMAIL_PASS 시작/끝:', `${process.env.EMAIL_PASS?.substring(0, 2)}***${process.env.EMAIL_PASS?.slice(-2)}`);
+console.log('--------------------');
+
 router.post('/send/email', async(req: Request, res: Response) => {
     console.log('[POST] 문의 메일 발송 요청 도착');
     const { title, content, email } = req.body;
