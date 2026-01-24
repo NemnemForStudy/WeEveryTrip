@@ -31,7 +31,7 @@ router.post('/send/email', async(req: Request, res: Response) => {
 
     const transporter = nodemailer.createTransport({
         host: 'smtp.gmail.com',
-        port: 465, // SSL 보안 포트
+        port: 587, // SSL 보안 포트
         secure: true, // 465 포트를 사용할 때는 true로 설정
         auth: {
             user: ADMIN_EMAIL,
