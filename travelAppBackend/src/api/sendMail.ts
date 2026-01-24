@@ -1,5 +1,6 @@
 import express, { Request, Response } from 'express';
 import nodemailer from 'nodemailer';
+import SMTPTransport from 'nodemailer/lib/smtp-transport';
 
 const router = express.Router();
 
@@ -31,18 +32,19 @@ router.post('/send/email', async(req: Request, res: Response) => {
 
     const transporter = nodemailer.createTransport({
         host: 'smtp.gmail.com',
-        port: 587, // SSL 보안 포트
-        secure: false,
+        port: 587,
+        secure: false, 
         requireTLS: true,
+        family: 4, // 이제 타입 에러 없이 IPv4 강제 설정이 먹힐 겁니다.
         auth: {
-            user: ADMIN_EMAIL,
-            pass: ADMIN_PASSWORD // 🚨 구글 계정 비번이 아닌 '16자리 앱 비밀번호'여야 합니다!
+            user: ADMIN_EMAIL, // 변수명 확인 (process.env.ADMIN_EMAIL)
+            pass: ADMIN_PASSWORD // 변수명 확인 (process.env.EMAIL_PASS)
         },
-        // 연결 시도를 위해 조금 더 기다려주도록 설정 추가
+        logger: true,
+        debug: true, 
         connectionTimeout: 20000, 
         greetingTimeout: 20000,
-        socketTimeout: 20000,
-    });
+    } as SMTPTransport.Options);
 
     const mailOptions = {
         from: `ModuTrip APP <${ADMIN_EMAIL}>`,
