@@ -30,20 +30,19 @@ router.post('/send/email', async(req: Request, res: Response) => {
         return res.status(500).json({ success: false, message: '서버 메일 설정 오류' });
     }
 
+    // 🔥 [핵심] 앱에 먼저 성공 응답을 보냅니다. (앱의 뱅글뱅글 멈춤 해결)
+    res.status(202).json({ success: true, message: '접수 중입니다.' });
+
     const transporter = nodemailer.createTransport({
         host: 'smtp.gmail.com',
-        port: 587,
-        secure: false, 
-        requireTLS: true,
-        family: 4, // 이제 타입 에러 없이 IPv4 강제 설정이 먹힐 겁니다.
+        port: 465,
+        secure: true,
+        family: 4, 
         auth: {
-            user: ADMIN_EMAIL, // 변수명 확인 (process.env.ADMIN_EMAIL)
-            pass: ADMIN_PASSWORD // 변수명 확인 (process.env.EMAIL_PASS)
+            user: ADMIN_EMAIL,
+            pass: ADMIN_PASSWORD 
         },
-        logger: true,
-        debug: true, 
-        connectionTimeout: 20000, 
-        greetingTimeout: 20000,
+        connectionTimeout: 30000,
     } as SMTPTransport.Options);
 
     const mailOptions = {
