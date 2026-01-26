@@ -87,7 +87,6 @@ interface PostApiService {
     @Multipart
     @POST("api/posts/upload-images")
     suspend fun uploadImages(
-        @Header("Authorization") token: String,
         @Part images: List<MultipartBody.Part>
     ): Response<UploadImagesResponse>
 }

@@ -1,6 +1,8 @@
 package com.nemnem.travelapp.di
 
 import android.content.Context
+import com.chuckerteam.chucker.api.ChuckerCollector
+import com.chuckerteam.chucker.api.ChuckerInterceptor
 import com.nemnem.travelapp.BuildConfig
 import com.nemnem.travelapp.data.api.AuthApiService
 import com.nemnem.travelapp.data.api.AuthAuthenticator
@@ -52,6 +54,17 @@ object NetworkModule {
             .build()
     }
 
+    @Provides
+    @Singleton
+    fun provideChuckerInterceptor(@ApplicationContext context: Context): ChuckerInterceptor {
+        return ChuckerInterceptor.Builder(context)
+            .collector(ChuckerCollector(context))
+            .maxContentLength(250000L)
+            .redactHeaders(emptySet())
+            .alwaysReadResponseBody(true)
+            .build()
+    }
+
     // 인증 토큰(JWT)이 포함된 클라이언트 (게시글 작성, 조회 등)
     // AuthInterceptor가 여기서 자동으로 헤더를 붙여줍니다.
     @Provides
@@ -60,7 +73,8 @@ object NetworkModule {
     fun provideAuthOkHttpClient(
         authInterceptor: AuthInterceptor,
         authAuthenticator: AuthAuthenticator,
-        loggingInterceptor: HttpLoggingInterceptor
+        loggingInterceptor: HttpLoggingInterceptor,
+        chuckerInterceptor: ChuckerInterceptor
     ): OkHttpClient {
         return OkHttpClient.Builder()
             .connectTimeout(60, TimeUnit.SECONDS) // 문의하기 메일 발송을 고려해 60초 추천
@@ -68,6 +82,7 @@ object NetworkModule {
             .writeTimeout(60, TimeUnit.SECONDS)
             .addInterceptor(authInterceptor)
             .addInterceptor(loggingInterceptor)
+            .addInterceptor(chuckerInterceptor)
             .authenticator(authAuthenticator)
             .build()
     }

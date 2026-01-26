@@ -146,7 +146,6 @@ open class MyPageViewModel @Inject constructor(
                 if(imageUri != null) {
                     val imagePart = uriToPart(context, imageUri)
                     val uploadResponse = postApiService.uploadImages(
-                        token = "Bearer ${tokenManager.getToken()}",
                         images = listOf(imagePart)
                     )
                     if (uploadResponse.isSuccessful) {

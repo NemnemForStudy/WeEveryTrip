@@ -236,10 +236,10 @@ fun WriteScreen(
                     CategoryItem("국내여행", isSelected = category == "국내여행") {
                         category = "국내여행"; showCategoryDialog = false
                     }
-                    Spacer(Modifier.height(12.dp))
-                    CategoryItem("국외여행", isSelected = category == "국외여행") {
-                        category = "국외여행"; showCategoryDialog = false
-                    }
+//                    Spacer(Modifier.height(12.dp))
+//                    CategoryItem("국외여행", isSelected = category == "국외여행") {
+//                        category = "국외여행"; showCategoryDialog = false
+//                    }
                 }
             }
         }

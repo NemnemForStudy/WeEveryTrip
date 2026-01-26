@@ -198,8 +198,6 @@ class EditPostViewModel @Inject constructor(
             _updateStatus.value = UpdateStatus.Loading
 
             try {
-                val token = tokenManager.getToken() ?: throw Exception("로그인 정보가 없습니다.")
-
                 // 리스트 첫 번째 사진이 무조건 가장 빠른 시간의 사진
                 val allImagesInDrawer = _groupedImages.value.values.flatten()
                     .sortedBy { it.timestamp ?: Long.MAX_VALUE }
@@ -212,7 +210,7 @@ class EditPostViewModel @Inject constructor(
                     val parts = withContext(Dispatchers.IO) {
                         localImages.map { uriToPart(context, it.uri) }
                     }
-                    val response = postApiService.uploadImages("Bearer $token", parts)
+                    val response = postApiService.uploadImages(parts)
                     if (response.isSuccessful) response.body()?.urls ?: emptyList()
                     else throw Exception("이미지 업로드 실패")
                 } else emptyList()
