@@ -9,11 +9,17 @@ import com.nemnem.travelapp.data.model.User
 import com.nemnem.travelapp.util.TokenManager
 import java.lang.RuntimeException
 import javax.inject.Inject
+import javax.inject.Named
 
 // 인증 관련 처리 담당 클래스
 // Hilt 통해 AuthApiService 구현체 주입 받음
 class AuthRepository @Inject constructor(
-    private val authApiService: AuthApiService,
+    // 1. 프로필 수정 등 인증이 필요한 요청용 (AppRetrofit 사용)
+    @Named("AuthWithToken") private val authApiService: AuthApiService,
+
+    // 2. 로그인, 회원가입, 토큰 갱신 등 인증이 필요 없는 요청용 (AuthRefreshRetrofit 사용)
+    @Named("AuthNoToken") private val authNoTokenService: AuthApiService,
+
     private val tokenManager: TokenManager
 ) {
     // ViewModel에서 함수 호출하게 됨.
@@ -113,9 +119,7 @@ class AuthRepository @Inject constructor(
 
     suspend fun updateProfile(nickname: String, profileImageUrl: String?): Result<Unit> {
         return try {
-//            val token = tokenManager.getToken() ?: return Result.failure(Exception("토큰 없음"))
             val response = authApiService.updateProfile(
-//                token = "Bearer $token",
                 request = UpdateProfileRequest(nickname, profileImageUrl)
             )
 

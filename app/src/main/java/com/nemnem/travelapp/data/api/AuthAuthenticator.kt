@@ -7,6 +7,7 @@ import okhttp3.Request
 import okhttp3.Response
 import okhttp3.Route
 import javax.inject.Inject
+import javax.inject.Named
 import javax.inject.Provider
 
 /**
@@ -16,14 +17,12 @@ class AuthAuthenticator @Inject constructor(
     private val tokenManager: TokenManager,
     private val sessionManager: SessionManager,
     // 순환 참조 방지를 위해 Provider를 사용합니다 (Hilt에서 필요)
-    private val authApiProvider: Provider<AuthApiService>
+    @Named("RefreshApiService") private val authApiProvider: Provider<AuthApiService>
 ) : Authenticator {
 
     override fun authenticate(route: Route?, response: Response): Request? {
-        Log.d("ModuTrip_Auth", "★★★ Authenticator 진입: 401 에러 감지 ★★★")
 
         if(response.request.url.encodedPath.contains("/api/auth/refresh")) {
-            Log.e("ModuTrip_Auth", "리프레시 토큰 요청 자체가 실패했습니다. 무한 루프 방지를 위해 중단합니다.")
             sessionManager.logout()
             return null
         }
@@ -34,49 +33,45 @@ class AuthAuthenticator @Inject constructor(
             return null
         }
 
-        // 2. 저장된 Refresh Token 가져오기
-        val refreshToken = tokenManager.getRefreshToken()
-        if (refreshToken.isNullOrEmpty()) {
-            Log.e("ModuTrip_Auth", "Refresh Token이 없어 로그아웃 처리합니다.")
-            sessionManager.logout()
-            return null
-        }
+        synchronized(this) {
+            val currentToken = tokenManager.getAccessToken()
+            val requestToken = response.request.header("Authorization")?.replace("Bearer ", "")
 
-        // 3. 서버에 새 토큰 요청 (동기 방식 .execute() 사용 필수)
-        // 주의: Authenticator는 백그라운드에서 돌기 때문에 코루틴 suspend를 쓰지 않고 Call을 씁니다.
-        val refreshCall = authApiProvider.get().refreshTokens("Bearer $refreshToken")
+            if(currentToken != requestToken && !currentToken.isNullOrEmpty()) {
+                return response.request.newBuilder()
+                    .header("Authorization", "Bearer $currentToken")
+                    .build()
+            }
 
-        return try {
-            val refreshCall = authApiProvider.get().refreshTokens("Bearer $refreshToken")
-            val refreshResponse = refreshCall.execute()
+            val refreshToken = tokenManager.getRefreshToken()
+            if(refreshToken.isNullOrEmpty()) {
+                sessionManager.logout()
+                return null
+            }
 
-            if (refreshResponse.isSuccessful) {
-                val newTokens = refreshResponse.body()
-                if (newTokens != null) {
-                    Log.d("ModuTrip_Auth", "토큰 갱신 성공! 새 토큰을 저장하고 재시도합니다.")
+            return try {
+                val refreshResponse = authApiProvider.get().refreshTokens("Bearer $refreshToken").execute()
 
-                    // 4. 새 토큰들을 EncryptedSharedPreferences에 저장
-                    tokenManager.saveAccessToken(newTokens.accessToken)
-                    tokenManager.saveRefreshToken(newTokens.refreshToken)
-                    tokenManager.saveToken(newTokens.accessToken) // 기존 키 호환용
+                if(refreshResponse.isSuccessful) {
+                    val newTokens = refreshResponse.body()
+                    if(newTokens != null) {
+                        // 새 토큰 안전하게 저장
+                        tokenManager.saveAccessToken(newTokens.accessToken)
+                        tokenManager.saveRefreshToken(newTokens.refreshToken)
+                        tokenManager.saveToken(newTokens.accessToken)
 
-                    // 5. 실패했던 원래 요청에 새 토큰을 끼워넣어 다시 보냄
-                    response.request.newBuilder()
-                        .header("Authorization", "Bearer ${newTokens.accessToken}")
-                        .build()
+                        response.request.newBuilder()
+                            .header("Authorization", "Bearer ${newTokens.accessToken}")
+                            .build()
+                    } else null
                 } else {
+                    sessionManager.logout()
                     null
                 }
-            } else {
-                // Refresh Token도 만료된 경우 (401 or 403 등)
-                Log.e("ModuTrip_Auth", "토큰 갱신 실패 (서버 에러): ${refreshResponse.code()}")
-                sessionManager.logout()
+            } catch (e: Exception) {
+                Log.e("ModuTrip_Auth", "네트워크 오류: ${e.message}")
                 null
             }
-        } catch (e: Exception) {
-            Log.e("ModuTrip_Auth", "네트워크 오류로 토큰 갱신 실패: ${e.message}")
-            sessionManager.logout()
-            null
         }
     }
 

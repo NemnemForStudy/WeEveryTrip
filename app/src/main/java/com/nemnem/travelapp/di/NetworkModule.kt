@@ -3,6 +3,8 @@ package com.nemnem.travelapp.di
 import android.content.Context
 import com.chuckerteam.chucker.api.ChuckerCollector
 import com.chuckerteam.chucker.api.ChuckerInterceptor
+import com.google.android.gms.auth.api.Auth
+import com.kakao.sdk.auth.AuthApi
 import com.nemnem.travelapp.BuildConfig
 import com.nemnem.travelapp.data.api.AuthApiService
 import com.nemnem.travelapp.data.api.AuthAuthenticator
@@ -28,6 +30,7 @@ import javax.inject.Singleton
 @Module // 이 클래스가 Hilt 모듈임을 나타냄.
 @InstallIn(SingletonComponent::class) // 이 모듈의 의존성이 앱의 싱글톤 라이프사이클을 따흔다.
 object NetworkModule {
+
     // HTTP 요청 및 응답 로깅을 위한 Interceptor를 제공함.
     // 디버깅 시 네트워크 통신 내용을 콘솔에서 확인할 수 있어 유용함.
     @Provides
@@ -62,6 +65,24 @@ object NetworkModule {
             .maxContentLength(250000L)
             .redactHeaders(emptySet())
             .alwaysReadResponseBody(true)
+            .build()
+    }
+
+    /**
+     * [수정 포인트 1] 인증 전용 Retrofit 추가 (DRY 원칙)
+     * 로그인, 회원가입, 토큰 갱신 API는 'AuthInterceptor'가 붙지 않은 클라이언트를 써야 합니다.
+     * 그래야 토큰 갱신 요청에 만료된 토큰이 중복으로 붙는 '간섭'을 막을 수 있어요.
+     */
+    @Provides
+    @Singleton
+    @Named("AuthRefreshRetrofit")
+    fun provideAuthRefreshRetrofit(
+        @Named("DefaultOkHttpClient") okHttpClient: OkHttpClient
+    ): Retrofit {
+        return Retrofit.Builder()
+            .baseUrl(BuildConfig.BASE_URL)
+            .client(okHttpClient)
+            .addConverterFactory(GsonConverterFactory.create())
             .build()
     }
 
@@ -119,6 +140,29 @@ object NetworkModule {
             .build()
     }
 
+    /**
+     * [갱신 전용 서비스] 로그인을 하거나 토큰을 새로 고칠 때 사용합니다.
+     * 이 녀석은 '토큰 없이' 혹은 '리프레시 토큰만' 가지고 서버에 가야 하므로
+     * 아무런 헤더 간섭이 없는 'AuthRefreshRetrofit'을 사용합니다.
+     */
+    @Provides
+    @Singleton
+    @Named("RefreshApiService")
+    fun provideRefreshApiService(@Named("AuthRefreshRetrofit") retrofit: Retrofit): AuthApiService {
+        return retrofit.create(AuthApiService::class.java)
+    }
+
+    /**
+     * [인증 정보 서비스] 내 프로필 조회, 회원 정보 수정 등 '내 토큰'이 필요한 경우 사용합니다.
+     * 이 녀석은 자동으로 토큰을 붙여주고, 만료 시 갱신까지 해주는 'AppRetrofit'을 사용합니다.
+     */
+    @Provides
+    @Singleton
+    @Named("ProfileApiService")
+    fun provideProfileApiService(@Named("AppRetrofit") retrofit: Retrofit): AuthApiService {
+        return retrofit.create(AuthApiService::class.java)
+    }
+
     // PostApiService 인터페이스 구현체를 Retrofit을 통해 생성해 제공함.
     // 위에 AppRetrofit으로 바꿨으니 변경해주자
     @Provides
@@ -130,11 +174,11 @@ object NetworkModule {
     // 인증 API (로그인/회원가입)
     // 로그인 요청 시에는 토큰이 없으므로 AuthInterceptor가 있어도 헤더에 추가하지 않습니다(Safe).
     // 따라서 그냥 AppRetrofit을 같이 써도 무방합니다.
-    @Provides
+    /*@Provides
     @Singleton
-    fun provideAuthApiService(@Named("AppRetrofit") retrofit: Retrofit): AuthApiService {
+    fun provideAuthApiService(@Named("AuthRefreshRetrofit") retrofit: Retrofit): AuthApiService {
         return retrofit.create(AuthApiService::class.java)
-    }
+    }*/
 
     // NaverAuthApiService는 NaverRetrofit 사용하도록 새로 추가
     // 네이버 인증 API
@@ -154,5 +198,21 @@ object NetworkModule {
     @Singleton
     fun provideInquiryApiService(@Named("AppRetrofit") retrofit: Retrofit): InquiryApiService {
         return retrofit.create(InquiryApiService::class.java)
+    }
+
+    // 로그인, 회원가입, 토큰 갱신용 (토큰이 필요 없는 용도)
+    @Provides
+    @Singleton
+    @Named("AuthNoToken")
+    fun provideAuthApiServiceNoToken(@Named("AuthRefreshRetrofit") retrofit: Retrofit): AuthApiService {
+        return retrofit.create(AuthApiService::class.java)
+    }
+
+    // 프로필 수정 등 (토큰이 필요한 용도)
+    @Provides
+    @Singleton
+    @Named("AuthWithToken")
+    fun provideAuthApiServiceWithToken(@Named("AppRetrofit") retrofit: Retrofit): AuthApiService {
+        return retrofit.create(AuthApiService::class.java)
     }
 }

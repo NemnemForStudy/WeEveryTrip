@@ -21,8 +21,7 @@ class TokenManager @Inject constructor(@ApplicationContext context: Context) {
         createSharedPrefs(context)
     } catch (e: Exception) {
         // 🛑 에러 발생 시(키 충돌 등) 기존 파일을 삭제하고 새 파일로 초기화
-        Log.
-        e("TokenManager", "암호화 복호화 실패! 기존 프리퍼런스 초기화 실행: ${e.message}")
+        Log.e("TokenManager", "암호화 복호화 실패! 기존 프리퍼런스 초기화 실행: ${e.message}")
 
         // 파일 삭제 시도 (파일명이 "secure_auth_prefs"인 경우)
         context.deleteSharedPreferences("secure_auth_prefs")

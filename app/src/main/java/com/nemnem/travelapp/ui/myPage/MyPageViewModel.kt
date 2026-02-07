@@ -7,6 +7,7 @@ import android.widget.Toast
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.NavController
+import com.nemnem.travelapp.data.api.PostApiService
 import com.nemnem.travelapp.data.model.User
 import com.nemnem.travelapp.data.repository.AuthRepository
 import com.nemnem.travelapp.util.RetrofitClient.postApiService
@@ -27,6 +28,7 @@ import javax.inject.Inject
 open class MyPageViewModel @Inject constructor(
     private val authRepository: AuthRepository,
     private val tokenManager: TokenManager,
+    private val postApiService: PostApiService
 ) : ViewModel() {
 
     private val _userState = MutableStateFlow<User?>(null)
