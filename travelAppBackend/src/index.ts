@@ -51,6 +51,10 @@ app.get('/debug', (req, res) => {
     res.send("🚀 서버가 최신 코드를 읽고 있습니다!");
 });
 
+app.get('/ping', (req: Request, res: Response) => {
+    res.send('pong');
+});
+
 // JSON 요청 본문을 파싱하기 위한 미들웨어입니다.
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
@@ -85,24 +89,6 @@ app.use((err: any, req: Request, res: Response, next: NextFunction) => {
 app.listen(port, '0.0.0.0', () => {
   console.log("안녕! 테스트중");
   console.log(`서버가 http://0.0.0.0:${port} 에서 실행 중입니다.`);  // 괄호 수정!
-});
-
-app.get('/test-db', async (req, res) => {
-    try {
-        const sql = `
-            INSERT INTO "user" (email, nickname, social_provider, social_id)
-            VALUES ($1, $2, $3, $4)
-            RETURNING *;
-        `;
-        const values = ['test@example.com', '테스터', 'none', 'test_1234'];
-        
-        const result = await db.query(sql, values);
-        res.json({ success: true, data: result.rows[0] });
-    } catch (err) {
-        console.error(err);
-        const errorMessage = err instanceof Error ? err.message : '알 수 없는 오류 발생';
-        res.status(500).send(errorMessage);
-    }
 });
 
 setInterval(() => {

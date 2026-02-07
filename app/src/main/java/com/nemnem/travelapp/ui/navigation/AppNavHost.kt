@@ -88,13 +88,16 @@ fun AppNavHost(
         }
 
         composable(
-            Screen.Detail.route,
-            arguments = listOf(navArgument("postId") { type = NavType.StringType })
+            route = Screen.Detail.route, // "detail/{postId}"
+            arguments = listOf(navArgument("postId") { type = NavType.StringType }),
+            deepLinks = listOf(
+                // 외부에서 "modutrip://post/123" 같은 주소를 클릭하면 상세 페이지로 바로 옵니다.
+                navDeepLink { uriPattern = "kakao${KAKAO_NATIVE_APP_KEY}://kakaolink?postId={postId}" },
+                navDeepLink { uriPattern = "modutrip://post/{postId}" }
+            )
         ) { backStackEntry ->
-            // ID 꺼내기
             val postId = backStackEntry.arguments?.getString("postId")
-
-            if(postId != null) {
+            if (postId != null) {
                 PostDetailScreen(
                     postId = postId,
                     navController = navController
@@ -112,22 +115,22 @@ fun AppNavHost(
             }
         }
 
-        composable(
-            route = "postDetail/{postId}",
-            arguments = listOf(navArgument("postId") { type = NavType.StringType }),
-            deepLinks = listOf(
-                navDeepLink { uriPattern = "kakao${KAKAO_NATIVE_APP_KEY}://kakaolink?postId={postId}" },
-                navDeepLink { uriPattern = "modutrip://post/{postId}" }
-            )
-        ) { backStackEntry ->
-            val postId = backStackEntry.arguments?.getString("postId")
-            if(postId != null) {
-                PostDetailScreen(
-                    postId = postId,
-                    navController = navController
-                )
-            }
-        }
+//        composable(
+//            route = "postDetail/{postId}",
+//            arguments = listOf(navArgument("postId") { type = NavType.StringType }),
+//            deepLinks = listOf(
+//                navDeepLink { uriPattern = "kakao${KAKAO_NATIVE_APP_KEY}://kakaolink?postId={postId}" },
+//                navDeepLink { uriPattern = "modutrip://post/{postId}" }
+//            )
+//        ) { backStackEntry ->
+//            val postId = backStackEntry.arguments?.getString("postId")
+//            if(postId != null) {
+//                PostDetailScreen(
+//                    postId = postId,
+//                    navController = navController
+//                )
+//            }
+//        }
 
         composable(Screen.Inquiry.route) {
             val currentUser = FirebaseAuth.getInstance().currentUser

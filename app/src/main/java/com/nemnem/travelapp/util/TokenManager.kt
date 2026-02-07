@@ -1,6 +1,7 @@
 package com.nemnem.travelapp.util
 
 import android.content.Context
+import android.util.Log
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKeys
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -15,8 +16,22 @@ import javax.inject.Singleton
 @Singleton // 앱 전역에서 하나의 인스턴스만 사용하도록 싱글톤 지정.
 class TokenManager @Inject constructor(@ApplicationContext context: Context) {
     // 보안을 위해 EncryptedSharedPreferences로 변경.
-    val masterKeyAlias = MasterKeys.getOrCreate(MasterKeys.AES256_GCM_SPEC)
-    private val prefs = EncryptedSharedPreferences.create(
+    private val masterKeyAlias = MasterKeys.getOrCreate(MasterKeys.AES256_GCM_SPEC)
+    private val prefs = try {
+        createSharedPrefs(context)
+    } catch (e: Exception) {
+        // 🛑 에러 발생 시(키 충돌 등) 기존 파일을 삭제하고 새 파일로 초기화
+        Log.
+        e("TokenManager", "암호화 복호화 실패! 기존 프리퍼런스 초기화 실행: ${e.message}")
+
+        // 파일 삭제 시도 (파일명이 "secure_auth_prefs"인 경우)
+        context.deleteSharedPreferences("secure_auth_prefs")
+
+        // 다시 생성
+        createSharedPrefs(context)
+    }
+
+    private fun createSharedPrefs(context: Context) = EncryptedSharedPreferences.create(
         "secure_auth_prefs",
         masterKeyAlias,
         context,

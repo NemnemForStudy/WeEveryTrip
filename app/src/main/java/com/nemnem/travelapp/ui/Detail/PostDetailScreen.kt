@@ -8,6 +8,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -59,6 +60,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -66,6 +68,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
@@ -119,25 +122,43 @@ fun PostDetailScreen(
     val routePointsByDay by viewModel.routePointsByDay.collectAsState()
     val currentDayIndex by viewModel.currentDayIndex.collectAsState()
 
+    val shouldRefresh by navController.currentBackStackEntry
+        ?.savedStateHandle
+        ?.getStateFlow("should_refresh", false) // 초기값 false
+        ?.collectAsStateWithLifecycle() ?: remember { mutableStateOf(false) }
+
+    LaunchedEffect(shouldRefresh) {
+        if (shouldRefresh == true) {
+            Log.d("PostDetail", "수정 완료 신호 감지 -> 데이터 새로고침")
+            viewModel.fetchPostDetail(postId)
+            // ✅ 신호를 처리했으므로 다시 false로 세팅합니다.
+            navController.currentBackStackEntry?.savedStateHandle?.set("should_refresh", false)
+        }
+    }
+
     LaunchedEffect(Unit) {
         viewModel.fetchPostDetail(postId)
         viewModel.loadLikeData(postId)
     }
 
-    // ✅ post 데이터가 로드된 직후, 첫날 경로 데이터 로드 (한 번만)
-    LaunchedEffect(post?.id) {
+    //  post 데이터가 로드된 직후, 첫날 경로 데이터 로드 (한 번만)
+    LaunchedEffect(post) { // post 객체 자체가 로드되었을 때 한 번만 실행
         post?.let { p ->
-            val dayKeys = routePointsByDay.keys.sorted()
-            val initialDayNum = dayKeys.getOrNull(0)
+            // 이미 데이터가 로드되어 있다면 중복 요청 방지 (선택 사항)
+            if (routePoints.isEmpty()) {
+                val dayKeys = p.imageLocations.mapNotNull { it.dayNumber }.distinct().sorted()
+                val initialDayNum = dayKeys.firstOrNull()
 
-            val pointsToRoute = p.imageLocations
-                .filter { it.dayNumber == initialDayNum && it.latitude != null && it.longitude != null }
-                .map { RoutePoint(latitude = it.latitude!!, longitude = it.longitude!!) }
+                if (initialDayNum != null) {
+                    val pointsToRoute = p.imageLocations
+                        .filter { it.dayNumber == initialDayNum && it.latitude != null && it.longitude != null }
+                        .map { RoutePoint(latitude = it.latitude!!, longitude = it.longitude!!) }
 
-            if (pointsToRoute.size >= 2) {
-                viewModel.fetchRoute(pointsToRoute)
-            } else {
-                viewModel.clearRoute()
+                    if (pointsToRoute.size >= 2) {
+                        Log.d("PostDetail", "첫날 경로 요청 시작")
+                        viewModel.fetchRoute(pointsToRoute)
+                    }
+                }
             }
         }
     }
@@ -211,7 +232,19 @@ fun PostDetailContent(
     val hasHeader = post.images?.isNotEmpty() == true || post.imageLocations.isNotEmpty()
     val coroutineScope = rememberCoroutineScope()
 
-    // ✅ 마커 데이터 계산
+    LaunchedEffect(shareTarget) {
+        if (shareTarget == ShareTarget.KAKAO) {
+            // 1. 이미 만들어두신 ShareUtil의 함수를 호출합니다.
+            // post.images의 첫번째 사진이나 imgUrl을 넘겨주도록 되어있으므로 post 객체를 통째로 넘깁니다.
+            ShareUtil.shareToKakao(context, post)
+
+            // 2. 중요: 공유가 끝나면 target을 다시 null로 바꿔줘야 합니다.
+            // 그래야 다음에 또 눌렀을 때 LaunchedEffect가 작동합니다. (이게 안되면 두번짼 안눌림)
+            onSnapshotDone()
+        }
+    }
+
+    //  마커 데이터 계산
     val dayKeys = routePointsByDay.keys.sorted()
     val currentDayNumber = dayKeys.getOrNull(currentDayIndex)
     val markerItems: List<MarkerItemWithIndex> = remember(post.imageLocations, currentDayNumber) {
@@ -231,14 +264,23 @@ fun PostDetailContent(
         }
     }
 
-    // ✅ 페이저 상태
-    val pagerState = rememberPagerState(pageCount = { markerItems.size })
+    // currentDayNumber가 변경될 때마다 pagerState를 재생성
+    val pagerState = rememberPagerState(
+        initialPage = 0,
+        pageCount = { markerItems.size }
+    )
 
-    // ✅ 날짜 변경 시 페이저 초기화
-    LaunchedEffect(currentDayIndex) {
+    // 날짜 변경 시 페이저 초기화
+    LaunchedEffect(currentDayNumber) {
+        Log.d("PostDetailContent", "currentDayNumber changed: $currentDayNumber, resetting pager to page 0")
         if (markerItems.isNotEmpty()) {
             pagerState.scrollToPage(0)
         }
+    }
+
+    // pagerState.currentPage를 selectedPageIndex로 사용
+    LaunchedEffect(pagerState.currentPage) {
+        Log.d("PostDetailContent", "pagerState.currentPage changed: ${pagerState.currentPage}")
     }
 
     Scaffold(
@@ -258,54 +300,40 @@ fun PostDetailContent(
     ) { pv ->
         LazyColumn(modifier = Modifier.fillMaxSize().padding(pv)) {
             if (hasHeader) {
-                // ✅ 지도 헤더
+                //  지도 헤더
                 item {
-                    PostMapHeader(
-                        post = post,
-                        markerItems = markerItems,
-                        routePoints = routePoints,
-                        selectedPageIndex = pagerState.currentPage,
-                        onMarkerClick = { index ->
-                            coroutineScope.launch { pagerState.animateScrollToPage(index) }
-                        },
-                        shareTarget = shareTarget,
-                        onSnapshotDone = onSnapshotDone,
-                        token = userToken,
-                        onMapSnapshotCaptured = { mapBitmap ->
-                            coroutineScope.launch {
-                                try {
-                                    val originalImages = post.images ?: emptyList()
-                                    ShareUtil.shareToInstagramWithMap(
-                                        context = context,
-                                        mapBitmap = mapBitmap,
-                                        imageUrls = originalImages,
-                                        postId = post.id
-                                    )
-                                } catch (e: Exception) {
-                                    Log.e("ShareError", "공유 중 오류 발생", e)
-                                } finally {
-                                    onSnapshotDone()
-                                }
-                            }
-                        }
-                    )
+                    Box(modifier = Modifier.fillMaxWidth().zIndex(1f)) {
+                        PostMapHeader(
+                            post = post,
+                            markerItems = markerItems,
+                            routePoints = routePoints,
+                            selectedPageIndex = pagerState.currentPage,
+                            onMarkerClick = { index -> coroutineScope.launch { pagerState.animateScrollToPage(index) } },
+                            shareTarget = shareTarget,
+                            onSnapshotDone = onSnapshotDone,
+                            token = userToken,
+                            onMapSnapshotCaptured = { mapBitmap -> /* 기존 로직 동일 */ }
+                        )
+                    }
                 }
 
-                // ✅ 하단 장소 카드 Carousel
+                //  하단 장소 카드 Carousel
                 if (markerItems.isNotEmpty()) {
                     item {
                         HorizontalPager(
                             state = pagerState,
                             contentPadding = PaddingValues(horizontal = 40.dp),
                             pageSpacing = 16.dp,
-                            modifier = Modifier.padding(vertical = 10.dp)
+                            modifier = Modifier.padding(vertical = 10.dp),
+                            userScrollEnabled = true,
+                            key = { index -> markerItems.getOrNull(index)?.imageUrl ?: index }
                         ) { page ->
                             LocationCard(markerItems[page])
                         }
                     }
                 }
 
-                // ✅ 날짜 선택 Row
+                //  날짜 선택 Row
                 item {
                     if (dayKeys.isNotEmpty()) {
                         Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -319,14 +347,21 @@ fun PostDetailContent(
                 item { Spacer(Modifier.height(24.dp)) }
             }
 
-            // ✅ 게시글 본문
-            item { PostBodySection(post, currentUserId == post.userId, onPostEdit, onPostDelete, hasHeader) }
-
+            //  게시글 본문
+            item {
+                PostBodySection(
+                    post = post,
+                    isMyPost = currentUserId == post.userId,
+                    onEdit = onPostEdit,
+                    onDelete = onPostDelete,
+                    isHeader = hasHeader // 일단 디자인 유지를 위해 true로 두되, 버튼이 안 눌리면 이걸 false로 바꿔보세요.
+                )
+            }
             item { Spacer(Modifier.height(40.dp)) }
         }
     }
 
-    // ✅ 공유 옵션 시트
+    //  공유 옵션 시트
     if (showShareSheet) {
         ModalBottomSheet(onDismissRequest = { showShareSheet = false }) {
             Row(Modifier.fillMaxWidth().padding(bottom = 40.dp), Arrangement.SpaceEvenly) {
@@ -363,19 +398,33 @@ fun PostMapHeader(
         routePoints.map { LatLng(it.latitude, it.longitude) }
     }
 
+    // MapUiSettings를 반드시 remember로 고정
+    val uiSettings = remember {
+        MapUiSettings(
+            isZoomControlEnabled = true,
+            isScrollGesturesEnabled = true,
+            isZoomGesturesEnabled = true,
+            isLocationButtonEnabled = false,
+            isRotateGesturesEnabled = false,
+            isTiltGesturesEnabled = false
+        )
+    }
+
     val isSharingMode = shareTarget == ShareTarget.INSTAGRAM
     val visibleCoords = remember(routeLatLngs) { routeLatLngs }
 
-    // ✅ [수정] Pager 페이지 변경 시 카메라 이동 로직
-    // MapEffect 외부에서 LaunchedEffect를 사용하여 cameraPositionState를 제어합니다.
-    LaunchedEffect(selectedPageIndex, isSharingMode) {
+    LaunchedEffect(selectedPageIndex, markerItems) {
         if (!isSharingMode && markerItems.isNotEmpty()) {
-            markerItems.getOrNull(selectedPageIndex)?.position?.let { targetLatLng ->
-                cameraPositionState.animate(
-                    update = CameraUpdate.scrollTo(targetLatLng),
-                    animation = CameraAnimation.Easing,
-                    durationMs = 500
-                )
+            val targetItem = markerItems.getOrNull(selectedPageIndex)
+            targetItem?.position?.let { targetLatLng ->
+                // 카메라가 이미 그 위치에 있다면 이동하지 않도록 방어 (부하 감소)
+                if (cameraPositionState.position.target != targetLatLng) {
+                    cameraPositionState.animate(
+                        update = CameraUpdate.scrollTo(targetLatLng),
+                        animation = CameraAnimation.Easing,
+                        durationMs = 500
+                    )
+                }
             }
         }
     }
@@ -384,20 +433,18 @@ fun PostMapHeader(
         NaverMap(
             modifier = Modifier.fillMaxSize(),
             cameraPositionState = cameraPositionState,
-            uiSettings = MapUiSettings(
-                isZoomControlEnabled = true,
-                isScrollGesturesEnabled = true,
-                isZoomGesturesEnabled = true,
-                isRotateGesturesEnabled = false,
-                isTiltGesturesEnabled = false
-            )
+            uiSettings = uiSettings,
+            contentPadding = PaddingValues(top = 10.dp),
+            onMapClick = { _, _ -> /* 지도 클릭 시 동작 */ }
         ) {
             // [1] 초기 진입 시 전체 경로가 보이게 이동
             MapEffect(key1 = routeLatLngs) { map ->
+                Log.d("PostMapHeader", "MapEffect[routeLatLngs] triggered")
                 if (routeLatLngs.size >= 2) {
-                    val bounds = LatLngBounds.Builder().apply { routeLatLngs.forEach { include(it) } }.build()
-                    val update = CameraUpdate.fitBounds(bounds, 200)
-                    map.moveCamera(update)
+                    val bounds = LatLngBounds.Builder().apply {
+                        routeLatLngs.forEach { include(it) }
+                    }.build()
+                    map.moveCamera(CameraUpdate.fitBounds(bounds, 200))
                 } else if (routeLatLngs.isNotEmpty()) {
                     map.moveCamera(CameraUpdate.scrollTo(routeLatLngs[0]))
                 }
@@ -408,13 +455,7 @@ fun PostMapHeader(
                 // 공유 모드이거나 현재 선택된 인덱스인 경우 마커 표시 (또는 전체 표시 등 기획에 따라 조절)
                 item.position?.let { pos ->
                     val isSelected = index == selectedPageIndex
-                    val icon = rememberClusteredPhotoIcon(
-                        imageUrl = item.imageUrl,
-                        index = item.index,
-                        count = 1,
-                        sizePx = 100,
-                        isSelected = isSelected
-                    )
+                    val icon = rememberClusteredPhotoIcon(item.imageUrl, item.index, 1, 100, isSelected)
                     Marker(
                         state = MarkerState(position = pos),
                         icon = icon ?: MarkerIcons.BLUE,

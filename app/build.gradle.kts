@@ -169,6 +169,8 @@ dependencies {
     implementation("com.google.android.gms:play-services-auth:21.2.0")
     implementation("androidx.compose.material:material-icons-extended")
 
+    implementation("androidx.compose.runtime:runtime-livedata:1.7.0")
+
     // Hilt Navigation
     implementation("androidx.hilt:hilt-navigation-compose:1.2.0")
 

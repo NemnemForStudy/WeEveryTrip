@@ -55,33 +55,19 @@ class MainActivity : ComponentActivity() {
                 ) {
                     // 네비게이션을 관리할 컨트롤러 생성
                     val navController = rememberNavController()
-                    val isSessionValid by sessionManager.isSessionValid.collectAsState()
+//                    val isSessionValid by sessionManager.isSessionValid.collectAsState()
 
                     Box(modifier = Modifier.fillMaxSize()) {
 
                         // 기존 앱 화면 (바닥 레이어)
                         AppNavHost(navController = navController, tokenManager = tokenManager)
-
-                        // 2. 테스트용 크래시 버튼 (최상단 레이어 - 우하단 배치)
-                        // 테스트가 끝나면 이 Button 블록만 지우면 됩니다!
-                        Button(
-                            onClick = {
-                                // 이 버튼을 누르면 즉시 앱이 강제 종료됩니다.
-                                throw IllegalStateException("Firebase Crashlytics Test: MoyeoLog")
-                            },
-                            modifier = Modifier
-                                .align(androidx.compose.ui.Alignment.BottomEnd)
-                                .padding(bottom = 50.dp, end = 20.dp)
-                        ) {
-                            androidx.compose.material3.Text("Crash Test")
-                        }
                     }
 
                     LaunchedEffect(intent) {
                         handleDeepLink(intent, navController)
                     }
                     // 만들어둔 네비게이션 지도 넣고 전달
-                    AppNavHost(navController = navController, tokenManager = tokenManager)
+//                    AppNavHost(navController = navController, tokenManager = tokenManager)
                 }
             }
         }

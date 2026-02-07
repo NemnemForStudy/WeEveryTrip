@@ -89,6 +89,9 @@ class EditPostViewModel @Inject constructor(
     private val _routePoints = MutableStateFlow<List<RoutePoint>>(emptyList())
     val routePoints: StateFlow<List<RoutePoint>> = _routePoints.asStateFlow()
 
+    private val _currentFocusedImage = MutableStateFlow<PostImage?>(null)
+    val currentFocusedImage = _currentFocusedImage.asStateFlow()
+
     // 경로 업데이트 작업을 관리할 Job 변수 추가
     private var routeUpdateJob: Job? = null
 
@@ -411,6 +414,21 @@ class EditPostViewModel @Inject constructor(
         } catch (e: Exception) {
             Log.e("TimeError", "시간 변환 실패: ${e.message}")
             null
+        }
+    }
+
+    fun onCardSelected(dayNumber: Int, index: Int) {
+        val imagesInDay = _groupedImages.value[dayNumber]
+        val selectedImage = imagesInDay?.getOrNull(index)
+
+        if (selectedImage != null) {
+            // 좌표가 있는 경우에만 상태 업데이트
+            if (selectedImage.latitude != null && selectedImage.longitude != null) {
+                _currentFocusedImage.value = selectedImage
+                Log.d("MAP_DEBUG", "📍 ViewModel: 지도 이동 준비 완료! (${selectedImage.latitude}, ${selectedImage.longitude})")
+            } else {
+                Log.d("MAP_DEBUG", "⚠️ ViewModel: 이 사진은 좌표가 없습니다.")
+            }
         }
     }
 }
