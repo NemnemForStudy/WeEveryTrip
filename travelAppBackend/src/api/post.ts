@@ -249,8 +249,9 @@ router.post('/', upload.any(), async (req: Request, res: Response) => {
 // ==========================================
 // 2. 게시물 검색 API (GET /api/posts/search)
 // ==========================================
-router.get('/search', async (req, res) => {
+router.get('/search', authMiddleware, async (req, res) => {
     const searchQuery = req.query.q as string;
+    const userId = (req as any).user.id;
 
     console.log(`👉 [검색 요청] 검색어: ${searchQuery}`);
 
@@ -278,11 +279,12 @@ router.get('/search', async (req, res) => {
             JOIN "user" u ON p.user_id = u.user_id
             LEFT JOIN category c ON p.category_id = c.category_id
             WHERE p.deleted_at IS NULL
+            AND p.user_id = $2
             AND (p.title ILIKE $1 OR p.content ILIKE $1)
             ORDER BY p.created_at DESC
         `;
 
-        const result = await db.query(queryText, [`%${searchQuery}%`]);
+        const result = await db.query(queryText, [`%${searchQuery}%`, userId]);
         
         // 결과 반환
         res.status(200).json(result.rows);
