@@ -50,8 +50,8 @@ android {
         applicationId = "com.nemnem.travelapp"
         minSdk = 24
         targetSdk = 36
-        versionCode = 4
-        versionName = "1.0.2"
+        versionCode = 7
+        versionName = "1.0.7"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
