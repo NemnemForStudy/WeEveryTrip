@@ -3,6 +3,7 @@
 
 🗺️ ModuTrip (모두트립)
 사진 한 장으로 완성되는 나만의 여행 경로 기록 서비스
+<p align="left"> <img src="https://img.shields.io/badge/Kotlin-7F52FF?style=flat-square&logo=Kotlin&logoColor=white"/> <img src="https://img.shields.io/badge/Jetpack%20Compose-4285F4?style=flat-square&logo=JetpackCompose&logoColor=white"/> <img src="https://img.shields.io/badge/Dagger%20Hilt-AECBFA?style=flat-square&logo=Google&logoColor=black"/> <img src="https://img.shields.io/badge/Node.js-339933?style=flat-square&logo=Node.js&logoColor=white"/> <img src="https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=TypeScript&logoColor=white"/> <img src="https://img.shields.io/badge/PostgreSQL-4169E1?style=flat-square&logo=PostgreSQL&logoColor=white"/> <img src="https://img.shields.io/badge/Supabase-3ECF8E?style=flat-square&logo=Supabase&logoColor=white"/> </p>
 
 🚀 서비스 개요
 기획 배경: 여행 후 사진을 정리하며 당시의 경로를 다시 떠올리기 어렵다는 불편함에서 시작되었습니다.
