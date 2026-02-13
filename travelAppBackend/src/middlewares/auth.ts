@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import jwt from 'jsonwebtoken';
+import jwt, { TokenExpiredError } from 'jsonwebtoken';
 
 export const authMiddleware = (req: Request, res: Response, next: NextFunction) => {
     const authHeader = req.headers.authorization;
@@ -23,6 +23,11 @@ export const authMiddleware = (req: Request, res: Response, next: NextFunction) 
 
         next();
     } catch(error) {
+        // 안드로이드 Authenticator가 401 코드를 감지할 수 있도록 에러 분기 처리
+        if (error instanceof TokenExpiredError) {
+            return res.status(401).json({ message: '토큰이 만료되었습니다.' });
+        }
+        // 그 외의 모든 유효하지 않은 토큰 에러는 403으로 처리
         return res.status(403).json({ message: '유효하지 않은 토큰' });
     }
 }
