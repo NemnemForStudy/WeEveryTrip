@@ -105,7 +105,7 @@ router.post('/social-login', async (req: Request, res: Response) => {
         const token = jwt.sign(
             { userId: user.user_id },
             JWT_SECRET_KEY,
-            { expiresIn: '1m' } // 테스트용 1분
+            { expiresIn: '1h' } // 테스트용 1분
         );
         
         const refreshToken = jwt.sign(
@@ -384,7 +384,7 @@ router.post('/refresh', async (req: Request, res: Response) => {
         const newToken = jwt.sign(
             { userId: user.user_id },
             JWT_SECRET_KEY,
-            { expiresIn: '1m' } // 테스트용 1분
+            { expiresIn: '1h' } // 테스트용 1분
         );
 
         const newRefreshToken = jwt.sign(

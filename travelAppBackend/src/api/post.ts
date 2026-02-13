@@ -633,7 +633,7 @@ router.post('/refresh', async (req: Request, res: Response) => {
         const newToken = jwt.sign(
             { userId: user.user_id },
             JWT_SECRET_KEY,
-            { expiresIn: '1m' } // 새 액세스 토큰 1시간
+            { expiresIn: '1h' } // 새 액세스 토큰 1시간
         );
     console.log(`✅ [Auth] 유저(${user.user_id}) 토큰 갱신 완료`);
 
