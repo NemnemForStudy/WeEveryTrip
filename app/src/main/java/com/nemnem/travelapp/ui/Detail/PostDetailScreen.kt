@@ -97,7 +97,7 @@ import com.naver.maps.map.util.MarkerIcons
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-enum class ShareTarget { KAKAO, INSTAGRAM }
+enum class ShareTarget { KAKAO, INSTAGRAM_FEED, INSTAGRAM_STORY }
 
 val PrimaryBlue = Color(0xFF4A90E2)
 val TextDark = Color(0xFF222222)
@@ -312,7 +312,23 @@ fun PostDetailContent(
                             shareTarget = shareTarget,
                             onSnapshotDone = onSnapshotDone,
                             token = userToken,
-                            onMapSnapshotCaptured = { mapBitmap -> /* 기존 로직 동일 */ }
+                            onMapSnapshotCaptured = { mapBitmap ->
+                                coroutineScope.launch {
+                                    if (shareTarget == ShareTarget.INSTAGRAM_FEED) {
+                                        ShareUtil.shareToInstagramFeed(
+                                            context = context,
+                                            mapBitmap = mapBitmap,
+                                            imageUrls = post.images ?: emptyList()
+                                        )
+                                    } else if (shareTarget == ShareTarget.INSTAGRAM_STORY) {
+                                        ShareUtil.shareToInstagramStory(
+                                            context = context,
+                                            backgroundBitmap = mapBitmap
+                                        )
+                                    }
+                                    onSnapshotDone()
+                                }
+                            }
                         )
                     }
                 }
@@ -354,7 +370,7 @@ fun PostDetailContent(
                     isMyPost = currentUserId == post.userId,
                     onEdit = onPostEdit,
                     onDelete = onPostDelete,
-                    isHeader = hasHeader // 일단 디자인 유지를 위해 true로 두되, 버튼이 안 눌리면 이걸 false로 바꿔보세요.
+                    isHeader = hasHeader // 디자인 유지를 위해 true
                 )
             }
             item { Spacer(Modifier.height(40.dp)) }
@@ -364,14 +380,21 @@ fun PostDetailContent(
     //  공유 옵션 시트
     if (showShareSheet) {
         ModalBottomSheet(onDismissRequest = { showShareSheet = false }) {
-            Row(Modifier.fillMaxWidth().padding(bottom = 40.dp), Arrangement.SpaceEvenly) {
-                ShareOptionItem("카카오톡", R.drawable.kakao_icon, Color(0xFFFFEB3B)) {
-                    showShareSheet = false
-                    onSharedClick(ShareTarget.KAKAO)
-                }
-                ShareOptionItem("인스타그램", R.drawable.instagram_icon, Color.White) {
-                    showShareSheet = false
-                    onSharedClick(ShareTarget.INSTAGRAM)
+            Column(Modifier.fillMaxWidth().padding(bottom = 40.dp)) {
+                Text("어디로 공유할까요?", modifier = Modifier.padding(16.dp), fontWeight = FontWeight.Bold)
+                Row(Modifier.fillMaxWidth(), Arrangement.SpaceEvenly) {
+                    ShareOptionItem("카카오톡", R.drawable.kakao_icon, Color(0xFFFFEB3B)) {
+                        showShareSheet = false
+                        ShareUtil.shareToKakao(context, post) // 즉시 실행
+                    }
+                    ShareOptionItem("인스타 피드", R.drawable.instagram_icon, Color.White) {
+                        showShareSheet = false
+                        onSharedClick(ShareTarget.INSTAGRAM_FEED)
+                    }
+                    ShareOptionItem("인스타 스토리", R.drawable.instagram_icon, Color.White) {
+                        showShareSheet = false
+                        onSharedClick(ShareTarget.INSTAGRAM_STORY)
+                    }
                 }
             }
         }
@@ -382,7 +405,8 @@ fun PostDetailContent(
 @Composable
 fun PostMapHeader(
     post: Post,
-    markerItems: List<MarkerItemWithIndex>,routePoints: List<RoutePoint>,
+    markerItems: List<MarkerItemWithIndex>,
+    routePoints: List<RoutePoint>,
     selectedPageIndex: Int,
     onMarkerClick: (Int) -> Unit,
     shareTarget: ShareTarget?,
@@ -410,7 +434,7 @@ fun PostMapHeader(
         )
     }
 
-    val isSharingMode = shareTarget == ShareTarget.INSTAGRAM
+    val isSharingMode = shareTarget == ShareTarget.INSTAGRAM_FEED || shareTarget == ShareTarget.INSTAGRAM_STORY
     val visibleCoords = remember(routeLatLngs) { routeLatLngs }
 
     LaunchedEffect(selectedPageIndex, markerItems) {

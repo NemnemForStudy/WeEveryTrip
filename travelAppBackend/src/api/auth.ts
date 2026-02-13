@@ -105,7 +105,7 @@ router.post('/social-login', async (req: Request, res: Response) => {
         const token = jwt.sign(
             { userId: user.user_id },
             JWT_SECRET_KEY,
-            { expiresIn: '1h' } // 액세스 토큰 1시간
+            { expiresIn: '1m' } // 액세스 토큰 1시간
         );
         
         const refreshToken = jwt.sign(
@@ -349,4 +349,64 @@ router.post('/updateProfile', authMiddleware, async (req: Request, res: Response
         console.error('프로필 업데이트 중 오류 발생:', error);
     }
 });
+
+/**
+ * 토큰 갱신 API
+ * POST /api/auth/refresh
+ */
+router.post('/refresh', async (req: Request, res: Response) => {
+    const authHeader = req.headers.authorization;
+
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return res.status(401).json({ message: '리프레시 토큰이 필요합니다.' });
+    }
+
+    const refreshToken = authHeader.substring(7);
+
+    try {
+        // 1. 리프레시 토큰 검증
+        const decoded = jwt.verify(refreshToken, JWT_SECRET_KEY) as { userId: number };
+
+        // 2. DB에 저장된 리프레시 토큰과 일치하는지 확인
+        const result = await db.query(
+            'SELECT * FROM "user" WHERE user_id = $1 AND refresh_token = $2 AND deleted_at IS NULL',
+            [decoded.userId, refreshToken]
+        );
+
+        const user = result.rows[0];
+        if (!user) {
+            return res.status(401).json({ message: '유효하지 않은 리프레시 토큰입니다.' });
+        }
+
+        // 3. 새로운 액세스 토큰 및 리프레시 토큰 발급 (Rotation 방식 권장)
+        const newToken = jwt.sign(
+            { userId: user.user_id },
+            JWT_SECRET_KEY,
+            { expiresIn: '1h' } // 새 액세스 토큰 1시간
+        );
+
+        const newRefreshToken = jwt.sign(
+            { userId: user.user_id },
+            JWT_SECRET_KEY,
+            { expiresIn: '7d' } // 새 리프레시 토큰 7일
+        );
+
+        // 4. DB 업데이트
+        await db.query(
+            'UPDATE "user" SET refresh_token = $1, updated_at = NOW() WHERE user_id = $2',
+            [newRefreshToken, user.user_id]
+        );
+
+        res.status(200).json({
+            token: newToken,
+            accessToken: newToken, // 안드로이드 모델명에 맞춤
+            refreshToken: newRefreshToken
+        });
+
+    } catch (err) {
+        console.error('토큰 갱신 중 오류 발생:', err);
+        res.status(401).json({ message: '리프레시 토큰이 만료되었거나 유효하지 않습니다.' });
+    }
+});
+
 export default router;

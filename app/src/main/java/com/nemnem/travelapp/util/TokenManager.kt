@@ -108,7 +108,8 @@ class TokenManager @Inject constructor(@ApplicationContext context: Context) {
     }
 
     fun isTokenValid(): Boolean {
-        val token = getToken()
-        return !token.isNullOrEmpty()
+        val accessToken = getAccessToken() ?: getToken()
+        val refreshToken = getRefreshToken()
+        return !accessToken.isNullOrEmpty() || !refreshToken.isNullOrEmpty()
     }
 }

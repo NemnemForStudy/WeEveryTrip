@@ -34,6 +34,8 @@ class AuthAuthenticator @Inject constructor(
         }
 
         synchronized(this) {
+            Log.d("ModuTrip_Auth", "🚨 401 에러 감지: 토큰 갱신을 시작합니다.") // 로그 추가
+
             val currentToken = tokenManager.getAccessToken()
             val requestToken = response.request.header("Authorization")?.replace("Bearer ", "")
 
@@ -53,6 +55,8 @@ class AuthAuthenticator @Inject constructor(
                 val refreshResponse = authApiProvider.get().refreshTokens("Bearer $refreshToken").execute()
 
                 if(refreshResponse.isSuccessful) {
+                    Log.d("ModuTrip_Auth", "✨ 토큰 갱신 성공! 새로운 토큰으로 요청을 재시도합니다.") // 로그 추가
+
                     val newTokens = refreshResponse.body()
                     if(newTokens != null) {
                         // 새 토큰 안전하게 저장
@@ -65,6 +69,7 @@ class AuthAuthenticator @Inject constructor(
                             .build()
                     } else null
                 } else {
+                    Log.e("ModuTrip_Auth", "❌ 토큰 갱신 실패 (리프레시 토큰 만료 등)") // 로그 추가
                     sessionManager.logout()
                     null
                 }

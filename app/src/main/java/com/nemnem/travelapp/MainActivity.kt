@@ -84,7 +84,8 @@ class MainActivity : ComponentActivity() {
             if(uri.host == "kakaolink") {
                 val postId = uri.getQueryParameter("postId")
                 if(!postId.isNullOrEmpty()) {
-                    navController.navigate("postDetail/${postId}") {
+                    // "postDetail/" 대신 AppNavHost에 정의된 "detail/" 경로를 사용합니다.
+                    navController.navigate("detail/${postId}") {
                         launchSingleTop = true
                     }
                 }
