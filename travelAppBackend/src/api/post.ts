@@ -604,13 +604,6 @@ router.post('/upload-images', authMiddleware, upload.any(), async (req: Request,
     }
 })
 
-typescript:travelAppBackend/src/api/auth.ts
-// ... 기존 코드 하단에 추가 ...
-
-/**
- * 토큰 갱신 API
- * POST /api/auth/refresh
- */
 router.post('/refresh', async (req: Request, res: Response) => {
     console.log('🔄 [Auth] 토큰 갱신 요청 수신');
     const authHeader = req.headers.authorization;
